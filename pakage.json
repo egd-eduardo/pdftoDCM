@@ -1,0 +1,22 @@
+{
+  "name": "dcmjs-pdf-gen",
+  "version": "1.0.0",
+  "description": "Generates DICOM Encapsulated PDF datasets for testing purposes.",
+  "main": "dcmjs-pdf-gen.js",
+  "scripts": {
+    "start": "node dcmjs-pdf-gen.js"
+  },
+  "dependencies": {
+    "dcmjs": "latest",
+    "dicom-dimse-native": "latest",
+    "faker": "5.5.3",
+    "glob": "8",
+    "inquirer": "8",
+    "moment": "latest",
+    "node-notifier": "latest",
+    "uuid": "8"
+  },
+  "overrides": {
+    "uuid": "8"
+  }
+}
