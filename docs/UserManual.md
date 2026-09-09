@@ -280,6 +280,7 @@ Click **Settings** in the header. Most of these are set once by your IT departme
 | **DICOM** | Character set, identifier generation, modality, default descriptions. Leave these alone unless your PACS administrator asks. |
 | **Folders** | Where files and logs are kept, and folder monitoring. |
 | **Appearance** | Language, dark mode, and whether to confirm before sending. |
+| **Licence** | The licence code for this site. **This tab only appears if your copy requires a licence.** If you cannot see it, nothing is licensed and there is nothing to do. |
 
 Two settings are worth knowing about as a user:
 
@@ -288,6 +289,31 @@ Two settings are worth knowing about as a user:
 
 > **Leave "Ask for confirmation before sending" switched on.** It is the last check that
 > the document matches the patient.
+
+### If you see a licence message
+
+Some copies of this application require a licence code. If yours does and there is a
+problem with it, a coloured band appears under the title bar explaining what is wrong.
+
+**You can still work.** You can still choose a document, enter the patient information,
+and generate and save the DICOM file. Only sending to the PACS is affected.
+
+To enter or correct the code:
+
+1. Click **Settings**, then the **Licence** tab.
+2. Paste the code your supplier sent you. It is one long line beginning `PDFDCM1.` and it
+   does not matter if your email program has split it across several lines.
+3. The **Status** underneath tells you at once whether the code is accepted.
+4. Click **Save**.
+
+If the message says the licence belongs to a different workstation, send your supplier the
+identifier shown under **This workstation**, which looks like `A1B2-C3D4-E5F6-7890`. The
+**Copy** button puts it on the clipboard so you can paste it into an email. It contains no
+personal information.
+
+If a licence has expired, the application keeps sending for a further fourteen days and
+warns you each time, so that nobody is ever cut off without notice. Tell whoever manages
+your contracts as soon as you see the warning.
 
 ---
 

@@ -112,6 +112,7 @@ pdftoDCM/
 │   │   ├── Logging/                 Serilog logger, audit trail, log export
 │   │   ├── Monitoring/              FileSystemWatcher based folder monitor
 │   │   ├── Localization/            Localizer + embedded en-US.json, pt-PT.json
+│   │   ├── Licensing/               Licence codec, signing, machine fingerprint
 │   │   └── Services/                ConversionWorkflowService, ApplicationServices
 │   │
 │   ├── PdfToDicom.App/              WPF desktop application. net8.0-windows
@@ -122,9 +123,11 @@ pdftoDCM/
 │   │   ├── Themes/                  Light.xaml, Dark.xaml, Controls.xaml
 │   │   └── app.manifest             asInvoker, per monitor DPI
 │   │
-│   └── PdfToDicom.Cli/              Headless front end for scripted conversion
+│   ├── PdfToDicom.Cli/              Headless front end for scripted conversion
+│   │
+│   └── PdfToDicom.LicenceTool/      Licence generator. PUBLISHER ONLY, never shipped
 │
-├── tests/PdfToDicom.Core.Tests/     107 xUnit tests
+├── tests/PdfToDicom.Core.Tests/     139 xUnit tests
 │
 ├── build/
 │   ├── build.sh                     Cross compiles the Windows binaries from Unix
@@ -205,6 +208,35 @@ built once; a DI container would add a dependency and a layer of indirection for
 
 `ObservableObject` and `RelayCommand` are a few dozen lines. Every dependency avoided is
 one less assembly in the executable and one less licence to account for.
+
+---
+
+### Licensing is dormant by default and never blocks
+
+The licence check is compiled into every build, and every published build has a blank
+`LicenceService.PublisherPublicKey`, which makes the whole subsystem inert: `IsEnforced` is
+false, `Check` returns `NotEnforced` for any input, the Licence tab is collapsed, and the
+workflow gate is a no-op. A test asserts the constant is blank so it cannot change by
+accident.
+
+The alternative, a separate "licensed" build configuration, was rejected: it produces two
+binaries that differ in the code path that matters, and the untested one is the one that
+ships.
+
+When the feature is switched on, three properties are deliberate:
+
+- **Only transmission is gated.** Generation, validation and local saving always work.
+  A clinician can always produce the document.
+- **Failure is permissive.** If the licence check throws, if the embedded key is
+  unreadable, or if no licence service was supplied, transmission proceeds and the fault
+  is logged. A defect in the licensing code must never stop a report reaching a record.
+- **Expiry has a fourteen day grace period.** A licence that lapses at midnight in a
+  hospital is a clinical incident, not a commercial success.
+
+The retry action is gated separately in `RetryTransmissionAsync`, because it does not pass
+through `RunAsync` and would otherwise be a way around the check.
+
+Full detail is in [the licensing workflow](LicensingWorkflow.md).
 
 ---
 
@@ -484,10 +516,11 @@ Output is written per architecture, so all three can coexist.
 dotnet test tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj
 ```
 
-107 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
+139 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
 strategy), person name construction, every mandatory attribute, payload integrity and odd
-length padding, UTF-8 round trips, configuration persistence and corruption recovery, and
-the full workflow with a stubbed network.
+length padding, UTF-8 round trips, configuration persistence and corruption recovery,
+licence signing, tampering, expiry, grace period and machine binding, and the full workflow
+with a stubbed network.
 
 ### XAML binding verification
 

@@ -36,6 +36,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />   <!-- Header band -->
+            <RowDefinition Height="Auto" />   <!-- Licence notice -->
             <RowDefinition Height="*" />      <!-- Workflow -->
             <RowDefinition Height="Auto" />   <!-- Action bar -->
             <RowDefinition Height="Auto" />   <!-- Status bar -->
@@ -75,8 +76,41 @@
             </Grid>
         </Border>
 
+        <!-- ============================================================ Licence notice -->
+        <!--
+            Collapsed unless there is genuinely something to say. It informs; it never
+            blocks. The operator can still select a document, fill in the form and
+            generate the object; only the transmission is affected, and the workflow
+            says so at the point it happens.
+        -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource WarningBackgroundBrush}"
+                BorderBrush="{DynamicResource WarningBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="24,10"
+                Visibility="{Binding ShowLicenceNotice, Converter={StaticResource BoolToVisibility}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                           Text="{Binding LicenceNotice}"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource PrimaryTextBrush}" />
+
+                <Button Grid.Column="1" Margin="16,0,0,0"
+                        Content="{loc:Localize Action.Settings}"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Command="{Binding OpenSettingsCommand}"
+                        MinWidth="120" MinHeight="34" />
+            </Grid>
+        </Border>
+
         <!-- ============================================================ Workflow -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="24,20,24,8">
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="24,20,24,8">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="3*" MinWidth="520" />
@@ -489,7 +523,7 @@
         </ScrollViewer>
 
         <!-- ============================================================ Action bar -->
-        <Border Grid.Row="2" Background="{DynamicResource CardBackgroundBrush}"
+        <Border Grid.Row="3" Background="{DynamicResource CardBackgroundBrush}"
                 BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,1,0,0"
                 Padding="24,14">
             <Grid>
@@ -527,7 +561,7 @@
         </Border>
 
         <!-- ============================================================ Status bar -->
-        <Border Grid.Row="3" Background="{DynamicResource StatusBarBackgroundBrush}"
+        <Border Grid.Row="4" Background="{DynamicResource StatusBarBackgroundBrush}"
                 BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,1,0,0"
                 Padding="24,0">
             <Grid Height="38">

@@ -28,6 +28,8 @@ public sealed class SettingsViewModel : ObservableObject
     private PacsDestination? _selectedDestination;
     private string _testResult = string.Empty;
     private bool _isTesting;
+    private string _licenceCode = string.Empty;
+    private string _licenceStatusText = string.Empty;
 
     /// <summary>Creates the view model over a working copy of the current configuration.</summary>
     public SettingsViewModel(ApplicationServices services)
@@ -44,6 +46,11 @@ public sealed class SettingsViewModel : ObservableObject
         SelectedLanguage = Languages.FirstOrDefault(l =>
             string.Equals(l.CultureName, Working.Language, StringComparison.OrdinalIgnoreCase))
             ?? Languages.FirstOrDefault();
+
+        _licenceCode = Working.LicenceCode;
+        RefreshLicenceStatus();
+
+        CopyMachineIdCommand = new RelayCommand(CopyMachineId);
 
         AddDestinationCommand = new RelayCommand(AddDestination);
         RemoveDestinationCommand = new RelayCommand(RemoveDestination, () => SelectedDestination is not null);
@@ -130,6 +137,73 @@ public sealed class SettingsViewModel : ObservableObject
             }
         }
     }
+
+    // ---------------------------------------------------------------- Licence
+
+    /// <summary>
+    /// True when this build enforces licensing, which is what decides whether the Licence
+    /// tab is shown at all. A build with no publisher key hides it, so an unlicensed
+    /// deployment never sees a control it cannot act on.
+    /// </summary>
+    public bool IsLicensingEnforced => _services.LicenceService.IsEnforced;
+
+    /// <summary>This workstation's identifier, quoted when requesting a bound licence.</summary>
+    public string MachineId => _services.LicenceService.MachineId;
+
+    /// <summary>The licence code as entered by the administrator.</summary>
+    public string LicenceCode
+    {
+        get => _licenceCode;
+        set
+        {
+            if (SetProperty(ref _licenceCode, value))
+            {
+                // Written through immediately so that Save persists whatever is shown,
+                // and checked as it is typed so a mistyped code is obvious at once.
+                Working.LicenceCode = value ?? string.Empty;
+                RefreshLicenceStatus();
+            }
+        }
+    }
+
+    /// <summary>Plain language description of what the entered code is worth.</summary>
+    public string LicenceStatusText
+    {
+        get => _licenceStatusText;
+        private set => SetProperty(ref _licenceStatusText, value);
+    }
+
+    /// <summary>True when the entered code does not permit transmission.</summary>
+    public bool LicenceHasProblem { get; private set; }
+
+    /// <summary>Copies the machine identifier so it can be pasted into an email.</summary>
+    public RelayCommand CopyMachineIdCommand { get; }
+
+    /// <summary>Re-checks the entered code and updates the displayed status.</summary>
+    private void RefreshLicenceStatus()
+    {
+        LicenceStatus status = _services.LicenceService.Check(_licenceCode);
+
+        LicenceStatusText = status.Message;
+        LicenceHasProblem = status.ShouldWarn;
+        OnPropertyChanged(nameof(LicenceHasProblem));
+    }
+
+    private void CopyMachineId()
+    {
+        try
+        {
+            Clipboard.SetText(MachineId);
+        }
+        catch (Exception ex)
+        {
+            // The clipboard can be locked by another application. The identifier is
+            // displayed on screen regardless, so this is never more than an inconvenience.
+            _services.Logger.Warning($"The machine identifier could not be copied: {ex.Message}");
+        }
+    }
+
+    // ---------------------------------------------------------------- Commands
 
     /// <summary>Adds a new destination with sensible starting values.</summary>
     public RelayCommand AddDestinationCommand { get; }
@@ -348,6 +422,13 @@ public sealed class SettingsViewModel : ObservableObject
         Compare("Language", _original.Language, Working.Language);
         Compare("DestinationCount", _original.Destinations.Count, Working.Destinations.Count);
 
+        // The code itself is deliberately not recorded. Knowing that it changed is what
+        // matters for support; reproducing it in a log file would be careless.
+        if (!string.Equals(_original.LicenceCode, Working.LicenceCode, StringComparison.Ordinal))
+        {
+            changes.Add("LicenceCode: changed");
+        }
+
         return changes.Count == 0 ? "No effective change." : string.Join("; ", changes);
     }
 
@@ -392,6 +473,7 @@ public sealed class SettingsViewModel : ObservableObject
         Language = source.Language,
         ShowAdvancedFields = source.ShowAdvancedFields,
         ConfirmBeforeSending = source.ConfirmBeforeSending,
+        LicenceCode = source.LicenceCode,
         Templates = source.Templates.Select(t => new PatientTemplate
         {
             Name = t.Name,

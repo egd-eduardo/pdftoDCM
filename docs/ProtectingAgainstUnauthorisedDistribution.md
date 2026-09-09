@@ -119,18 +119,30 @@ answer is a **signed offline licence file**.
   motherboard serial, and expect perhaps five percent of licences to need re-issuing each
   year.
 
-### What a good implementation looks like here
+### This is now built
 
-The architecture already accommodates this cleanly. It would be:
+Layer 3 is implemented and in the repository. It differs from the sketch above in one
+respect: there is **no licence file**. The licence is a single code the customer pastes
+into Settings, which removes an entire class of support call about a file in the wrong
+folder.
 
-- `ILicenceService` in `PdfToDicom.Core/Abstractions/`
-- `SignedLicenceService` in a new `PdfToDicom.Core/Licensing/` folder
-- A check in `ApplicationServices` at startup, and a licence status panel in Settings
-- A small `pdftodicom-licence-gen` tool, kept private and never published, that signs
-  licence files with your private key
+| Part | Where |
+|---|---|
+| `ILicenceService`, `LicenceState`, `LicenceStatus` | `src/PdfToDicom.Core/Abstractions/ILicenceService.cs` |
+| Signing, verification and the code format | `src/PdfToDicom.Core/Licensing/` |
+| Workstation fingerprint | `src/PdfToDicom.Core/Licensing/MachineFingerprint.cs` |
+| Transmission gate | `src/PdfToDicom.Core/Services/ConversionWorkflowService.cs` |
+| Licence tab and notice band | `SettingsWindow.xaml`, `MainWindow.xaml` |
+| The generator, **publisher only** | `src/PdfToDicom.LicenceTool/` |
 
-**Estimated effort: one to two days**, including tests. I have not built it yet because the
-policy decisions are yours to make first. See the questions at the end.
+**It is switched off.** `LicenceService.PublisherPublicKey` is blank in the repository, and
+a build with a blank key enforces nothing whatsoever: the Licence tab is hidden, the
+notice band never appears, and the workflow is byte for byte the workflow that shipped
+before licensing existed. A test asserts that the constant is still blank, so the feature
+cannot be switched on by accident.
+
+See **[the licensing workflow](LicensingWorkflow.md)** for how to switch it on and issue
+codes.
 
 ### Grace and failure behaviour matters clinically
 
@@ -198,30 +210,39 @@ Cheap, and surprisingly effective at answering *"who leaked it?"*.
 | 2 | Lawyer reviews the licence | 300 to 800 EUR | One meeting |
 | 3 | Code signing certificate | 200 to 600 EUR per year | Half a day to set up |
 | 4 | Make the repository private | Free | Minutes |
-| 5 | Signed offline licence keys | Free | One to two days |
+| 5 | Signed offline licence keys | Free | **Done, switched off** |
 | 6 | Per customer build watermarking | Free | Half a day |
 | 7 | Obfuscation | Free to 400 EUR | One day, plus ongoing care |
 
-Items 1 to 4 give you most of the protection available. Items 5 and 6 are what you add when
-you have real customers. Item 7 is for when you have a competitor.
+Items 1 to 4 give you most of the protection available. Item 5 is built and waiting for
+you to run `keygen`. Item 6 is what you add when you have real customers, and item 7 is
+for when you have a competitor.
+
+**Item 4 is the one that undercuts everything else.** The repository is public as I write
+this. While it is, anyone can read the source, remove the licence check and build their
+own copy, and no amount of work on layers 3 to 5 changes that. Making it private is free
+and takes a minute; it is the highest value action on this list.
 
 ---
 
-## Decisions I need from you before building the licence system
+## Decisions still outstanding on commercial policy
 
-I have not implemented Layer 3 because these are commercial choices, not technical ones,
-and building the wrong model wastes the work:
+The mechanism is built and supports every model below, so none of these blocks you any
+longer. They are commercial choices to make before you issue the first code:
 
 1. **What does a licence cover?** Per workstation, per site, per hospital, or unlimited
-   within one organisation?
-2. **Perpetual or subscription?** Subscription needs an expiry date and a renewal process.
-3. **What happens when a licence is invalid?** I recommend the soft degradation described
-   above, but it is your call.
-4. **How will you deliver licence files?** Email attachment is normal and works offline.
-5. **Do you want a trial mode?** For example, thirty days fully functional, then transmit
-   is disabled.
-
-Tell me the answers and I will build it.
+   within one organisation? The code carries a seat count, and can be bound to a single
+   workstation with `--machine`. The seat count is **recorded, not enforced**: nothing in
+   the application counts installations, because an offline application cannot.
+2. **Perpetual or subscription?** Both work. Omit `--expires` for perpetual; pass
+   `--days 365` for an annual subscription.
+3. **What happens when a licence is invalid?** Decided, and implemented as the soft
+   degradation described above: the application opens, converts and saves, and withholds
+   only transmission.
+4. **How will you deliver codes?** Email is normal and works offline. The code is one
+   line of text; the Settings field tolerates the line breaks an email client inserts.
+5. **Do you want a trial mode?** `--days 30` gives exactly that, with the fourteen day
+   grace period after it.
 
 ---
 

@@ -67,7 +67,7 @@ cd pdftoDCM
 .\build\build.ps1                          # test, publish and build the installer (x64)
 .\build\build.ps1 -Runtime win-arm64       # native ARM64 build
 .\build\build.ps1 -Runtime win-x86         # 32 bit build
-.\build\build.ps1 -Task test               # run the 107 tests only
+.\build\build.ps1 -Task test               # run the 139 tests only
 ```
 
 The product is Windows only. The build tooling itself is not: `build/build.sh` cross
@@ -110,7 +110,8 @@ build/verify-against-dcmtk.sh
 src/PdfToDicom.Core/     All logic. net8.0, no presentation code, fully testable
 src/PdfToDicom.App/      WPF desktop application. net8.0-windows
 src/PdfToDicom.Cli/      Command line front end for scripted conversion
-tests/                   107 xUnit tests
+src/PdfToDicom.LicenceTool/  Licence generator. Publisher only, never distributed
+tests/                   139 xUnit tests
 build/                   Build scripts, installer, interoperability verification
 dist/                    Prebuilt ARM64 executable, for convenience during development
 docs/                    User manual (EN + PT), technical docs, conformance statement
@@ -134,6 +135,7 @@ application and the CLI provably identical in behaviour.
 | [Technical Documentation](docs/TechnicalDocumentation.md) | Developers and IT |
 | [DICOM Conformance Statement](docs/DicomConformanceStatement.md) | PACS administrators |
 | [Protecting Against Unauthorised Distribution](docs/ProtectingAgainstUnauthorisedDistribution.md) | The copyright holder |
+| [Licensing Workflow](docs/LicensingWorkflow.md) | The copyright holder |
 | [`samples/config.sample.json`](samples/config.sample.json) | Annotated configuration reference |
 | [`LICENSE`](LICENSE) | Proprietary licence terms |
 | [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) | Third party component licences |
@@ -142,9 +144,10 @@ application and the CLI provably identical in behaviour.
 
 ## Verification status
 
-**107 unit and workflow tests pass**, covering validation rules, VR limits, UID uniqueness
+**139 unit and workflow tests pass**, covering validation rules, VR limits, UID uniqueness
 across 20,000 identifiers per strategy, every mandatory attribute, payload padding, UTF-8
-round trips, configuration corruption recovery and the complete workflow.
+round trips, configuration corruption recovery, licence signing and expiry, and the
+complete workflow.
 
 **All three architectures are verified as native builds.** CI checks the PE machine type
 of each published executable, so a build cannot silently fall back to the runner's own
@@ -194,6 +197,32 @@ Stated openly; the full list is in the
 - **Encrypted PDFs are refused**, because nobody could open one from the archive.
 - **No storage commitment**; acceptance of the C-STORE is confirmed, not permanent
   archival.
+
+---
+
+## Distribution protection
+
+The application contains a **signed offline licence key** mechanism: an ECDSA P-256 code,
+optionally bound to one workstation and optionally time limited, entered by the customer in
+**Settings, Licence**.
+
+**It is switched off in this repository and in every published build.**
+`LicenceService.PublisherPublicKey` is blank, and a build with a blank key enforces
+nothing: the Licence tab is hidden, no notice ever appears, and the workflow is identical
+to the one that shipped before the feature existed. A test asserts the constant is still
+blank, so it cannot be switched on by accident.
+
+Switching it on is one `keygen` command and one pasted constant. See
+**[the licensing workflow](docs/LicensingWorkflow.md)**.
+
+When it is in force, a licence problem withholds **only transmission**. The application
+still opens, still converts and still saves locally, and an expired licence keeps
+transmitting for a further fourteen days. A licence that stops working at midnight, in a
+hospital, is a clinical incident rather than a commercial success.
+
+> **Note.** While this repository is public, none of this protects anything: anyone can
+> read the source, remove the check and build their own copy. Making the repository
+> private is free and is the single highest value action available.
 
 ---
 

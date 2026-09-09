@@ -40,10 +40,18 @@ public sealed class ConversionWorkflowService
     private readonly DicomFileWriter _fileWriter;
     private readonly IAppLogger _logger;
     private readonly IAuditLogger _auditLogger;
+    private readonly ILicenceService? _licenceService;
     private readonly PatientDemographicsValidator _demographicsValidator;
     private readonly PacsDestinationValidator _destinationValidator;
 
     /// <summary>Creates the workflow service.</summary>
+    /// <param name="licenceService">
+    /// Optional. When supplied, transmission is withheld from a copy whose licence is
+    /// missing, forged, registered to another machine, or long expired. Conversion and
+    /// local saving are never withheld: a clinician must always be able to produce the
+    /// document, whatever the commercial position. When null, or when the build carries no
+    /// publisher key, nothing is withheld at all.
+    /// </param>
     public ConversionWorkflowService(
         IConfigurationService configurationService,
         IPdfInspector pdfInspector,
@@ -52,7 +60,8 @@ public sealed class ConversionWorkflowService
         IDicomNetworkService networkService,
         DicomFileWriter fileWriter,
         IAppLogger logger,
-        IAuditLogger auditLogger)
+        IAuditLogger auditLogger,
+        ILicenceService? licenceService = null)
     {
         _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
         _pdfInspector = pdfInspector ?? throw new ArgumentNullException(nameof(pdfInspector));
@@ -62,6 +71,7 @@ public sealed class ConversionWorkflowService
         _fileWriter = fileWriter ?? throw new ArgumentNullException(nameof(fileWriter));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _auditLogger = auditLogger ?? throw new ArgumentNullException(nameof(auditLogger));
+        _licenceService = licenceService;
 
         _demographicsValidator = new PatientDemographicsValidator();
         _destinationValidator = new PacsDestinationValidator();
@@ -115,12 +125,24 @@ public sealed class ConversionWorkflowService
 
         AppConfiguration configuration = _configurationService.Current;
 
-        IReadOnlyList<PacsDestination> destinations = options.Transmit
+        // ---------------------------------------------------------- 0. Licence
+        // A licence problem downgrades the run to "generate and save" rather than failing
+        // it. The document is still produced, so the operator is never left unable to do
+        // clinical work; only the transmission is withheld, and the reason is stated.
+        string? licenceRefusal = DescribeLicenceRefusal(configuration);
+        bool transmit = options.Transmit && licenceRefusal is null;
+
+        if (licenceRefusal is not null && options.Transmit)
+        {
+            _logger.Warning($"Transmission was withheld because of the licence: {licenceRefusal}");
+        }
+
+        IReadOnlyList<PacsDestination> destinations = transmit
             ? options.Destinations ?? configuration.EnabledDestinations
             : Array.Empty<PacsDestination>();
 
         // ---------------------------------------------------------- 1. Validate inputs
-        ValidationResult inputValidation = ValidateInputs(pdfPath, demographics, options.Transmit);
+        ValidationResult inputValidation = ValidateInputs(pdfPath, demographics, transmit);
 
         if (!inputValidation.IsValid)
         {
@@ -195,7 +217,7 @@ public sealed class ConversionWorkflowService
 
         // ---------------------------------------------------------- 4. Save the object
         string? savedPath = null;
-        bool saveRequested = configuration.AlwaysSaveDicomLocally || !options.Transmit;
+        bool saveRequested = configuration.AlwaysSaveDicomLocally || !transmit;
 
         if (saveRequested)
         {
@@ -216,8 +238,17 @@ public sealed class ConversionWorkflowService
         _auditLogger.DicomGenerated(
             built.StudyInstanceUid, built.SeriesInstanceUid, built.SopInstanceUid, savedPath);
 
-        if (!options.Transmit)
+        if (!transmit)
         {
+            if (licenceRefusal is not null && options.Transmit)
+            {
+                objectValidation.AddWarning("Licence", licenceRefusal);
+            }
+
+            string outcome = savedPath is null
+                ? "The DICOM object was generated but could not be saved."
+                : $"The DICOM object was generated and saved to '{savedPath}'.";
+
             return new ConversionResult
             {
                 DicomGenerated = true,
@@ -226,9 +257,9 @@ public sealed class ConversionWorkflowService
                 SeriesInstanceUid = built.SeriesInstanceUid,
                 SopInstanceUid = built.SopInstanceUid,
                 ValidationIssues = objectValidation.Issues,
-                Summary = savedPath is null
-                    ? "The DICOM object was generated but could not be saved."
-                    : $"The DICOM object was generated and saved to '{savedPath}'."
+                Summary = licenceRefusal is not null && options.Transmit
+                    ? $"{outcome} It was not transmitted: {licenceRefusal}"
+                    : outcome
             };
         }
 
@@ -292,6 +323,25 @@ public sealed class ConversionWorkflowService
         AppConfiguration configuration = _configurationService.Current;
         IReadOnlyList<PacsDestination> targets = destinations ?? configuration.EnabledDestinations;
 
+        // The retry action bypasses RunAsync, so the licence is checked here as well.
+        // Without this, a copy that cannot transmit could still transmit by pressing Retry.
+        string? licenceRefusal = DescribeLicenceRefusal(configuration);
+
+        if (licenceRefusal is not null)
+        {
+            _logger.Warning($"The retry was withheld because of the licence: {licenceRefusal}");
+
+            return targets.Select(target => new TransmissionResult
+            {
+                DestinationName = target.Name,
+                CalledAeTitle = target.CalledAeTitle,
+                Host = target.Host,
+                Port = target.Port,
+                Outcome = TransmissionOutcome.LocalError,
+                Message = licenceRefusal
+            }).ToList();
+        }
+
         _logger.Information($"Retrying the transmission of {sopInstanceUid} to {targets.Count} destination(s).");
 
         IReadOnlyList<TransmissionResult> results = await _networkService
@@ -305,6 +355,34 @@ public sealed class ConversionWorkflowService
 
         TrySaveConfiguration();
         return results;
+    }
+
+    /// <summary>
+    /// Returns the reason transmission must be withheld, or null when it may proceed.
+    /// </summary>
+    /// <remarks>
+    /// Null is returned whenever there is any doubt: when no licence service was supplied,
+    /// when the build carries no publisher key, and when the check itself faults. A
+    /// licensing subsystem that stops a hospital sending a report because of a bug in the
+    /// licensing subsystem is a worse failure than an unlicensed copy.
+    /// </remarks>
+    private string? DescribeLicenceRefusal(AppConfiguration configuration)
+    {
+        if (_licenceService is null || !_licenceService.IsEnforced)
+        {
+            return null;
+        }
+
+        try
+        {
+            LicenceStatus status = _licenceService.Check(configuration.LicenceCode);
+            return status.MayTransmit ? null : status.Message;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("The licence could not be checked, so transmission was allowed.", ex);
+            return null;
+        }
     }
 
     /// <summary>Builds the operator facing summary of the run.</summary>

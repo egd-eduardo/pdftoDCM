@@ -288,6 +288,43 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    // ---------------------------------------------------------------- Licence
+
+    /// <summary>
+    /// True when a licence problem needs stating. Always false in a build that does not
+    /// enforce licensing, which is what keeps the notice invisible until the publisher
+    /// switches the feature on.
+    /// </summary>
+    public bool ShowLicenceNotice => CurrentLicenceStatus.ShouldWarn;
+
+    /// <summary>The licence message shown in the notice band.</summary>
+    public string LicenceNotice => CurrentLicenceStatus.Message;
+
+    /// <summary>
+    /// The current licence status, read fresh so that entering a code in Settings clears
+    /// the notice without restarting the application.
+    /// </summary>
+    private LicenceStatus CurrentLicenceStatus
+    {
+        get
+        {
+            try
+            {
+                return _services.LicenceService.Check(
+                    _services.ConfigurationService.Current.LicenceCode);
+            }
+            catch (Exception ex)
+            {
+                // The notice band is cosmetic. A fault here must never stop the main
+                // window from rendering.
+                _services.Logger.Warning($"The licence could not be checked: {ex.Message}");
+
+                return new LicenceStatus(
+                    LicenceState.NotEnforced, null, null, 0, false, string.Empty);
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- Status
 
     /// <summary>Current workflow state.</summary>
@@ -897,7 +934,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             OnPropertyChanged(nameof(InstitutionHeader));
             OnPropertyChanged(nameof(ShowAdvancedFields));
+            RefreshLicenceNotice();
         }
+    }
+
+    /// <summary>Re-reads the licence so the notice band reflects the current code.</summary>
+    private void RefreshLicenceNotice()
+    {
+        OnPropertyChanged(nameof(ShowLicenceNotice));
+        OnPropertyChanged(nameof(LicenceNotice));
     }
 
     private void OpenLogViewer()
@@ -1045,6 +1090,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             OnPropertyChanged(nameof(InstitutionHeader));
             OnPropertyChanged(nameof(ShowAdvancedFields));
+            RefreshLicenceNotice();
             RefreshDestinations();
         }
 

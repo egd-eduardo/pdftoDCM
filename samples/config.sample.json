@@ -96,6 +96,9 @@
   "ShowAdvancedFields": false,
   "ConfirmBeforeSending": true,
 
+  "//Licensing": "Ignored entirely unless the build carries a publisher public key, which the published builds do not. Leave it empty. When licensing is in force, the code is entered through Settings, Licence rather than by editing this file.",
+  "LicenceCode": "",
+
   "//Templates": "Reusable, non identifying form values. Templates never store a Patient ID, name, date of birth or accession number.",
   "Templates": [
     {

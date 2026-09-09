@@ -281,6 +281,7 @@ pelo departamento de informática.
 | **DICOM** | Conjunto de carateres, geração de identificadores, modalidade, descrições por omissão. Não altere sem indicação do administrador do PACS. |
 | **Pastas** | Onde são guardados os ficheiros e os registos, e a monitorização de pastas. |
 | **Aspeto** | Idioma, modo escuro e confirmação antes de enviar. |
+| **Licença** | O código de licença desta instalação. **Este separador só aparece se a sua cópia exigir licença.** Se não o vir, não há nada a fazer. |
 
 Duas definições são relevantes para o utilizador:
 
@@ -289,6 +290,31 @@ Duas definições são relevantes para o utilizador:
 
 > **Mantenha ativada a opção "Pedir confirmação antes de enviar".** É a última verificação
 > de que o documento corresponde ao doente.
+
+### Se aparecer uma mensagem sobre a licença
+
+Algumas cópias desta aplicação exigem um código de licença. Se a sua exigir e houver algum
+problema, aparece uma faixa colorida por baixo do título a explicar o que se passa.
+
+**Pode continuar a trabalhar.** Continua a poder escolher um documento, introduzir os dados
+do doente e gerar e guardar o ficheiro DICOM. Apenas o envio para o PACS é afetado.
+
+Para introduzir ou corrigir o código:
+
+1. Clique em **Definições** e depois no separador **Licença**.
+2. Cole o código enviado pelo fornecedor. É uma linha longa que começa por `PDFDCM1.` e não
+   há problema se o programa de correio eletrónico a tiver dividido por várias linhas.
+3. O **Estado**, logo abaixo, indica de imediato se o código é aceite.
+4. Clique em **Guardar**.
+
+Se a mensagem indicar que a licença pertence a outra estação de trabalho, envie ao
+fornecedor o identificador apresentado em **Esta estação de trabalho**, com o aspeto
+`A1B2-C3D4-E5F6-7890`. O botão **Copiar** coloca-o na área de transferência para o poder
+colar num email. Não contém qualquer informação pessoal.
+
+Se uma licença expirar, a aplicação continua a enviar durante mais catorze dias, avisando
+de cada vez, para que ninguém fique impedido de trabalhar sem aviso prévio. Assim que vir
+o aviso, informe quem gere os contratos.
 
 ---
 
