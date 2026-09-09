@@ -40,6 +40,7 @@ try
         "generate" => await RunConversionAsync(services, options, transmit: false),
         "echo" => await RunEchoAsync(services, options),
         "inspect" => RunInspect(services, options),
+        "extract" => RunExtract(services, options),
         "config" => RunShowConfiguration(services),
         _ => UnknownCommand(options.Command)
     };
@@ -213,6 +214,92 @@ static int RunInspect(ApplicationServices services, CommandLineOptions options)
     PrintValidationIssues(validation.Issues);
 
     return validation.IsValid ? ExitCodes.Success : ExitCodes.GenerationFailed;
+}
+
+/// <summary>
+/// Recovers the original PDF from a generated object.
+/// </summary>
+/// <remarks>
+/// This exists for troubleshooting. When a document renders unexpectedly in a PACS
+/// viewer, the first question is whether the stored PDF is intact or whether the viewer
+/// is rendering it badly. Extracting the payload and opening it in an ordinary PDF reader
+/// answers that in seconds: if the recovered file looks correct, the conversion is sound
+/// and the problem lies in how the archive displays it.
+/// </remarks>
+static int RunExtract(ApplicationServices services, CommandLineOptions options)
+{
+    if (string.IsNullOrWhiteSpace(options.PdfPath))
+    {
+        Console.Error.WriteLine("error: --pdf must point at the .dcm file to extract from.");
+        return ExitCodes.InvalidArguments;
+    }
+
+    if (!File.Exists(options.PdfPath))
+    {
+        Console.Error.WriteLine($"error: '{options.PdfPath}' does not exist.");
+        return ExitCodes.InvalidArguments;
+    }
+
+    DicomFile file;
+    try
+    {
+        file = DicomFile.Open(options.PdfPath);
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"error: '{options.PdfPath}' could not be read as a DICOM file: {ex.Message}");
+        return ExitCodes.GenerationFailed;
+    }
+
+    string mimeType = file.Dataset.GetSingleValueOrDefault(DicomTag.MIMETypeOfEncapsulatedDocument, string.Empty);
+
+    if (!file.Dataset.TryGetValues(DicomTag.EncapsulatedDocument, out byte[] payload) || payload.Length == 0)
+    {
+        Console.Error.WriteLine("error: the file contains no encapsulated document.");
+        return ExitCodes.GenerationFailed;
+    }
+
+    // OB values are padded to an even length, so a single trailing null byte may have
+    // been added at encapsulation. It is removed here so the recovered file is exactly
+    // the original, which is what makes a byte for byte comparison meaningful.
+    int length = payload.Length;
+    if (length > 0 && payload[length - 1] == 0x00)
+    {
+        length--;
+    }
+
+    string output = string.IsNullOrWhiteSpace(options.OutputPath)
+        ? Path.ChangeExtension(options.PdfPath, ".extracted.pdf")
+        : options.OutputPath;
+
+    try
+    {
+        string? directory = Path.GetDirectoryName(Path.GetFullPath(output));
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        File.WriteAllBytes(output, payload.AsSpan(0, length).ToArray());
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"error: the recovered document could not be written: {ex.Message}");
+        return ExitCodes.GenerationFailed;
+    }
+
+    bool looksLikePdf = length >= 5 && payload.AsSpan(0, 5).SequenceEqual("%PDF-"u8);
+
+    Console.WriteLine($"Recovered {length} bytes to '{output}'.");
+    Console.WriteLine($"  Declared MIME type : {(string.IsNullOrEmpty(mimeType) ? "(none)" : mimeType)}");
+    Console.WriteLine($"  Begins with a PDF header : {(looksLikePdf ? "yes" : "NO")}");
+    Console.WriteLine($"  Patient  : {file.Dataset.GetSingleValueOrDefault(DicomTag.PatientName, string.Empty)}");
+    Console.WriteLine($"  Accession: {file.Dataset.GetSingleValueOrDefault(DicomTag.AccessionNumber, string.Empty)}");
+    Console.WriteLine();
+    Console.WriteLine("Open the recovered file in an ordinary PDF reader. If it looks correct, the");
+    Console.WriteLine("stored document is intact and any display problem lies in the viewer.");
+
+    return looksLikePdf ? ExitCodes.Success : ExitCodes.GenerationFailed;
 }
 
 /// <summary>Prints the effective configuration and where it is stored.</summary>

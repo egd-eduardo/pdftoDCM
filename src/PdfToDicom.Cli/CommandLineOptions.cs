@@ -25,6 +25,9 @@ public sealed class CommandLineOptions
     /// <summary>Explicit configuration file, when one was supplied.</summary>
     public string? ConfigurationPath { get; private set; }
 
+    /// <summary>Output path for the extract command.</summary>
+    public string? OutputPath { get; private set; }
+
     /// <summary>Names of the destinations to use. Empty means every enabled destination.</summary>
     public List<string> DestinationNames { get; } = new();
 
@@ -168,6 +171,9 @@ public sealed class CommandLineOptions
             case "config":
                 ConfigurationPath = value;
                 break;
+            case "out":
+                OutputPath = value;
+                break;
             default:
                 ParseErrors.Add($"Unknown option '--{name}'.");
                 break;
@@ -196,6 +202,7 @@ public sealed class CommandLineOptions
           generate    Convert a PDF and save it locally, without transmitting.
           echo        Send a C-ECHO verification to the configured destination(s).
           inspect     Print the DICOM tags of an existing .dcm file.
+          extract     Recover the original PDF from a .dcm file, byte for byte.
           config      Show the effective configuration and where it is stored.
           help        Show this text.
 
@@ -218,6 +225,7 @@ public sealed class CommandLineOptions
           --study-id <value>           Study ID.
           --destination <name>         Use only this destination. May be repeated.
           --config <path>              Use a specific configuration file.
+          --out <path>                 Where extract writes the recovered PDF.
           --no-send                    Generate and save without transmitting.
           --show-tags                  Print the generated DICOM tags.
           --verbose                    Include debug entries in the log.
@@ -229,6 +237,7 @@ public sealed class CommandLineOptions
           pdftodicom send --pdf report.pdf --patient-id 12345 --surname Silva \
                           --given-name Maria --dob 1970-05-21 --accession ACC001
           pdftodicom inspect --pdf out/12345_ACC001_1234.dcm
+          pdftodicom extract --pdf out/12345_ACC001_1234.dcm --out recovered.pdf
 
         EXIT CODES
           0  success
