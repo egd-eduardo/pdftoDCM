@@ -257,6 +257,7 @@ public sealed class ConversionWorkflowService
                 SeriesInstanceUid = built.SeriesInstanceUid,
                 SopInstanceUid = built.SopInstanceUid,
                 ValidationIssues = objectValidation.Issues,
+                TransmissionWithheld = licenceRefusal is not null && options.Transmit,
                 Summary = licenceRefusal is not null && options.Transmit
                     ? $"{outcome} It was not transmitted: {licenceRefusal}"
                     : outcome

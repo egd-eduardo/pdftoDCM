@@ -485,6 +485,30 @@ public sealed class LicensedWorkflowTests : IDisposable
         // And the operator is told why, in the summary and in the issue list.
         Assert.Contains("licence", result.Summary, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(result.ValidationIssues, i => i.Field == "Licence");
+
+        // A run that was asked to transmit and did not must never report success. An
+        // empty transmission list alone cannot distinguish this from "generate only",
+        // and the command line tool's exit code depends on the difference.
+        Assert.True(result.TransmissionWithheld);
+        Assert.False(result.IsCompleteSuccess);
+    }
+
+    [Fact]
+    public async Task AGenerateOnlyRunIsStillACompleteSuccess()
+    {
+        // The other side of the distinction above: nothing was withheld here, because
+        // nothing was asked for.
+        using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var licence = new LicenceService(
+            publicKeyOverride: Convert.ToBase64String(key.ExportSubjectPublicKeyInfo()));
+
+        ConversionResult result = await CreateWorkflow(licence).RunAsync(
+            TestSupport.SamplePdfPath,
+            TestSupport.CreateDemographics(),
+            new ConversionOptions(Transmit: false));
+
+        Assert.False(result.TransmissionWithheld);
+        Assert.True(result.IsCompleteSuccess);
     }
 
     [Fact]
