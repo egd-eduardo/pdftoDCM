@@ -142,8 +142,6 @@ class XamlBindingValidator:
             text = path.read_text(encoding="utf-8")
             keys.update(re.findall(r'x:Key="([^"]+)"', text))
 
-        # Keys supplied by the framework itself rather than by this application.
-        keys.update({"{x:Type PasswordBox}"})
         return keys
 
     def _check_two_way_bindings(self, path: Path, text: str) -> None:

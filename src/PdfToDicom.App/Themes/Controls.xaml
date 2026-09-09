@@ -223,8 +223,6 @@
     <!-- Applied to a mandatory field that the operator has left empty. -->
     <Style x:Key="RequiredInputTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource InputTextBoxStyle}" />
 
-    <Style TargetType="PasswordBox" BasedOn="{StaticResource {x:Type PasswordBox}}" />
-
     <!-- ============================================================ ComboBox -->
 
     <Style x:Key="InputComboBoxStyle" TargetType="ComboBox">
