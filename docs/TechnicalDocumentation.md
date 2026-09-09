@@ -489,6 +489,30 @@ strategy), person name construction, every mandatory attribute, payload integrit
 length padding, UTF-8 round trips, configuration persistence and corruption recovery, and
 the full workflow with a stubbed network.
 
+### XAML binding verification
+
+```bash
+python3 build/validate-xaml-bindings.py
+```
+
+WPF resolves bindings when a window loads, not when it compiles. A binding that cannot
+work is therefore a clean build followed by a crash on startup, and on a clinical
+workstation that means the application simply refuses to open.
+
+The application itself cannot be run anywhere but Windows, so this check stands in for
+launching it. It reports:
+
+- a binding to a dependency property that is **two way by default** (`TextBox.Text`,
+  `ComboBox.SelectedItem`, `CheckBox.IsChecked`, `DatePicker.SelectedDate`,
+  `RangeBase.Value` and others) whose source property has no public setter;
+- a `StaticResource` key that is never defined;
+- a `StaticResource` used earlier in a file than it is defined.
+
+> This check exists because exactly that defect shipped. `ProgressBar.Value` was bound to
+> a property with a private setter, and because `RangeBase.Value` binds two way by
+> default, the main window failed to load on a Windows ARM64 machine. The build was clean
+> and all 107 tests passed. Only running the application would have revealed it.
+
 ### Interoperability verification
 
 ```bash
@@ -608,17 +632,22 @@ networking, validation and workflow layers need no change.
 
 Stated plainly, because a hospital deploying this needs to know what it does not do.
 
-1. **No PDF page rendering.** The interface shows a document icon and metadata, not a
+1. **The user interface is not covered by automated tests.** The 107 tests cover Core in
+   depth, but WPF cannot run on a build agent without a desktop session, so no test opens
+   a window. `build/validate-xaml-bindings.py` catches the binding errors that stop the
+   application starting, and is not a substitute for running it. **Launch the application
+   once on a real Windows machine before releasing any build.**
+2. **No PDF page rendering.** The interface shows a document icon and metadata, not a
    thumbnail. Rendering would require a native component and would defeat the single file
    deployment.
-2. **No Modality Worklist query.** Demographics are typed or scanned, not retrieved from
+3. **No Modality Worklist query.** Demographics are typed or scanned, not retrieved from
    the RIS. A worklist SCU is the obvious next feature and would eliminate the transcription
    risk that section 4 of the user manual warns about.
-3. **Encrypted PDFs are refused.** Encapsulating one produces an object no clinician can
+4. **Encrypted PDFs are refused.** Encapsulating one produces an object no clinician can
    open from the archive.
-5. **Single instance per user session.** Two instances would both monitor the folder and
+6. **Single instance per user session.** Two instances would both monitor the folder and
    double-send the same document.
-6. **No storage commitment.** The application confirms the C-STORE was accepted, not that
+7. **No storage commitment.** The application confirms the C-STORE was accepted, not that
    the archive has committed the object to permanent storage.
-7. **`Modality` defaults to `OT`, not the standard's `DOC`.** As specified, configurable,
+8. **`Modality` defaults to `OT`, not the standard's `DOC`.** As specified, configurable,
    and discussed in section 4.

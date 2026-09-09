@@ -10,7 +10,7 @@
 #
 # Usage:
 #   build/build.sh              build, test and publish
-#   build/build.sh test         run the tests only
+#   build/build.sh test         run the validators and the tests only
 #   build/build.sh publish      publish only
 #   build/build.sh clean        remove build output
 #
@@ -66,6 +66,15 @@ do_build() {
     # EnableWindowsTargeting lets the WPF project compile on a non Windows host.
     dotnet build "$REPO_ROOT/PDF to DICOM.sln" -c "$CONFIGURATION" --no-restore --nologo \
         -p:EnableWindowsTargeting=true
+}
+
+do_validate() {
+    step "Validating XAML bindings and the installer script"
+
+    # Both catch failures that only appear at runtime on Windows, so they are checked
+    # here where they cost nothing rather than on a clinical workstation.
+    python3 "$REPO_ROOT/build/validate-xaml-bindings.py"
+    python3 "$REPO_ROOT/build/validate-installer-script.py"
 }
 
 do_test() {
@@ -133,9 +142,9 @@ require_sdk
 
 case "${1:-all}" in
     clean)   do_clean ;;
-    test)    do_restore; do_build; do_test ;;
+    test)    do_restore; do_build; do_validate; do_test ;;
     publish) do_restore; do_publish ;;
-    all)     do_restore; do_build; do_test; do_publish ;;
+    all)     do_restore; do_build; do_validate; do_test; do_publish ;;
     *)
         echo "Usage: $0 [all|test|publish|clean]" >&2
         exit 1

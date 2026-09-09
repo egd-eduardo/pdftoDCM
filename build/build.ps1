@@ -85,6 +85,23 @@ function Invoke-Build {
     if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 }
 
+function Invoke-Validate {
+    Write-Step 'Validating XAML bindings'
+
+    # A broken WPF binding compiles cleanly and then crashes when the window loads, so
+    # it is checked here rather than discovered by a user on a clinical workstation.
+    $validator = Join-Path $RepoRoot 'build\validate-xaml-bindings.py'
+    $python = Get-Command python3, python -ErrorAction SilentlyContinue | Select-Object -First 1
+
+    if (-not $python) {
+        Write-Warning 'Python was not found, so the XAML bindings were not validated.'
+        return
+    }
+
+    & $python.Source $validator
+    if ($LASTEXITCODE -ne 0) { throw 'The XAML bindings did not pass validation.' }
+}
+
 function Invoke-Test {
     Write-Step 'Running the test suite'
     dotnet test (Join-Path $RepoRoot 'tests\PdfToDicom.Core.Tests\PdfToDicom.Core.Tests.csproj') `
@@ -230,10 +247,10 @@ Assert-Sdk
 
 switch ($Task) {
     'clean'   { Invoke-Clean }
-    'test'    { Invoke-Restore; Invoke-Build; Invoke-Test }
+    'test'    { Invoke-Restore; Invoke-Build; Invoke-Validate; Invoke-Test }
     'publish' { Invoke-Restore; Invoke-Publish }
     'package' { Invoke-Package }
-    'all'     { Invoke-Restore; Invoke-Build; Invoke-Test; Invoke-Publish; Invoke-Package }
+    'all'     { Invoke-Restore; Invoke-Build; Invoke-Validate; Invoke-Test; Invoke-Publish; Invoke-Package }
 }
 
 Write-Step 'Done'

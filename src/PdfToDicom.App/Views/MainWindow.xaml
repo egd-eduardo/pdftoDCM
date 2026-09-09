@@ -547,11 +547,17 @@
                            TextTrimming="CharacterEllipsis"
                            Foreground="{DynamicResource PrimaryTextBrush}" />
 
+                <!--
+                    RangeBase.Value binds two way by default. The view model drives the
+                    bar and never accepts a value back from it, so the mode is stated
+                    explicitly. Without it WPF rejects the binding against a read only
+                    property and the window fails to load at all.
+                -->
                 <ProgressBar Grid.Column="2"
                              Width="180" Height="5"
                              VerticalAlignment="Center"
                              IsIndeterminate="{Binding IsProgressIndeterminate}"
-                             Value="{Binding ProgressValue}"
+                             Value="{Binding ProgressValue, Mode=OneWay}"
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"
                              Foreground="{DynamicResource AccentBrush}"
                              Background="{DynamicResource SubtleBackgroundBrush}"

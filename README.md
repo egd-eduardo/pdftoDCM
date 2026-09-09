@@ -183,6 +183,10 @@ Recorded in full in the [technical documentation](docs/TechnicalDocumentation.md
 Stated openly; the full list is in the
 [technical documentation](docs/TechnicalDocumentation.md#18-known-limitations).
 
+- **The user interface has no automated test coverage.** WPF cannot run on a build agent,
+  so `build/validate-xaml-bindings.py` catches the binding errors that stop the
+  application starting, and nothing else does. Launch any build once on real Windows
+  before releasing it.
 - **No Modality Worklist query.** Demographics are typed or scanned, not retrieved from the
   RIS. This is the most significant functional gap and the obvious next feature.
 - **No PDF thumbnail preview** — a document icon and metadata instead, to preserve the
