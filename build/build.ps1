@@ -162,18 +162,48 @@ The self contained executable in artifacts\<rid>\app is fully functional without
         return
     }
 
-    # The script uses the architecture identifiers introduced in Inno Setup 6.3.
-    # An older compiler reports this as an obscure parse error, so it is checked here.
-    $isccVersion = (Get-Item $iscc).VersionInfo.ProductVersion
-    Write-Host "    using Inno Setup $isccVersion"
+    # The installer script uses the architecture identifiers introduced in Inno Setup 6.3.
+    # An older compiler reports their absence as an obscure parse error, so the version is
+    # checked here to produce a message that says what is actually wrong.
+    #
+    # ISCC.exe does not populate its ProductVersion resource: it reports 0.0.0.0. The
+    # version is therefore taken from the compiler's own banner, which it prints on
+    # startup, and the file version resource is used only as a fallback.
+    #
+    # This check must never block a build it cannot evaluate. An undetermined version is
+    # a warning, not a failure, because letting the compiler speak for itself is always
+    # better than refusing to run it.
+    $isccVersion = $null
+
+    try {
+        $banner = & $iscc /? 2>&1 | Select-Object -First 5
+
+        # Anchored to the product name so that a copyright year or any other number in
+        # the banner cannot be mistaken for a version and wrongly block the build.
+        $match = [regex]::Match(($banner -join ' '), 'Inno Setup\s+(\d+\.\d+(?:\.\d+)?)')
+        if ($match.Success) { $isccVersion = $match.Groups[1].Value }
+    }
+    catch {
+        # The banner could not be read. The file version is tried next.
+    }
+
+    if (-not $isccVersion) {
+        $fileVersion = (Get-Item $iscc).VersionInfo.FileVersion
+        if ($fileVersion -and $fileVersion -notmatch '^0\.0') { $isccVersion = $fileVersion }
+    }
 
     if ($isccVersion -match '^(\d+)\.(\d+)') {
         $major = [int]$Matches[1]
         $minor = [int]$Matches[2]
 
+        Write-Host "    using Inno Setup $isccVersion"
+
         if ($major -lt 6 -or ($major -eq 6 -and $minor -lt 3)) {
             throw "Inno Setup 6.3 or later is required for the architecture identifiers used by the installer script, but $isccVersion was found."
         }
+    }
+    else {
+        Write-Host '    Inno Setup version could not be determined; proceeding and letting the compiler report any incompatibility.'
     }
 
     # A static check of the installer script, when Python is available. It catches the

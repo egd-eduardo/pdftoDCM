@@ -60,6 +60,26 @@ jobs:
         # check catches the common classes of error in seconds.
         run: python3 build/validate-installer-script.py
 
+      - name: Parse check the PowerShell build script
+        # build.ps1 only runs on the Windows job, so a syntax or logic error in it would
+        # otherwise cost a full Windows build to discover. PowerShell is present on the
+        # Linux runner, so the script is at least parsed here first.
+        shell: pwsh
+        run: |
+          $errors = $null
+          $tokens = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'build/build.ps1'), [ref]$tokens, [ref]$errors) | Out-Null
+
+          if ($errors) {
+            $errors | ForEach-Object {
+              Write-Host "::error file=build/build.ps1,line=$($_.Extent.StartLineNumber)::$($_.Message)"
+            }
+            throw "build.ps1 has $($errors.Count) parse error(s)."
+          }
+
+          Write-Host 'build.ps1 parses cleanly.'
+
       - name: Install DCMTK for the interoperability check
         run: sudo apt-get update && sudo apt-get install -y dcmtk
 
