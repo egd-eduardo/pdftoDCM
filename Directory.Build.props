@@ -19,9 +19,9 @@
 
     <!-- Product identity, surfaced in file properties and in the About dialog. -->
     <Product>PDF to DICOM</Product>
-    <Company>Eduard</Company>
-    <Authors>Eduard</Authors>
-    <Copyright>Copyright (c) 2026 Eduard</Copyright>
+    <Company>Eduardo Dias</Company>
+    <Authors>Eduardo Dias</Authors>
+    <Copyright>Copyright (c) 2026 Eduardo Dias. All rights reserved.</Copyright>
     <Version>1.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>

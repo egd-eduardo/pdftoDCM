@@ -58,13 +58,13 @@ do_clean() {
 
 do_restore() {
     step "Restoring packages"
-    dotnet restore "$REPO_ROOT/PdfToDicom.sln" --nologo
+    dotnet restore "$REPO_ROOT/PDF to DICOM.sln" --nologo
 }
 
 do_build() {
     step "Building ($CONFIGURATION)"
     # EnableWindowsTargeting lets the WPF project compile on a non Windows host.
-    dotnet build "$REPO_ROOT/PdfToDicom.sln" -c "$CONFIGURATION" --no-restore --nologo \
+    dotnet build "$REPO_ROOT/PDF to DICOM.sln" -c "$CONFIGURATION" --no-restore --nologo \
         -p:EnableWindowsTargeting=true
 }
 

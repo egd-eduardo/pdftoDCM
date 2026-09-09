@@ -42,11 +42,11 @@ jobs:
       - name: Restore
         # Restore generates assets for every runtime identifier declared in the project
         # files, so the Release build below succeeds without restoring again.
-        run: dotnet restore PdfToDicom.sln
+        run: dotnet restore "PDF to DICOM.sln"
 
       - name: Build
         # EnableWindowsTargeting lets the WPF project compile on a Linux runner.
-        run: dotnet build PdfToDicom.sln -c Release --no-restore -p:EnableWindowsTargeting=true
+        run: dotnet build "PDF to DICOM.sln" -c Release --no-restore -p:EnableWindowsTargeting=true
 
       - name: Run the unit and workflow tests
         run: >-

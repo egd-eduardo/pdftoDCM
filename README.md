@@ -21,7 +21,7 @@ buttons, and error messages written in plain language.
 | **Network use** | Outbound DICOM only, to configured destinations. Everything else is offline |
 | **SOP class produced** | Encapsulated PDF Storage `1.2.840.10008.5.1.4.1.1.104.1` |
 | **Languages** | English, Portuguese (Portugal) |
-| **Author** | Eduard |
+| **Author** | Eduardo Dias |
 | **Verified against** | DCMTK, end to end, by an automated script in this repository |
 
 ---
@@ -40,6 +40,13 @@ buttons, and error messages written in plain language.
 ---
 
 ## Quick start
+
+### Just want to run it?
+
+A prebuilt **Windows ARM64** executable is committed at
+[`dist/PdfToDicom-win-arm64.exe`](dist/PdfToDicom-win-arm64.exe). It is self contained, so
+download it and double click. Builds for x64 and x86, and the installers for all three
+architectures, are attached to every [CI run](../../actions).
 
 ### For a hospital user
 
@@ -99,11 +106,13 @@ build/verify-against-dcmtk.sh
 ## Repository layout
 
 ```
+"PDF to DICOM.sln"       Visual Studio solution
 src/PdfToDicom.Core/     All logic. net8.0, no presentation code, fully testable
 src/PdfToDicom.App/      WPF desktop application. net8.0-windows
 src/PdfToDicom.Cli/      Command line front end for scripted conversion
 tests/                   107 xUnit tests
 build/                   Build scripts, installer, interoperability verification
+dist/                    Prebuilt ARM64 executable, for convenience during development
 docs/                    User manual (EN + PT), technical docs, conformance statement
 samples/                 Annotated configuration, example PDF, example DICOM object
 ```
@@ -124,7 +133,10 @@ application and the CLI provably identical in behaviour.
 | [Manual do Utilizador](docs/ManualDoUtilizador.pt-PT.md) | Pessoal hospitalar |
 | [Technical Documentation](docs/TechnicalDocumentation.md) | Developers and IT |
 | [DICOM Conformance Statement](docs/DicomConformanceStatement.md) | PACS administrators |
+| [Protecting Against Unauthorised Distribution](docs/ProtectingAgainstUnauthorisedDistribution.md) | The copyright holder |
 | [`samples/config.sample.json`](samples/config.sample.json) | Annotated configuration reference |
+| [`LICENSE`](LICENSE) | Proprietary licence terms |
+| [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) | Third party component licences |
 
 ---
 
@@ -178,6 +190,15 @@ Stated openly; the full list is in the
 - **Encrypted PDFs are refused**, because nobody could open one from the archive.
 - **No storage commitment**; acceptance of the C-STORE is confirmed, not permanent
   archival.
+
+---
+
+## Licence
+
+**Proprietary. Copyright (c) 2026 Eduardo Dias. All rights reserved.**
+
+This software is licensed, not sold. No right to use, copy or distribute it is granted
+except under a separate written agreement. See [`LICENSE`](LICENSE).
 
 ---
 

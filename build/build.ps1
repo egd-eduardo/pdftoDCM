@@ -43,7 +43,7 @@ Set-StrictMode -Version Latest
 
 $RepoRoot  = Split-Path -Parent $PSScriptRoot
 $Artifacts = Join-Path $RepoRoot 'artifacts'
-$Solution  = Join-Path $RepoRoot 'PdfToDicom.sln'
+$Solution  = Join-Path $RepoRoot 'PDF to DICOM.sln'
 
 function Write-Step {
     param([string]$Message)

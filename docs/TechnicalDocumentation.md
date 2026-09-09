@@ -96,7 +96,7 @@ and the command line tool provably identical in behaviour: both drive the same
 
 ```
 pdftoDCM/
-├── PdfToDicom.sln
+├── PDF to DICOM.sln
 ├── Directory.Build.props            Shared compiler settings
 ├── global.json                      SDK version, permissive roll-forward
 │

@@ -24,7 +24,7 @@
 #define AppName        "PDF to DICOM"
 #define AppShortName   "PdfToDicom"
 #define AppVersion     "1.0.0"
-#define AppPublisher   "Eduard"
+#define AppPublisher   "Eduardo Dias"
 #define AppExeName     "PdfToDicom.exe"
 #define CliExeName     "pdftodicom.exe"
 
@@ -80,6 +80,10 @@ ArchitecturesInstallIn64BitMode={#ArchInstallIn64}
 ; Windows 10 version 1809 is the oldest supported build.
 MinVersion=10.0.17763
 
+; The licence must be accepted before installation. Acceptance is what turns the
+; licence from a notice into an agreement, which is the basis of any later enforcement.
+LicenseFile=..\..\LICENSE
+
 SetupIconFile=..\..\src\PdfToDicom.App\Assets\app.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 UninstallDisplayName={#AppName} ({#ArchSuffix})
@@ -109,6 +113,8 @@ Source: "..\..\artifacts\{#TargetRid}\cli\{#CliExeName}"; DestDir: "{app}"; Flag
 
 ; Documentation and samples, installed alongside the application so a user can
 ; reach the manual without a network connection.
+Source: "..\..\LICENSE";                       DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
+Source: "..\..\THIRD-PARTY-NOTICES.md";        DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\docs\*";                          DestDir: "{app}\docs";    Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
 Source: "..\..\samples\config.sample.json";      DestDir: "{app}\samples"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\samples\example-report.pdf";      DestDir: "{app}\samples"; Flags: ignoreversion skipifsourcedoesntexist
