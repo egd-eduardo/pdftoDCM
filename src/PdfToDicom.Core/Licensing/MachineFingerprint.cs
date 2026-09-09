@@ -9,8 +9,8 @@ namespace PdfToDicom.Core.Licensing;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The identifier combines the machine name with the hardware address of the first
-/// physical network adapter. Both are stable across restarts, reinstalls of the
+/// The identifier combines the machine name with the hardware address of a physical
+/// network adapter. Both are stable across restarts, reinstalls of the
 /// application and changes of user, but will change if the network card is replaced or
 /// the machine is renamed. A small proportion of licences will therefore need reissuing
 /// over the life of a deployment, which is expected and is why the reissue path is
@@ -28,6 +28,7 @@ public static class MachineFingerprint
     private const int DisplayCharacters = 16;
 
     private static string? _cachedId;
+    private static byte[]? _cachedHash;
     private static readonly object CacheLock = new();
 
     /// <summary>
@@ -40,7 +41,7 @@ public static class MachineFingerprint
         {
             lock (CacheLock)
             {
-                return _cachedId ??= Format(ComputeHash());
+                return _cachedId ??= Format(CachedHash());
             }
         }
     }
@@ -50,7 +51,20 @@ public static class MachineFingerprint
     /// <see cref="LicencePayload.MachineHashLength"/>.
     /// </summary>
     public static byte[] CurrentHash() =>
-        ComputeHash()[..LicencePayload.MachineHashLength];
+        CachedHash()[..LicencePayload.MachineHashLength];
+
+    /// <summary>
+    /// The full hash, computed once. Enumerating network adapters costs milliseconds and
+    /// the answer cannot change while the process is running, so it is not repeated on
+    /// every licence check.
+    /// </summary>
+    private static byte[] CachedHash()
+    {
+        lock (CacheLock)
+        {
+            return _cachedHash ??= ComputeHash();
+        }
+    }
 
     /// <summary>
     /// Recomputes the hash for a supplied identifier, so the licence generator can produce
@@ -96,9 +110,9 @@ public static class MachineFingerprint
     }
 
     /// <summary>
-    /// Hashes the machine name together with the first physical adapter's hardware
-    /// address. Failure to read the adapter is not fatal: the name alone still yields a
-    /// usable, if weaker, identifier.
+    /// Hashes the machine name together with a physical adapter's hardware address.
+    /// Failure to read the adapter is not fatal: the name alone still yields a usable,
+    /// if weaker, identifier.
     /// </summary>
     private static byte[] ComputeHash()
     {
@@ -119,8 +133,11 @@ public static class MachineFingerprint
     }
 
     /// <summary>
-    /// Returns the hardware address of the first adapter that looks physical, ignoring
-    /// loopback and tunnel interfaces, whose addresses are not machine specific.
+    /// Returns one hardware address from the adapters that look physical, ignoring
+    /// loopback and tunnel interfaces, whose addresses are not machine specific. The
+    /// candidates are ordered before one is taken, because the order the operating system
+    /// reports adapters in is not guaranteed to be stable, and an identifier that changed
+    /// between restarts would be useless.
     /// </summary>
     private static string? TryGetPrimaryAdapterAddress()
     {
