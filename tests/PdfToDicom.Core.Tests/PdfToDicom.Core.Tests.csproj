@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The tests target plain net8.0 so they run on Windows, macOS and Linux. That matters
+    here: the desktop application is Windows only, but its logic lives in Core and must be
+    verifiable from a developer's Mac and from a continuous integration runner.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>PdfToDicom.Core.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PdfToDicom.Core\PdfToDicom.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\samples\example-report.pdf" Link="example-report.pdf" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

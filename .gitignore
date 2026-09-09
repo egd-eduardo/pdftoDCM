@@ -1,0 +1,26 @@
+# Build output
+bin/
+obj/
+artifacts/
+publish/
+*.user
+*.suo
+
+# Rider / Visual Studio / VS Code
+.vs/
+.idea/
+.vscode/
+
+# macOS
+.DS_Store
+
+# NuGet
+*.nupkg
+packages/
+
+# Local runtime data produced during manual testing
+logs/
+scratch/
+
+# Verification scratch output
+/tmp-verify/

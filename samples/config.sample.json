@@ -1,0 +1,109 @@
+{
+  "//": "Sample configuration for PDF to DICOM. Copy this file to %APPDATA%\\PdfToDicom\\config.json and edit the values for your site. Every setting can also be changed from the Settings dialog inside the application; this file exists so that an administrator can pre-configure a workstation, or deploy the same settings to many workstations, without touching the interface.",
+
+  "ConfigurationVersion": 1,
+
+  "//Institution": "Identity of the deploying site. HospitalName appears in the application header. InstitutionName is written to Institution Name (0008,0080) in every generated object.",
+  "HospitalName": "Hospital de Exemplo",
+  "InstitutionName": "Hospital de Exemplo",
+  "DepartmentName": "Servico de Imagiologia",
+  "StationName": "IMG-WS-01",
+
+  "//Network": "CallingAeTitle is how this workstation identifies itself. Your PACS administrator must register this AE Title together with the workstation's IP address before any transmission will be accepted.",
+  "CallingAeTitle": "PDF2DCM",
+
+  "//Destinations": "One entry per receiving system. Every entry with IsEnabled true receives a copy of each generated object. VerifyBeforeSend performs a C-ECHO first. RetryCount is the number of ADDITIONAL attempts after a failure, so 2 means up to three attempts in total.",
+  "Destinations": [
+    {
+      "Id": "primary",
+      "Name": "Main PACS",
+      "CalledAeTitle": "PACS",
+      "Host": "192.168.10.20",
+      "Port": 104,
+      "CallingAeTitleOverride": "",
+      "IsEnabled": true,
+      "VerifyBeforeSend": true,
+      "TimeoutSeconds": 30,
+      "RetryCount": 2,
+      "RetryDelaySeconds": 3,
+      "UseTls": false,
+      "AcceptAnyTlsCertificate": false
+    },
+    {
+      "Id": "archive",
+      "Name": "Departmental archive",
+      "CalledAeTitle": "ORTHANC",
+      "Host": "192.168.10.30",
+      "Port": 4242,
+      "CallingAeTitleOverride": "",
+      "IsEnabled": false,
+      "VerifyBeforeSend": true,
+      "TimeoutSeconds": 30,
+      "RetryCount": 1,
+      "RetryDelaySeconds": 3,
+      "UseTls": false,
+      "AcceptAnyTlsCertificate": false
+    }
+  ],
+  "RecentDestinationLimit": 8,
+
+  "//CharacterSet": "Utf8 writes Specific Character Set as ISO_IR 192 and represents any accented or non Latin name correctly. Change to Latin1 only if your archive is known to reject UTF-8.",
+  "CharacterSet": "Utf8",
+
+  "//UidStrategy": "UuidDerived builds identifiers under the 2.25 prefix defined by DICOM PS3.5 Annex B.2 and needs no registration. Use RegisteredRoot only if your organisation owns a UID root, and set OrganizationUidRoot to it. The root must be at most 31 characters so the generated UIDs stay within the 64 character limit.",
+  "UidStrategy": "UuidDerived",
+  "OrganizationUidRoot": "",
+
+  "//Modality": "OT (Other) is the default because essentially every archive in the field accepts it. DOC is the value defined by the current standard for encapsulated document series. Change this only if your PACS administrator asks you to.",
+  "Modality": "OT",
+
+  "//ConversionType": "Written to Conversion Type (0008,0064). WSD (Workstation) correctly describes a document produced by another application on a computer. Other defined terms are SD, SI, DF, DI, DRW and SYN.",
+  "ConversionType": "WSD",
+
+  "Manufacturer": "PDF to DICOM",
+
+  "//BurnedInAnnotation": "True writes YES to Burned In Annotation (0028,0301). Clinical reports normally print the patient identity on the page, so YES is the truthful value for this workflow.",
+  "BurnedInAnnotation": true,
+
+  "DefaultDocumentTitle": "Clinical Report",
+  "DefaultStudyDescription": "Encapsulated PDF Document",
+  "DefaultSeriesDescription": "PDF Document",
+  "SeriesNumber": 1,
+  "InstanceNumber": 1,
+
+  "//PrivateAttributes": "The PDF page count is written to a correctly reserved private block, because the standard defines no attribute for it. Set to false if a receiving system is intolerant of private data elements.",
+  "RecordPageCountInPrivateTag": true,
+  "IncludeConceptNameCodeSequence": true,
+
+  "//Folders": "Leave any of these empty to use the per user default beneath %APPDATA%\\PdfToDicom. Nothing is written outside the user's profile, which is why the application needs no administrator rights.",
+  "DefaultPdfFolder": "",
+  "OutputFolder": "",
+  "LogFolder": "",
+
+  "//Retention": "AlwaysSaveDicomLocally keeps a copy of every generated object. AutoDeleteAfterSuccessfulTransmission removes that copy once every enabled destination has accepted it. Keeping copies is recommended while a site is being commissioned.",
+  "AlwaysSaveDicomLocally": true,
+  "AutoDeleteAfterSuccessfulTransmission": false,
+  "LogRetentionDays": 90,
+
+  "//FolderMonitoring": "When enabled, a PDF that appears in MonitoredFolder is offered to the operator automatically. The file is only offered once the producing application has finished writing it.",
+  "EnableFolderMonitoring": false,
+  "MonitoredFolder": "",
+  "MonitorSettleDelayMilliseconds": 1500,
+
+  "//Presentation": "Language accepts en-US and pt-PT. ConfirmBeforeSending shows a summary of the patient details before anything is transmitted and should be left enabled in clinical use.",
+  "DarkMode": false,
+  "Language": "pt-PT",
+  "ShowAdvancedFields": false,
+  "ConfirmBeforeSending": true,
+
+  "//Templates": "Reusable, non identifying form values. Templates never store a Patient ID, name, date of birth or accession number.",
+  "Templates": [
+    {
+      "Name": "Relatorio de radiologia",
+      "ReferringPhysicianName": "",
+      "StudyDescription": "Relatorio de Radiologia",
+      "SeriesDescription": "Documento PDF",
+      "DocumentTitle": "Relatorio Clinico"
+    }
+  ]
+}

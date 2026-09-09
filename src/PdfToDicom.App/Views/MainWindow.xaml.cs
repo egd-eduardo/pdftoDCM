@@ -1,0 +1,130 @@
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using PdfToDicom.App.ViewModels;
+
+namespace PdfToDicom.App.Views;
+
+/// <summary>
+/// The single window that hosts the whole workflow.
+/// </summary>
+/// <remarks>
+/// The code behind is limited to concerns that genuinely belong to the view: drag and
+/// drop, which is expressed in terms of WPF events, and the initial keyboard focus.
+/// Everything else lives in <see cref="MainViewModel"/>.
+/// </remarks>
+public partial class MainWindow : Window
+{
+    /// <summary>Creates the window.</summary>
+    public MainWindow()
+    {
+        InitializeComponent();
+
+        // Drag and drop is handled at window level as well as on the drop zone, so a
+        // document dropped anywhere on the window is accepted. An operator should not
+        // have to aim.
+        DragEnter += OnDragEnter;
+        DragOver += OnDragOver;
+        DragLeave += OnDragLeave;
+        Drop += OnDrop;
+
+        Loaded += OnLoaded;
+        Closing += OnClosing;
+    }
+
+    private MainViewModel? ViewModel => DataContext as MainViewModel;
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        // Focusing the Patient ID field means a barcode scanner, which behaves as a
+        // keyboard, can be used the moment the window appears without a click.
+        PatientIdBox.Focus();
+        Keyboard.Focus(PatientIdBox);
+    }
+
+    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e) =>
+        (DataContext as IDisposable)?.Dispose();
+
+    // ------------------------------------------------------------------ Drag and drop
+
+    private void OnDragEnter(object sender, DragEventArgs e) => UpdateDragState(e);
+
+    private void OnDragOver(object sender, DragEventArgs e) => UpdateDragState(e);
+
+    private void OnDragLeave(object sender, DragEventArgs e)
+    {
+        if (ViewModel is not null)
+        {
+            ViewModel.IsDragOver = false;
+        }
+    }
+
+    /// <summary>
+    /// Accepts the drag only when it carries exactly one PDF file, and reflects that in
+    /// the cursor so the operator knows before releasing whether the drop will work.
+    /// </summary>
+    private void UpdateDragState(DragEventArgs e)
+    {
+        bool acceptable = TryGetPdfPath(e, out _);
+
+        e.Effects = acceptable ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+
+        if (ViewModel is not null)
+        {
+            ViewModel.IsDragOver = acceptable;
+        }
+    }
+
+    private void OnDrop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+
+        if (ViewModel is null)
+        {
+            return;
+        }
+
+        ViewModel.IsDragOver = false;
+
+        if (TryGetPdfPath(e, out string? path) && path is not null)
+        {
+            ViewModel.LoadPdf(path);
+        }
+    }
+
+    /// <summary>
+    /// Extracts a single PDF path from the drag payload.
+    /// </summary>
+    /// <remarks>
+    /// Only a single file is accepted. Silently taking the first of several dropped files
+    /// would be ambiguous, and a document filed against the wrong patient is exactly the
+    /// error this application must not make easy.
+    /// </remarks>
+    private static bool TryGetPdfPath(DragEventArgs e, out string? path)
+    {
+        path = null;
+
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            return false;
+        }
+
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] files || files.Length != 1)
+        {
+            return false;
+        }
+
+        string candidate = files[0];
+
+        if (!File.Exists(candidate) ||
+            !candidate.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        path = candidate;
+        return true;
+    }
+}

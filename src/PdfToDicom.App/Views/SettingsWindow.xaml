@@ -1,0 +1,361 @@
+<Window x:Class="PdfToDicom.App.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:PdfToDicom.App.Converters"
+        xmlns:loc="clr-namespace:PdfToDicom.App.Infrastructure"
+        Title="{loc:Localize Settings.Title}"
+        Height="720" Width="880"
+        MinHeight="600" MinWidth="760"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        FontFamily="{StaticResource UiFontFamily}"
+        UseLayoutRounding="True">
+
+    <Window.Resources>
+        <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <conv:StringToVisibilityConverter x:Key="StringToVisibility" />
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TabControl Grid.Row="0" Background="Transparent" BorderThickness="0">
+
+            <!-- ==================================================== Institution -->
+            <TabItem Header="{loc:Localize Settings.Tab.Institution}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
+                    <StackPanel MaxWidth="520" HorizontalAlignment="Left">
+                        <TextBlock Text="{loc:Localize Settings.HospitalName}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.HospitalName, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.InstitutionName}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.InstitutionName, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14"
+                                 ToolTip="Written to Institution Name (0008,0080)." />
+
+                        <TextBlock Text="{loc:Localize Settings.DepartmentName}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.DepartmentName, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.StationName}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.StationName, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.CallingAeTitle}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.CallingAeTitle, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" MaxLength="16"
+                                 ToolTip="The AE Title this workstation identifies itself with. Maximum 16 characters." />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,6,0,0"
+                                   Text="Your PACS administrator must configure this AE Title, together with this workstation's IP address, as a known source." />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ==================================================== Destinations -->
+            <TabItem Header="{loc:Localize Settings.Tab.Destinations}">
+                <Grid Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="240" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <DockPanel Grid.Column="0">
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button Content="{loc:Localize Settings.AddDestination}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Command="{Binding AddDestinationCommand}"
+                                    MinWidth="96" Margin="0,0,6,0" />
+                            <Button Content="{loc:Localize Settings.RemoveDestination}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Command="{Binding RemoveDestinationCommand}"
+                                    MinWidth="96" />
+                        </StackPanel>
+
+                        <ListBox ItemsSource="{Binding Destinations}"
+                                 SelectedItem="{Binding SelectedDestination}"
+                                 Background="{DynamicResource CardBackgroundBrush}"
+                                 BorderBrush="{DynamicResource CardBorderBrush}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="2,5">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                        <TextBlock Style="{StaticResource CaptionTextStyle}">
+                                            <Run Text="{Binding CalledAeTitle, Mode=OneWay}" /><Run Text="@" /><Run Text="{Binding Host, Mode=OneWay}" /><Run Text=":" /><Run Text="{Binding Port, Mode=OneWay}" />
+                                        </TextBlock>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+
+                    <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto"
+                                  Visibility="{Binding HasSelectedDestination, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <TextBlock Text="{loc:Localize Settings.DestinationName}" Style="{StaticResource FieldLabelTextStyle}" />
+                            <TextBox Text="{Binding SelectedDestination.Name, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,12" />
+
+                            <TextBlock Text="{loc:Localize Settings.CalledAeTitle}" Style="{StaticResource FieldLabelTextStyle}" />
+                            <TextBox Text="{Binding SelectedDestination.CalledAeTitle, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" MaxLength="16" Margin="0,0,0,12" />
+
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="110" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{loc:Localize Settings.Host}" Style="{StaticResource FieldLabelTextStyle}" />
+                                    <TextBox Text="{Binding SelectedDestination.Host, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource InputTextBoxStyle}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="{loc:Localize Settings.Port}" Style="{StaticResource FieldLabelTextStyle}" />
+                                    <TextBox Text="{Binding SelectedDestination.Port, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource InputTextBoxStyle}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{loc:Localize Settings.Timeout}" Style="{StaticResource FieldLabelTextStyle}" />
+                                    <TextBox Text="{Binding SelectedDestination.TimeoutSeconds, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource InputTextBoxStyle}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="{loc:Localize Settings.RetryCount}" Style="{StaticResource FieldLabelTextStyle}" />
+                                    <TextBox Text="{Binding SelectedDestination.RetryCount, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource InputTextBoxStyle}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="4">
+                                    <TextBlock Text="{loc:Localize Settings.RetryDelay}" Style="{StaticResource FieldLabelTextStyle}" />
+                                    <TextBox Text="{Binding SelectedDestination.RetryDelaySeconds, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource InputTextBoxStyle}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <CheckBox Content="{loc:Localize Settings.Enabled}"
+                                      IsChecked="{Binding SelectedDestination.IsEnabled}"
+                                      Style="{StaticResource SettingCheckBoxStyle}" />
+                            <CheckBox Content="{loc:Localize Settings.VerifyBeforeSend}"
+                                      IsChecked="{Binding SelectedDestination.VerifyBeforeSend}"
+                                      Style="{StaticResource SettingCheckBoxStyle}" />
+                            <CheckBox Content="{loc:Localize Settings.UseTls}"
+                                      IsChecked="{Binding SelectedDestination.UseTls}"
+                                      Style="{StaticResource SettingCheckBoxStyle}" />
+
+                            <Button Content="{loc:Localize Step3.TestConnection}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Command="{Binding TestDestinationCommand}"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,12,0,0" />
+
+                            <Border Background="{DynamicResource SubtleBackgroundBrush}"
+                                    CornerRadius="6" Padding="12" Margin="0,10,0,0"
+                                    Visibility="{Binding TestResult, Converter={StaticResource StringToVisibility}}">
+                                <TextBlock Text="{Binding TestResult}" TextWrapping="Wrap"
+                                           Style="{StaticResource CaptionTextStyle}" />
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+
+            <!-- ==================================================== DICOM -->
+            <TabItem Header="{loc:Localize Settings.Tab.Dicom}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
+                    <StackPanel MaxWidth="520" HorizontalAlignment="Left">
+                        <TextBlock Text="{loc:Localize Settings.CharacterSet}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <ComboBox ItemsSource="{Binding CharacterSets}"
+                                  SelectedValue="{Binding Working.CharacterSet}"
+                                  SelectedValuePath="Value" DisplayMemberPath="Display"
+                                  Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.UidStrategy}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <ComboBox ItemsSource="{Binding UidStrategies}"
+                                  SelectedValue="{Binding Working.UidStrategy}"
+                                  SelectedValuePath="Value" DisplayMemberPath="Display"
+                                  Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.OrganizationUidRoot}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.OrganizationUidRoot, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,4"
+                                 ToolTip="Only used when the registered root strategy is selected." />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,14"
+                                   Text="Leave the strategy on the UUID option unless your organisation owns a registered UID root." />
+
+                        <TextBlock Text="{loc:Localize Settings.Modality}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <ComboBox ItemsSource="{Binding ModalityOptions}"
+                                  SelectedItem="{Binding Working.Modality}"
+                                  Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,14"
+                                   Text="OT is accepted by essentially every archive. DOC is the value defined by the current standard for encapsulated documents. Change this only if your PACS administrator asks you to." />
+
+                        <TextBlock Text="{loc:Localize Settings.ConversionType}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <ComboBox ItemsSource="{Binding ConversionTypeOptions}"
+                                  SelectedItem="{Binding Working.ConversionType}"
+                                  Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.Manufacturer}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.Manufacturer, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.DefaultDocumentTitle}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.DefaultDocumentTitle, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.DefaultStudyDescription}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.DefaultStudyDescription, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.DefaultSeriesDescription}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.DefaultSeriesDescription, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14" />
+
+                        <CheckBox Content="{loc:Localize Settings.BurnedInAnnotation}"
+                                  IsChecked="{Binding Working.BurnedInAnnotation}"
+                                  Style="{StaticResource SettingCheckBoxStyle}" />
+                        <CheckBox Content="Record the PDF page count in a private attribute"
+                                  IsChecked="{Binding Working.RecordPageCountInPrivateTag}"
+                                  Style="{StaticResource SettingCheckBoxStyle}" />
+                        <CheckBox Content="Include coded document title sequences"
+                                  IsChecked="{Binding Working.IncludeConceptNameCodeSequence}"
+                                  Style="{StaticResource SettingCheckBoxStyle}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ==================================================== Folders -->
+            <TabItem Header="{loc:Localize Settings.Tab.Folders}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
+                    <StackPanel MaxWidth="620" HorizontalAlignment="Left">
+                        <TextBlock Text="{loc:Localize Settings.OutputFolder}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding Working.OutputFolder, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" />
+                            <Button Grid.Column="1" Content="{loc:Localize Settings.Browse}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Command="{Binding BrowseOutputFolderCommand}"
+                                    MinWidth="96" Margin="8,0,0,0" />
+                        </Grid>
+
+                        <TextBlock Text="{loc:Localize Settings.LogFolder}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding Working.LogFolder, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" />
+                            <Button Grid.Column="1" Content="{loc:Localize Settings.Browse}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Command="{Binding BrowseLogFolderCommand}"
+                                    MinWidth="96" Margin="8,0,0,0" />
+                        </Grid>
+
+                        <TextBlock Text="{loc:Localize Settings.DefaultPdfFolder}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding Working.DefaultPdfFolder, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" />
+                            <Button Grid.Column="1" Content="{loc:Localize Settings.Browse}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Command="{Binding BrowsePdfFolderCommand}"
+                                    MinWidth="96" Margin="8,0,0,0" />
+                        </Grid>
+
+                        <TextBlock Text="{loc:Localize Settings.LogRetention}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.LogRetentionDays, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Width="120"
+                                 HorizontalAlignment="Left" Margin="0,0,0,14" />
+
+                        <CheckBox Content="{loc:Localize Settings.AlwaysSaveLocally}"
+                                  IsChecked="{Binding Working.AlwaysSaveDicomLocally}"
+                                  Style="{StaticResource SettingCheckBoxStyle}" />
+                        <CheckBox Content="{loc:Localize Settings.AutoDelete}"
+                                  IsChecked="{Binding Working.AutoDeleteAfterSuccessfulTransmission}"
+                                  Style="{StaticResource SettingCheckBoxStyle}" />
+
+                        <Separator Margin="0,14" Background="{DynamicResource SeparatorBrush}" />
+
+                        <CheckBox Content="{loc:Localize Settings.EnableFolderMonitoring}"
+                                  IsChecked="{Binding Working.EnableFolderMonitoring}"
+                                  Style="{StaticResource SettingCheckBoxStyle}" />
+
+                        <TextBlock Text="{loc:Localize Settings.MonitoredFolder}" Style="{StaticResource FieldLabelTextStyle}" Margin="0,8,0,4" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding Working.MonitoredFolder, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}"
+                                     IsEnabled="{Binding Working.EnableFolderMonitoring}" />
+                            <Button Grid.Column="1" Content="{loc:Localize Settings.Browse}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Command="{Binding BrowseMonitoredFolderCommand}"
+                                    IsEnabled="{Binding Working.EnableFolderMonitoring}"
+                                    MinWidth="96" Margin="8,0,0,0" />
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ==================================================== Appearance -->
+            <TabItem Header="{loc:Localize Settings.Tab.Appearance}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
+                    <StackPanel MaxWidth="420" HorizontalAlignment="Left">
+                        <TextBlock Text="{loc:Localize Settings.Language}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <ComboBox ItemsSource="{Binding Languages}"
+                                  SelectedItem="{Binding SelectedLanguage}"
+                                  DisplayMemberPath="DisplayName"
+                                  Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,18" />
+
+                        <CheckBox Content="{loc:Localize Settings.DarkMode}"
+                                  IsChecked="{Binding Working.DarkMode}"
+                                  Style="{StaticResource SettingCheckBoxStyle}" />
+                        <CheckBox Content="{loc:Localize Settings.ShowAdvancedFields}"
+                                  IsChecked="{Binding Working.ShowAdvancedFields}"
+                                  Style="{StaticResource SettingCheckBoxStyle}" />
+                        <CheckBox Content="{loc:Localize Settings.ConfirmBeforeSending}"
+                                  IsChecked="{Binding Working.ConfirmBeforeSending}"
+                                  Style="{StaticResource SettingCheckBoxStyle}" />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="24,2,0,0"
+                                   Text="Keeping confirmation switched on is strongly recommended in clinical use. It is the last check that the document matches the patient." />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="{loc:Localize Action.Cancel}"
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    IsCancel="True" MinWidth="120" MinHeight="40" Margin="0,0,10,0" />
+            <Button Content="{loc:Localize Action.Save}"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    MinWidth="140" MinHeight="40"
+                    IsDefault="True"
+                    Click="OnSave" />
+        </StackPanel>
+    </Grid>
+</Window>

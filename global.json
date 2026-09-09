@@ -1,0 +1,8 @@
+{
+  "//": "rollForward is deliberately permissive so the solution builds on whatever recent .NET SDK a developer has installed on Windows, macOS or Linux.",
+  "sdk": {
+    "version": "8.0.100",
+    "rollForward": "latestMajor",
+    "allowPrerelease": false
+  }
+}

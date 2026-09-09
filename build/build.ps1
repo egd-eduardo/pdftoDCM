@@ -1,0 +1,179 @@
+<#
+.SYNOPSIS
+    Builds, tests, publishes and packages PDF to DICOM on Windows.
+
+.DESCRIPTION
+    Produces the self contained single file executable and, when Inno Setup 6 is
+    installed, the per user installer. This is the script the release pipeline runs.
+
+    The equivalent for a developer working on macOS or Linux is build/build.sh, which
+    can produce the executable but not the installer, because Inno Setup requires
+    Windows.
+
+.PARAMETER Task
+    all      restore, build, test, publish and package (default)
+    test     run the test suite only
+    publish  publish the executables only
+    package  build the installer only, from an existing publish
+    clean    remove build output
+
+.EXAMPLE
+    .\build\build.ps1
+    .\build\build.ps1 -Task test
+#>
+
+[CmdletBinding()]
+param(
+    [ValidateSet('all', 'test', 'publish', 'package', 'clean')]
+    [string]$Task = 'all',
+
+    [string]$Configuration = 'Release',
+
+    [string]$Runtime = 'win-x64'
+)
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+$RepoRoot  = Split-Path -Parent $PSScriptRoot
+$Artifacts = Join-Path $RepoRoot 'artifacts'
+$Solution  = Join-Path $RepoRoot 'PdfToDicom.sln'
+
+function Write-Step {
+    param([string]$Message)
+    Write-Host ''
+    Write-Host "==> $Message" -ForegroundColor Cyan
+}
+
+function Assert-Sdk {
+    if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+        throw 'The .NET SDK was not found. Install the .NET 8 SDK from https://dotnet.microsoft.com/download'
+    }
+
+    Write-Host "    using .NET SDK $(dotnet --version)"
+}
+
+function Invoke-Clean {
+    Write-Step 'Cleaning'
+
+    if (Test-Path $Artifacts) {
+        Remove-Item $Artifacts -Recurse -Force
+    }
+
+    Get-ChildItem -Path (Join-Path $RepoRoot 'src'), (Join-Path $RepoRoot 'tests') `
+        -Include bin, obj -Recurse -Directory -ErrorAction SilentlyContinue |
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+    Write-Host '    build output removed'
+}
+
+function Invoke-Restore {
+    Write-Step 'Restoring packages'
+    dotnet restore $Solution --nologo
+    if ($LASTEXITCODE -ne 0) { throw 'Restore failed.' }
+}
+
+function Invoke-Build {
+    Write-Step "Building ($Configuration)"
+    dotnet build $Solution -c $Configuration --no-restore --nologo
+    if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
+}
+
+function Invoke-Test {
+    Write-Step 'Running the test suite'
+    dotnet test (Join-Path $RepoRoot 'tests\PdfToDicom.Core.Tests\PdfToDicom.Core.Tests.csproj') `
+        -c $Configuration --nologo --verbosity minimal
+    if ($LASTEXITCODE -ne 0) { throw 'The test suite failed. The build is not shippable.' }
+}
+
+function Invoke-Publish {
+    Write-Step "Publishing the desktop application for $Runtime"
+
+    # Self contained and single file: the runtime, WPF and every dependency are embedded,
+    # so the result runs on a clean Windows 10 or 11 machine with nothing pre-installed.
+    dotnet publish (Join-Path $RepoRoot 'src\PdfToDicom.App\PdfToDicom.App.csproj') `
+        -c $Configuration `
+        -r $Runtime `
+        --self-contained true `
+        -p:PublishSingleFile=true `
+        -p:IncludeNativeLibrariesForSelfExtract=true `
+        -p:EnableCompressionInSingleFile=true `
+        -o (Join-Path $Artifacts 'app') `
+        --nologo -v quiet
+
+    if ($LASTEXITCODE -ne 0) { throw 'Publishing the desktop application failed.' }
+
+    Write-Step "Publishing the command line tool for $Runtime"
+
+    dotnet publish (Join-Path $RepoRoot 'src\PdfToDicom.Cli\PdfToDicom.Cli.csproj') `
+        -c $Configuration `
+        -r $Runtime `
+        --self-contained true `
+        -p:PublishSingleFile=true `
+        -p:EnableCompressionInSingleFile=true `
+        -o (Join-Path $Artifacts 'cli') `
+        --nologo -v quiet
+
+    if ($LASTEXITCODE -ne 0) { throw 'Publishing the command line tool failed.' }
+
+    $exe = Join-Path $Artifacts 'app\PdfToDicom.exe'
+    $size = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+    Write-Host "    produced PdfToDicom.exe ($size MB)"
+
+    Write-Step 'Assembling the portable package'
+
+    $portable = Join-Path $Artifacts 'portable'
+    if (Test-Path $portable) { Remove-Item $portable -Recurse -Force }
+    New-Item -ItemType Directory -Path $portable | Out-Null
+
+    Copy-Item $exe $portable
+    Copy-Item (Join-Path $Artifacts 'cli\pdftodicom.exe') $portable -ErrorAction SilentlyContinue
+    Copy-Item (Join-Path $RepoRoot 'samples\config.sample.json') $portable
+    Copy-Item (Join-Path $RepoRoot 'samples\example-report.pdf') $portable
+    Copy-Item (Join-Path $RepoRoot 'docs') (Join-Path $portable 'docs') -Recurse
+
+    Compress-Archive -Path "$portable\*" `
+        -DestinationPath (Join-Path $Artifacts 'PdfToDicom-portable.zip') -Force
+
+    Write-Host "    portable package: $(Join-Path $Artifacts 'PdfToDicom-portable.zip')"
+}
+
+function Invoke-Package {
+    Write-Step 'Building the installer'
+
+    $iscc = @(
+        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+        "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+    if (-not $iscc) {
+        Write-Warning @'
+Inno Setup 6 was not found, so the installer was not built.
+Install it from https://jrsoftware.org/isdl.php, or use winget:
+    winget install JRSoftware.InnoSetup
+The self contained executable in artifacts\app is fully functional without it.
+'@
+        return
+    }
+
+    $script = Join-Path $RepoRoot 'build\installer\PdfToDicom.iss'
+    & $iscc "/O$Artifacts" $script
+
+    if ($LASTEXITCODE -ne 0) { throw 'The installer build failed.' }
+
+    Get-ChildItem $Artifacts -Filter '*.exe' |
+        Where-Object { $_.Name -like 'PdfToDicom-Setup*' } |
+        ForEach-Object { Write-Host "    installer: $($_.FullName)" }
+}
+
+Assert-Sdk
+
+switch ($Task) {
+    'clean'   { Invoke-Clean }
+    'test'    { Invoke-Restore; Invoke-Build; Invoke-Test }
+    'publish' { Invoke-Restore; Invoke-Publish }
+    'package' { Invoke-Package }
+    'all'     { Invoke-Restore; Invoke-Build; Invoke-Test; Invoke-Publish; Invoke-Package }
+}
+
+Write-Step 'Done'
