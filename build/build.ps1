@@ -162,6 +162,30 @@ The self contained executable in artifacts\<rid>\app is fully functional without
         return
     }
 
+    # The script uses the architecture identifiers introduced in Inno Setup 6.3.
+    # An older compiler reports this as an obscure parse error, so it is checked here.
+    $isccVersion = (Get-Item $iscc).VersionInfo.ProductVersion
+    Write-Host "    using Inno Setup $isccVersion"
+
+    if ($isccVersion -match '^(\d+)\.(\d+)') {
+        $major = [int]$Matches[1]
+        $minor = [int]$Matches[2]
+
+        if ($major -lt 6 -or ($major -eq 6 -and $minor -lt 3)) {
+            throw "Inno Setup 6.3 or later is required for the architecture identifiers used by the installer script, but $isccVersion was found."
+        }
+    }
+
+    # A static check of the installer script, when Python is available. It catches the
+    # common mistakes far more clearly than the compiler does.
+    $validator = Join-Path $RepoRoot 'build\validate-installer-script.py'
+    $python = Get-Command python3, python -ErrorAction SilentlyContinue | Select-Object -First 1
+
+    if ($python -and (Test-Path $validator)) {
+        & $python.Source $validator
+        if ($LASTEXITCODE -ne 0) { throw 'The installer script did not pass validation.' }
+    }
+
     $script = Join-Path $RepoRoot 'build\installer\PdfToDicom.iss'
     & $iscc "/DTargetRid=$Runtime" "/O$Artifacts" $script
 

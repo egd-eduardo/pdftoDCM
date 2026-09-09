@@ -122,7 +122,7 @@ Source: "..\..\samples\example-encapsulated.dcm"; DestDir: "{app}\samples"; Flag
 
 [Icons]
 Name: "{group}\{#AppName}";                   Filename: "{app}\{#AppExeName}"
-Name: "{group}\User manual";                  Filename: "{app}\docs\UserManual.md"; Flags: skipifsourcedoesntexist
+Name: "{group}\User manual";                  Filename: "{app}\docs\UserManual.md"; Flags: createonlyiffileexists
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}";             Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 

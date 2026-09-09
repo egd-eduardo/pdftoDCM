@@ -54,6 +54,12 @@ jobs:
           -c Release --no-build --verbosity normal
           --logger "trx;LogFileName=test-results.trx"
 
+      - name: Validate the installer script
+        # Inno Setup only runs on Windows, so a mistake here would otherwise surface
+        # several minutes later in the packaging job as a bare line number. This static
+        # check catches the common classes of error in seconds.
+        run: python3 build/validate-installer-script.py
+
       - name: Install DCMTK for the interoperability check
         run: sudo apt-get update && sudo apt-get install -y dcmtk
 
