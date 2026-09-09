@@ -10,6 +10,10 @@
     can produce the executable but not the installer, because Inno Setup requires
     Windows.
 
+.PARAMETER Runtime
+    Target architecture: win-x86, win-x64 (default) or win-arm64. Windows on ARM can run
+    the x64 build under emulation, but a native arm64 build avoids that layer entirely.
+
 .PARAMETER Task
     all      restore, build, test, publish and package (default)
     test     run the test suite only
@@ -20,6 +24,7 @@
 .EXAMPLE
     .\build\build.ps1
     .\build\build.ps1 -Task test
+    .\build\build.ps1 -Runtime win-arm64
 #>
 
 [CmdletBinding()]
@@ -29,6 +34,7 @@ param(
 
     [string]$Configuration = 'Release',
 
+    [ValidateSet('win-x86', 'win-x64', 'win-arm64')]
     [string]$Runtime = 'win-x64'
 )
 
@@ -98,7 +104,7 @@ function Invoke-Publish {
         -p:PublishSingleFile=true `
         -p:IncludeNativeLibrariesForSelfExtract=true `
         -p:EnableCompressionInSingleFile=true `
-        -o (Join-Path $Artifacts 'app') `
+        -o (Join-Path $Artifacts "$Runtime\app") `
         --nologo -v quiet
 
     if ($LASTEXITCODE -ne 0) { throw 'Publishing the desktop application failed.' }
@@ -111,31 +117,31 @@ function Invoke-Publish {
         --self-contained true `
         -p:PublishSingleFile=true `
         -p:EnableCompressionInSingleFile=true `
-        -o (Join-Path $Artifacts 'cli') `
+        -o (Join-Path $Artifacts "$Runtime\cli") `
         --nologo -v quiet
 
     if ($LASTEXITCODE -ne 0) { throw 'Publishing the command line tool failed.' }
 
-    $exe = Join-Path $Artifacts 'app\PdfToDicom.exe'
+    $exe = Join-Path $Artifacts "$Runtime\app\PdfToDicom.exe"
     $size = [math]::Round((Get-Item $exe).Length / 1MB, 1)
     Write-Host "    produced PdfToDicom.exe ($size MB)"
 
     Write-Step 'Assembling the portable package'
 
-    $portable = Join-Path $Artifacts 'portable'
+    $portable = Join-Path $Artifacts "portable-$Runtime"
     if (Test-Path $portable) { Remove-Item $portable -Recurse -Force }
     New-Item -ItemType Directory -Path $portable | Out-Null
 
     Copy-Item $exe $portable
-    Copy-Item (Join-Path $Artifacts 'cli\pdftodicom.exe') $portable -ErrorAction SilentlyContinue
+    Copy-Item (Join-Path $Artifacts "$Runtime\cli\pdftodicom.exe") $portable -ErrorAction SilentlyContinue
     Copy-Item (Join-Path $RepoRoot 'samples\config.sample.json') $portable
     Copy-Item (Join-Path $RepoRoot 'samples\example-report.pdf') $portable
     Copy-Item (Join-Path $RepoRoot 'docs') (Join-Path $portable 'docs') -Recurse
 
     Compress-Archive -Path "$portable\*" `
-        -DestinationPath (Join-Path $Artifacts 'PdfToDicom-portable.zip') -Force
+        -DestinationPath (Join-Path $Artifacts "PdfToDicom-portable-$Runtime.zip") -Force
 
-    Write-Host "    portable package: $(Join-Path $Artifacts 'PdfToDicom-portable.zip')"
+    Write-Host "    portable package: $(Join-Path $Artifacts "PdfToDicom-portable-$Runtime.zip")"
 }
 
 function Invoke-Package {
@@ -151,13 +157,13 @@ function Invoke-Package {
 Inno Setup 6 was not found, so the installer was not built.
 Install it from https://jrsoftware.org/isdl.php, or use winget:
     winget install JRSoftware.InnoSetup
-The self contained executable in artifacts\app is fully functional without it.
+The self contained executable in artifacts\<rid>\app is fully functional without it.
 '@
         return
     }
 
     $script = Join-Path $RepoRoot 'build\installer\PdfToDicom.iss'
-    & $iscc "/O$Artifacts" $script
+    & $iscc "/DTargetRid=$Runtime" "/O$Artifacts" $script
 
     if ($LASTEXITCODE -ne 0) { throw 'The installer build failed.' }
 

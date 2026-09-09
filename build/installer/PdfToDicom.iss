@@ -15,17 +15,43 @@
 ;  admin and DefaultDirName to {autopf}, at the cost of needing an administrator
 ;  to run the installer once. The application itself still needs no elevation.
 ;
-;  Build with:  ISCC.exe build\installer\PdfToDicom.iss
-;  Requires:    Inno Setup 6 (https://jrsoftware.org/isdl.php)
-;               artifacts\app\PdfToDicom.exe produced by build.ps1 or build.sh
+;  Build with:  ISCC.exe /DTargetRid=win-x64 build\installer\PdfToDicom.iss
+;  Requires:    Inno Setup 6.3 or later, for the architecture identifiers used below
+;               (https://jrsoftware.org/isdl.php)
+;               artifacts\<rid>\app\PdfToDicom.exe produced by build.ps1 or build.sh
 ; ============================================================================
 
 #define AppName        "PDF to DICOM"
 #define AppShortName   "PdfToDicom"
 #define AppVersion     "1.0.0"
-#define AppPublisher   "Hospital Imaging Informatics"
+#define AppPublisher   "Eduard"
 #define AppExeName     "PdfToDicom.exe"
 #define CliExeName     "pdftodicom.exe"
+
+; Target architecture. Pass it on the command line to build an installer for one of the
+; three supported Windows architectures, for example:
+;     ISCC.exe /DTargetRid=win-arm64 build\installer\PdfToDicom.iss
+; Defaults to win-x64, which is the mainstream clinical workstation.
+#ifndef TargetRid
+  #define TargetRid "win-x64"
+#endif
+
+; Maps the runtime identifier to the Inno Setup architecture identifiers.
+;   x64compatible also matches ARM64 machines running x64 under emulation, so the x64
+;   installer remains usable there; the arm64 installer is simply the better choice.
+#if TargetRid == "win-x86"
+  #define ArchAllowed      "x86compatible"
+  #define ArchInstallIn64  ""
+  #define ArchSuffix       "x86"
+#elif TargetRid == "win-arm64"
+  #define ArchAllowed      "arm64"
+  #define ArchInstallIn64  "arm64"
+  #define ArchSuffix       "arm64"
+#else
+  #define ArchAllowed      "x64compatible"
+  #define ArchInstallIn64  "x64compatible"
+  #define ArchSuffix       "x64"
+#endif
 
 [Setup]
 AppId={{7B2E4C91-3D5A-4F8E-9C1B-2A6D8E4F0A31}
@@ -44,19 +70,19 @@ DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 DisableDirPage=no
 
-OutputBaseFilename=PdfToDicom-Setup-{#AppVersion}
+OutputBaseFilename=PdfToDicom-Setup-{#AppVersion}-{#ArchSuffix}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
+ArchitecturesAllowed={#ArchAllowed}
+ArchitecturesInstallIn64BitMode={#ArchInstallIn64}
 
 ; Windows 10 version 1809 is the oldest supported build.
 MinVersion=10.0.17763
 
 SetupIconFile=..\..\src\PdfToDicom.App\Assets\app.ico
 UninstallDisplayIcon={app}\{#AppExeName}
-UninstallDisplayName={#AppName}
+UninstallDisplayName={#AppName} ({#ArchSuffix})
 
 ; Closes the application cleanly if it is running during an upgrade, rather than
 ; leaving files locked and producing a partial installation.
@@ -76,10 +102,10 @@ Name: "associatepdf"; Description: "Add PDF to DICOM to the ""Open with"" list f
 ; The application is a single self contained executable. The .NET runtime, WPF and
 ; every dependency are embedded, which is what removes the need to install any
 ; separate runtime on the workstation.
-Source: "..\..\artifacts\app\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\artifacts\{#TargetRid}\app\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 ; The command line tool is optional and is used for scripted or bulk conversion.
-Source: "..\..\artifacts\cli\{#CliExeName}"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\..\artifacts\{#TargetRid}\cli\{#CliExeName}"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 ; Documentation and samples, installed alongside the application so a user can
 ; reach the manual without a network connection.

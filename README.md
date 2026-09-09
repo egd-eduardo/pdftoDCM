@@ -13,13 +13,15 @@ buttons, and error messages written in plain language.
 
 | | |
 |---|---|
-| **Platform** | Windows 10 (1809+) and Windows 11, x64 |
+| **Platform** | Windows 10 (1809+) and Windows 11 |
+| **Architectures** | 32 bit (x86), 64 bit (x64) and ARM64, each a native build |
 | **Prerequisites on the workstation** | **None.** No .NET, Java, Python or Visual C++ runtime |
 | **Deployment** | One self contained `.exe`, or a per user installer with no UAC prompt |
 | **Administrator rights** | Not required, to install or to run |
 | **Network use** | Outbound DICOM only, to configured destinations. Everything else is offline |
 | **SOP class produced** | Encapsulated PDF Storage `1.2.840.10008.5.1.4.1.1.104.1` |
 | **Languages** | English, Portuguese (Portugal) |
+| **Author** | Eduard |
 | **Verified against** | DCMTK, end to end, by an automated script in this repository |
 
 ---
@@ -49,24 +51,31 @@ Your IT department must first register this workstation on the PACS. See the
 
 ### For a developer
 
-Requires only the .NET 8 SDK. The solution builds on Windows, **macOS** and Linux.
+Requires only the .NET 8 SDK.
 
-```bash
-git clone <repository-url> && cd pdftoDCM
+```powershell
+git clone <repository-url>
+cd pdftoDCM
 
-build/build.sh            # restore, build, test and publish the Windows executable
-build/build.sh test       # run the 107 tests
+.\build\build.ps1                          # test, publish and build the installer (x64)
+.\build\build.ps1 -Runtime win-arm64       # native ARM64 build
+.\build\build.ps1 -Runtime win-x86         # 32 bit build
+.\build\build.ps1 -Task test               # run the 107 tests only
 ```
 
-On Windows, `.\build\build.ps1` additionally produces the installer.
+The product is Windows only. The build tooling itself is not: `build/build.sh` cross
+compiles the same Windows binaries from macOS or Linux, which is what lets the test suite
+and the DICOM interoperability check run on a Linux CI runner. Only the Inno Setup
+installer genuinely requires Windows.
 
-> **Working on a Mac?** The .NET SDK cross compiles the Windows executable natively, so
-> `build/build.sh` gives you a shippable `.exe`. The Inno Setup installer needs Windows, so
-> push the branch and let [the CI workflow](.github/workflows/build-windows.yml) build it
-> on a `windows-latest` runner. The cross platform CLI below lets you exercise real DICOM
-> transmission from macOS in the meantime.
+```bash
+RID=win-arm64 build/build.sh publish        # from macOS or Linux
+```
 
-### Testing against a real archive, from any platform
+Every push builds all three architectures and attaches the installers to
+[the CI run](.github/workflows/build-windows.yml).
+
+### Testing against a real archive
 
 ```bash
 # Start a reference DICOM archive
@@ -92,17 +101,18 @@ build/verify-against-dcmtk.sh
 ```
 src/PdfToDicom.Core/     All logic. net8.0, no presentation code, fully testable
 src/PdfToDicom.App/      WPF desktop application. net8.0-windows
-src/PdfToDicom.Cli/      Cross platform command line front end
+src/PdfToDicom.Cli/      Command line front end for scripted conversion
 tests/                   107 xUnit tests
 build/                   Build scripts, installer, interoperability verification
 docs/                    User manual (EN + PT), technical docs, conformance statement
 samples/                 Annotated configuration, example PDF, example DICOM object
 ```
 
-The layering is strict: `Core` targets plain `net8.0` rather than `net8.0-windows`, which
-is what allows the whole of the DICOM construction, validation and networking to be tested
-from a Mac, and what makes the desktop application and the CLI provably identical in
-behaviour.
+The layering is strict. `Core` targets plain `net8.0` rather than `net8.0-windows`. That is
+a build time decision, not a product one: the shipped application is Windows only, but
+keeping the logic free of a Windows target is what allows the DICOM construction,
+validation and networking to be tested on a CI runner, and what makes the desktop
+application and the CLI provably identical in behaviour.
 
 ---
 
@@ -123,6 +133,10 @@ behaviour.
 **107 unit and workflow tests pass**, covering validation rules, VR limits, UID uniqueness
 across 20,000 identifiers per strategy, every mandatory attribute, payload padding, UTF-8
 round trips, configuration corruption recovery and the complete workflow.
+
+**All three architectures are verified as native builds.** CI checks the PE machine type
+of each published executable, so a build cannot silently fall back to the runner's own
+architecture.
 
 **End to end interoperability against DCMTK passes.** An automated script starts a real
 `storescp`, drives the application's own CLI to convert and transmit a PDF carrying an
@@ -162,7 +176,6 @@ Stated openly; the full list is in the
 - **No PDF thumbnail preview** — a document icon and metadata instead, to preserve the
   single file deployment.
 - **Encrypted PDFs are refused**, because nobody could open one from the archive.
-- **x64 Windows only**; no ARM64 build is currently produced.
 - **No storage commitment**; acceptance of the C-STORE is confirmed, not permanent
   archival.
 

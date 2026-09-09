@@ -13,13 +13,21 @@
 #   build/build.sh test         run the tests only
 #   build/build.sh publish      publish only
 #   build/build.sh clean        remove build output
+#
+# Set RID to choose the target architecture (win-x86, win-x64, win-arm64):
+#   RID=win-arm64 build/build.sh publish
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACTS="$REPO_ROOT/artifacts"
-RUNTIME="win-x64"
 CONFIGURATION="Release"
+
+# Target architecture: win-x86, win-x64 (default) or win-arm64.
+# Windows on ARM can run the x64 build under emulation, but a native arm64 build is faster
+# and is what a Windows on ARM machine should really run.
+#   RID=win-arm64 build/build.sh publish
+RUNTIME="${RID:-win-x64}"
 
 cd "$REPO_ROOT"
 
@@ -79,7 +87,7 @@ do_publish() {
         -p:IncludeNativeLibrariesForSelfExtract=true \
         -p:EnableCompressionInSingleFile=true \
         -p:EnableWindowsTargeting=true \
-        -o "$ARTIFACTS/app" \
+        -o "$ARTIFACTS/$RUNTIME/app" \
         --nologo -v quiet
 
     step "Publishing the command line tool for $RUNTIME"
@@ -90,27 +98,27 @@ do_publish() {
         --self-contained true \
         -p:PublishSingleFile=true \
         -p:EnableCompressionInSingleFile=true \
-        -o "$ARTIFACTS/cli" \
+        -o "$ARTIFACTS/$RUNTIME/cli" \
         --nologo -v quiet
 
     step "Assembling the portable package"
 
-    local package="$ARTIFACTS/portable"
+    local package="$ARTIFACTS/portable-$RUNTIME"
     rm -rf "$package"
     mkdir -p "$package"
 
-    cp "$ARTIFACTS/app/PdfToDicom.exe" "$package/"
-    cp "$ARTIFACTS/cli/pdftodicom.exe" "$package/" 2>/dev/null || true
+    cp "$ARTIFACTS/$RUNTIME/app/PdfToDicom.exe" "$package/"
+    cp "$ARTIFACTS/$RUNTIME/cli/pdftodicom.exe" "$package/" 2>/dev/null || true
     cp "$REPO_ROOT/samples/config.sample.json" "$package/"
     cp "$REPO_ROOT/samples/example-report.pdf" "$package/"
     cp -r "$REPO_ROOT/docs" "$package/docs"
 
-    (cd "$ARTIFACTS" && zip -qr "PdfToDicom-portable.zip" "portable")
+    (cd "$ARTIFACTS" && zip -qr "PdfToDicom-portable-$RUNTIME.zip" "portable-$RUNTIME")
 
-    info "portable package: $ARTIFACTS/PdfToDicom-portable.zip"
+    info "portable package: $ARTIFACTS/PdfToDicom-portable-$RUNTIME.zip"
 
     step "Result"
-    ls -lh "$ARTIFACTS/app/PdfToDicom.exe" | awk '{print "    desktop application: " $9 " (" $5 ")"}'
+    ls -lh "$ARTIFACTS/$RUNTIME/app/PdfToDicom.exe" | awk '{print "    desktop application: " $9 " (" $5 ")"}'
 
     cat <<'MESSAGE'
 

@@ -44,7 +44,7 @@ Three layers, with dependencies pointing in one direction only.
 ```
 ┌──────────────────────────┐   ┌──────────────────────────┐
 │   PdfToDicom.App (WPF)   │   │   PdfToDicom.Cli         │
-│   net8.0-windows         │   │   net8.0, cross platform │
+│   net8.0-windows         │   │   net8.0                 │
 │   Views, ViewModels,     │   │   Argument parsing and   │
 │   themes, localization   │   │   console output         │
 └────────────┬─────────────┘   └────────────┬─────────────┘
@@ -73,10 +73,12 @@ Three layers, with dependencies pointing in one direction only.
 ```
 
 **Core contains no presentation code and targets plain `net8.0`, not `net8.0-windows`.**
-That is what allows the whole of the business logic, DICOM construction and networking to
-be unit tested and exercised from macOS or Linux, even though the desktop application
-itself is Windows only. It is also what makes the desktop application and the command line
-tool provably identical in behaviour: both drive the same `ConversionWorkflowService`.
+The product ships for Windows only, in its three architectures. Keeping Core free of a
+Windows target is a build time decision rather than a product one: it is what allows the
+business logic, DICOM construction and networking to be unit tested and exercised on a CI
+runner or a developer's machine of any kind. It is also what makes the desktop application
+and the command line tool provably identical in behaviour: both drive the same
+`ConversionWorkflowService`.
 
 ### SOLID in practice
 
@@ -120,12 +122,12 @@ pdftoDCM/
 │   │   ├── Themes/                  Light.xaml, Dark.xaml, Controls.xaml
 │   │   └── app.manifest             asInvoker, per monitor DPI
 │   │
-│   └── PdfToDicom.Cli/              Headless front end. net8.0, cross platform
+│   └── PdfToDicom.Cli/              Headless front end for scripted conversion
 │
 ├── tests/PdfToDicom.Core.Tests/     107 xUnit tests
 │
 ├── build/
-│   ├── build.sh                     macOS and Linux build and publish
+│   ├── build.sh                     Cross compiles the Windows binaries from Unix
 │   ├── build.ps1                    Windows build, publish and installer
 │   ├── verify-against-dcmtk.sh      End to end interoperability verification
 │   └── installer/PdfToDicom.iss     Inno Setup, per user installation
@@ -408,49 +410,69 @@ and no image data**.
 
 ## 12. Building
 
+### Supported targets
+
+The product is built for Windows only, natively for each of its three architectures:
+
+| Runtime identifier | Target |
+|---|---|
+| `win-x86` | 32 bit Windows, still present on older clinical workstations |
+| `win-x64` | The mainstream 64 bit workstation |
+| `win-arm64` | Windows on ARM, natively rather than through x64 emulation |
+
+CI verifies the PE machine type of every published executable, so a build cannot silently
+fall back to the runner's own architecture.
+
 ### Prerequisites
 
-- .NET 8 SDK (any host: Windows, macOS or Linux)
-- Inno Setup 6 — **only** needed to build the installer, and **only** available on Windows
+- .NET 8 SDK
+- Inno Setup **6.3 or later** — only needed to build the installer, and only available on
+  Windows. The architecture identifiers used by the installer script require 6.3.
 
-### On macOS or Linux
+### On Windows
+
+```powershell
+.\build\build.ps1                        # everything, including the installer
+.\build\build.ps1 -Runtime win-arm64     # native ARM64
+.\build\build.ps1 -Runtime win-x86       # 32 bit
+.\build\build.ps1 -Task publish
+.\build\build.ps1 -Task package
+```
+
+### From macOS or Linux
+
+The build tooling cross compiles the Windows binaries, which is what lets the tests and the
+interoperability check run on a Linux CI runner.
 
 ```bash
-build/build.sh            # restore, build, test, publish
-build/build.sh test       # tests only
-build/build.sh publish    # publish only
+build/build.sh                       # restore, build, test, publish (win-x64)
+RID=win-arm64 build/build.sh publish # a different architecture
+build/build.sh test
 build/build.sh clean
 ```
 
-This produces the Windows executable. It cannot produce the installer.
+This produces the Windows executables. It cannot produce the installer.
 
 > Cross compiling WPF from a non Windows host works because `EnableWindowsTargeting=true`
 > is set in `Directory.Build.props`. The Windows reference assemblies are restored from
 > NuGet.
 
-### On Windows
-
-```powershell
-.\build\build.ps1                  # everything, including the installer
-.\build\build.ps1 -Task publish
-.\build\build.ps1 -Task package
-```
-
 ### Via CI
 
 `.github/workflows/build-windows.yml` tests on Linux (including the DCMTK interoperability
-check) and then publishes and packages on Windows. **This is the recommended route for a
-developer working on a Mac**, since it is the only way to obtain the installer without a
-Windows machine.
+check) and then publishes and packages on Windows, once per architecture. It is the
+simplest way to obtain all three installers from a single push.
 
 ### Output
 
+Output is written per architecture, so all three can coexist.
+
 | Path | Contents |
 |---|---|
-| `artifacts/app/PdfToDicom.exe` | Self contained desktop application (~69 MB) |
-| `artifacts/cli/pdftodicom.exe` | Self contained command line tool |
-| `artifacts/PdfToDicom-portable.zip` | Portable package with docs and samples |
-| `artifacts/PdfToDicom-Setup-1.0.0.exe` | Per user installer (Windows build only) |
+| `artifacts/<rid>/app/PdfToDicom.exe` | Self contained desktop application (~65 to 69 MB) |
+| `artifacts/<rid>/cli/pdftodicom.exe` | Self contained command line tool |
+| `artifacts/PdfToDicom-portable-<rid>.zip` | Portable package with docs and samples |
+| `artifacts/PdfToDicom-Setup-1.0.0-<arch>.exe` | Per user installer (Windows build only) |
 
 ---
 
@@ -491,10 +513,10 @@ All checks pass as of this release.
 
 ## 14. The command line tool
 
-`pdftodicom` runs on Windows, macOS and Linux and drives the same workflow as the desktop
-application. Its purpose is threefold: it lets a developer on a Mac test against a real
-PACS, it gives hospital IT a scriptable path for bulk conversion, and it is what the
-verification script drives.
+`pdftodicom` drives the same workflow as the desktop application. It is shipped for the
+same three Windows architectures, and gives hospital IT a scriptable path for bulk or
+unattended conversion. It is also what the interoperability verification script drives,
+which is why it is kept free of any Windows only dependency.
 
 ```bash
 pdftodicom echo
@@ -534,15 +556,16 @@ Deploy `config.json` to `%APPDATA%\PdfToDicom\` before first launch. See
 
 ### Code signing
 
-The application is designed to be signed. Sign `artifacts/app/PdfToDicom.exe` **before**
-building the installer, then sign the installer:
+The application is designed to be signed. Sign `artifacts/<rid>/app/PdfToDicom.exe` **before**
+building the installer for that architecture, then sign the installer. Repeat per
+architecture:
 
 ```powershell
 signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
-    /f certificate.pfx /p $password artifacts\app\PdfToDicom.exe
-.\build\build.ps1 -Task package
+    /f certificate.pfx /p $password artifacts\win-x64\app\PdfToDicom.exe
+.\build\build.ps1 -Task package -Runtime win-x64
 signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
-    /f certificate.pfx /p $password artifacts\PdfToDicom-Setup-1.0.0.exe
+    /f certificate.pfx /p $password artifacts\PdfToDicom-Setup-1.0.0-x64.exe
 ```
 
 ---
@@ -593,8 +616,6 @@ Stated plainly, because a hospital deploying this needs to know what it does not
    risk that section 4 of the user manual warns about.
 3. **Encrypted PDFs are refused.** Encapsulating one produces an object no clinician can
    open from the archive.
-4. **x64 only.** No ARM64 Windows build is produced, though the source has no impediment to
-   one.
 5. **Single instance per user session.** Two instances would both monitor the folder and
    double-send the same document.
 6. **No storage commitment.** The application confirms the C-STORE was accepted, not that
