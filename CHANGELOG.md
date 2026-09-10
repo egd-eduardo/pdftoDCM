@@ -25,6 +25,9 @@ is running, not restricting who may run it. See [`LICENSE`](LICENSE).
   the installer with a self signed certificate, and `build.ps1 -Sign` runs it as part of a
   release. Every signature is timestamped, so it outlives the certificate.
 
+  **Nothing needs to be installed.** It uses PowerShell's `Set-AuthenticodeSignature`,
+  which is part of Windows. `signtool.exe` and the Windows SDK are not required.
+
   **Windows will still warn that the publisher is unrecognised.** A self signed certificate
   is not trusted by default and is deliberately not being deployed to client machines. What
   signing provides is tamper evidence, a consistent publisher identity, and the ability for
