@@ -16,10 +16,11 @@ it on.**
 
 `LicenceService.PublisherPublicKey` is an empty string. While it is empty:
 
-- the Licence tab in Settings is **hidden**;
+- the Licence tab in Settings says plainly that codes are not checked in this build;
+- a code entered there is **saved and described, but never verified**;
 - the licence notice on the main window **never appears**;
 - the workflow **withholds nothing**, ever;
-- every licence code, valid or nonsense, is ignored.
+- every licence code, valid or nonsense, is ignored for the purpose of any decision.
 
 An automated test asserts that the constant is still empty, so it cannot be switched on by
 an accidental commit. A build produced from this repository today behaves exactly as the
@@ -30,10 +31,25 @@ else changes.
 
 ---
 
+## 0. Get the tool
+
+Prebuilt executables are committed at [`dist/licence-tool/`](../dist/licence-tool/), so
+nothing has to be installed and no development environment is needed.
+
+**`pdftodicom-licence-win-x86.exe` runs on every Windows this software targets**: 32 bit,
+64 bit, Windows Server, and Windows 10 or 11 on ARM through the built in x86 emulation.
+Native x64 and ARM64 builds are there too, but the tool runs for milliseconds, so there is
+no practical difference.
+
+Every command below can be run either against that executable or from source with
+`dotnet run --project src\PdfToDicom.LicenceTool --`. They are the same program.
+
+---
+
 ## 1. Generate your key pair, once, ever
 
 ```powershell
-dotnet run --project src\PdfToDicom.LicenceTool -- keygen
+.\pdftodicom-licence-win-x86.exe keygen
 ```
 
 This writes `licence-private.key` and prints the matching public key.
@@ -194,9 +210,9 @@ understand:
 - **A capable person can decompile the application and remove the check.** This is true of
   every offline licensing scheme in any managed language. Obfuscation raises the bar and
   does not eliminate this.
-- **While the repository is public, this protects nothing at all.** Anyone can read the
-  source, delete the check and build their own copy. Making the repository private is the
-  single highest value action available, it is free, and it takes a minute.
+- **It depends entirely on the repository staying private.** Anyone who can read the
+  source can delete the check and build their own copy. The repository is private today;
+  publishing it would undo the whole mechanism at a stroke.
 - **Seat counts are not enforced.** An application with no network access to you cannot
   count installations. The number is contractual.
 - **The machine fingerprint is not tamper proof.** It is derived from the machine name and

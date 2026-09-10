@@ -127,7 +127,7 @@ pdftoDCM/
 │   │
 │   └── PdfToDicom.LicenceTool/      Licence generator. PUBLISHER ONLY, never shipped
 │
-├── tests/PdfToDicom.Core.Tests/     140 xUnit tests
+├── tests/PdfToDicom.Core.Tests/     150 xUnit tests
 │
 ├── build/
 │   ├── build.sh                     Cross compiles the Windows binaries from Unix
@@ -516,7 +516,7 @@ Output is written per architecture, so all three can coexist.
 dotnet test tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj
 ```
 
-140 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
+150 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
 strategy), person name construction, every mandatory attribute, payload integrity and odd
 length padding, UTF-8 round trips, configuration persistence and corruption recovery,
 licence signing, tampering, expiry, grace period and machine binding, and the full workflow

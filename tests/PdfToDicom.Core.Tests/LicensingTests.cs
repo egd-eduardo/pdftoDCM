@@ -371,6 +371,88 @@ public sealed class LicensingTests
             MachineFingerprint.HashOfDisplayedId($"  {identifier.ToLowerInvariant().Replace("-", " ")}  "));
     }
 
+    // ---------------------------------------------------------------- Inspection
+
+    [Fact]
+    public void AnUnverifiedCodeIsStillDescribedUsefully()
+    {
+        // What the Settings dialog shows in a build with no publisher key, so that
+        // whoever is setting the system up can see the code arrived intact.
+        (ECDsa key, _) = CreateKeyPair();
+        using (key)
+        {
+            string code = Issue(key, Payload(
+                "Hospital de Exemplo",
+                expiresOn: new DateTime(2027, 3, 15),
+                seats: 20));
+
+            string description = LicenceInspector.Describe(code);
+
+            Assert.Contains("Hospital de Exemplo", description);
+            Assert.Contains("20", description);
+
+            // It must never claim the code is valid, because without the publisher key
+            // that cannot possibly be known.
+            Assert.DoesNotContain("valid", description, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void DatesAreWrittenUnambiguously()
+    {
+        // 09/10 is the ninth of October in Lisbon and the tenth of September in Boston.
+        // A licence expiry an operator cannot read correctly is worse than useless.
+        (ECDsa key, string publicKey) = CreateKeyPair();
+        using (key)
+        {
+            string code = Issue(key, Payload(expiresOn: new DateTime(2027, 10, 9)));
+
+            var service = new LicenceService(
+                publicKeyOverride: publicKey,
+                nowProvider: () => new DateTime(2027, 10, 1));
+
+            Assert.Contains("2027-10-09", service.Check(code).Message);
+            Assert.Contains("2027-10-09", LicenceInspector.Describe(code));
+        }
+    }
+
+    [Fact]
+    public void DescribingAPerpetualLicenceSaysSo()
+    {
+        (ECDsa key, _) = CreateKeyPair();
+        using (key)
+        {
+            Assert.Contains("no expiry", LicenceInspector.Describe(Issue(key, Payload())));
+        }
+    }
+
+    [Fact]
+    public void DescribingABoundLicenceSaysSo()
+    {
+        (ECDsa key, _) = CreateKeyPair();
+        using (key)
+        {
+            string code = Issue(key, Payload(machineHash: MachineFingerprint.CurrentHash()));
+
+            Assert.Contains("workstation", LicenceInspector.Describe(code));
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("nonsense")]
+    [InlineData("PDFDCM1.!!!!.????")]
+    [InlineData("PDFDCM1")]
+    public void DescribingAnUnreadableCodeExplainsRatherThanRaising(string? code)
+    {
+        string description = LicenceInspector.Describe(code);
+
+        Assert.NotEmpty(description);
+        Assert.DoesNotContain("Exception", description, StringComparison.OrdinalIgnoreCase);
+    }
+
     // ---------------------------------------------------------------- Payload
 
     [Fact]

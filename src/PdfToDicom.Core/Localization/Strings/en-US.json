@@ -97,6 +97,8 @@
   "Settings.Tab.Folders": "Folders",
   "Settings.Tab.Appearance": "Appearance",
   "Settings.Tab.Licence": "Licence",
+  "Settings.Licence.NotEnforced.Title": "This build does not check licence codes",
+  "Settings.Licence.NotEnforced.Body": "A code entered here is saved, and is described below so you can confirm it arrived intact, but it is not verified and nothing is restricted. Licence checking begins only in a build that carries the publisher key. See the licensing workflow documentation.",
   "Settings.LicenceCode": "Licence code",
   "Settings.LicenceCode.Help": "Paste the code supplied with your licence. It may be spread over several lines; spaces and line breaks are ignored.",
   "Settings.LicenceStatus": "Status",

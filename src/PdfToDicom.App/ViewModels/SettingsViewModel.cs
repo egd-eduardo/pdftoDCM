@@ -5,6 +5,7 @@ using Microsoft.Win32;
 using PdfToDicom.App.Infrastructure;
 using PdfToDicom.Core.Abstractions;
 using PdfToDicom.Core.Configuration;
+using PdfToDicom.Core.Licensing;
 using PdfToDicom.Core.Models;
 using PdfToDicom.Core.Services;
 using PdfToDicom.Core.Validation;
@@ -182,10 +183,23 @@ public sealed class SettingsViewModel : ObservableObject
     /// <summary>Re-checks the entered code and updates the displayed status.</summary>
     private void RefreshLicenceStatus()
     {
-        LicenceStatus status = _services.LicenceService.Check(_licenceCode);
+        if (_services.LicenceService.IsEnforced)
+        {
+            LicenceStatus status = _services.LicenceService.Check(_licenceCode);
 
-        LicenceStatusText = status.Message;
-        LicenceHasProblem = status.ShouldWarn;
+            LicenceStatusText = status.Message;
+            LicenceHasProblem = status.ShouldWarn;
+        }
+        else
+        {
+            // Without a publisher key the signature cannot be checked, so the code's
+            // contents are described instead. Reporting only "licensing is not enabled"
+            // would leave the person setting this up with no idea whether the code they
+            // pasted even arrived intact.
+            LicenceStatusText = LicenceInspector.Describe(_licenceCode);
+            LicenceHasProblem = false;
+        }
+
         OnPropertyChanged(nameof(LicenceHasProblem));
     }
 

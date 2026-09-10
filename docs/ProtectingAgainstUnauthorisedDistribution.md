@@ -134,11 +134,12 @@ folder.
 | Transmission gate | `src/PdfToDicom.Core/Services/ConversionWorkflowService.cs` |
 | Licence tab and notice band | `SettingsWindow.xaml`, `MainWindow.xaml` |
 | The generator, **publisher only** | `src/PdfToDicom.LicenceTool/` |
+| Prebuilt generators, **publisher only** | `dist/licence-tool/` |
 
 **It is switched off.** `LicenceService.PublisherPublicKey` is blank in the repository, and
-a build with a blank key enforces nothing whatsoever: the Licence tab is hidden, the
-notice band never appears, and the workflow is byte for byte the workflow that shipped
-before licensing existed. A test asserts that the constant is still blank, so the feature
+a build with a blank key enforces nothing whatsoever: the Licence tab states plainly that
+codes are not checked, the notice band never appears, and the workflow is byte for byte
+the workflow that shipped before licensing existed. A test asserts that the constant is still blank, so the feature
 cannot be switched on by accident.
 
 See **[the licensing workflow](LicensingWorkflow.md)** for how to switch it on and issue
@@ -209,7 +210,7 @@ Cheap, and surprisingly effective at answering *"who leaked it?"*.
 | 1 | Licence file and EULA | Free | **Done** |
 | 2 | Lawyer reviews the licence | 300 to 800 EUR | One meeting |
 | 3 | Code signing certificate | 200 to 600 EUR per year | Half a day to set up |
-| 4 | Make the repository private | Free | Minutes |
+| 4 | Make the repository private | Free | **Done** |
 | 5 | Signed offline licence keys | Free | **Done, switched off** |
 | 6 | Per customer build watermarking | Free | Half a day |
 | 7 | Obfuscation | Free to 400 EUR | One day, plus ongoing care |
@@ -218,10 +219,10 @@ Items 1 to 4 give you most of the protection available. Item 5 is built and wait
 you to run `keygen`. Item 6 is what you add when you have real customers, and item 7 is
 for when you have a competitor.
 
-**Item 4 is the one that undercuts everything else.** The repository is public as I write
-this. While it is, anyone can read the source, remove the licence check and build their
-own copy, and no amount of work on layers 3 to 5 changes that. Making it private is free
-and takes a minute; it is the highest value action on this list.
+**Item 4 is the one that would undercut everything else, and it is done.** The repository
+is private. That matters more than it might appear: while source is public, anyone can
+read it, remove the licence check and build their own copy, and no amount of work on
+layers 3 to 5 changes that. Everything below rests on the repository staying private.
 
 ---
 
