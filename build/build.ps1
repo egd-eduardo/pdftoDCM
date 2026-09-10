@@ -92,20 +92,67 @@ function Invoke-Build {
     if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 }
 
+<#
+    Finds a Python that actually runs, or returns null.
+
+    Merely being on the PATH is not enough on Windows. It ships "App execution aliases"
+    for python.exe and python3.exe: zero length stubs that exist, resolve, and satisfy
+    Get-Command, but do nothing except print
+
+        Python was not found; run without arguments to install from the Microsoft Store
+
+    and exit non zero. A build that trusts Get-Command therefore reports Python as present
+    and then fails, which is exactly what happened.
+
+    So the candidate is asked for its version and has to answer properly.
+#>
+function Get-WorkingPython {
+    foreach ($name in 'python3', 'python', 'py') {
+        $command = Get-Command $name -ErrorAction SilentlyContinue
+        if (-not $command) { continue }
+
+        try {
+            # 2>&1 because some builds report the version on standard error.
+            $reported = & $command.Source '--version' 2>&1
+
+            if ($LASTEXITCODE -eq 0 -and "$reported" -match 'Python\s+\d') {
+                return $command.Source
+            }
+        }
+        catch {
+            # Unrunnable. Try the next candidate.
+        }
+    }
+
+    return $null
+}
+
 function Invoke-Validate {
     Write-Step 'Validating XAML bindings'
 
     # A broken WPF binding compiles cleanly and then crashes when the window loads, so
     # it is checked here rather than discovered by a user on a clinical workstation.
     $validator = Join-Path $RepoRoot 'build\validate-xaml-bindings.py'
-    $python = Get-Command python3, python -ErrorAction SilentlyContinue | Select-Object -First 1
+    $python = Get-WorkingPython
 
     if (-not $python) {
-        Write-Warning 'Python was not found, so the XAML bindings were not validated.'
+        Write-Warning @'
+Python is not available, so the XAML bindings were not checked.
+
+This is optional and the build continues without it. The check exists to catch a
+binding that compiles but fails when a window opens. CI runs it on every push, so
+nothing is lost as long as the branch is pushed.
+
+To run it here, install Python from https://www.python.org/downloads/ and tick
+"Add python.exe to PATH".
+'@
         return
     }
 
-    & $python.Source $validator
+    & $python $validator
+
+    # Only reached with a working Python, so a non zero code now means the validator
+    # genuinely found a problem rather than that Python could not start.
     if ($LASTEXITCODE -ne 0) { throw 'The XAML bindings did not pass validation.' }
 }
 
@@ -376,14 +423,17 @@ The self contained executable in artifacts\<rid>\app is fully functional without
         Write-Host '    Inno Setup version could not be determined; proceeding and letting the compiler report any incompatibility.'
     }
 
-    # A static check of the installer script, when Python is available. It catches the
-    # common mistakes far more clearly than the compiler does.
+    # A static check of the installer script, when a working Python is available. It
+    # catches the common mistakes far more clearly than the compiler does.
     $validator = Join-Path $RepoRoot 'build\validate-installer-script.py'
-    $python = Get-Command python3, python -ErrorAction SilentlyContinue | Select-Object -First 1
+    $python = Get-WorkingPython
 
     if ($python -and (Test-Path $validator)) {
-        & $python.Source $validator
+        & $python $validator
         if ($LASTEXITCODE -ne 0) { throw 'The installer script did not pass validation.' }
+    }
+    elseif (-not $python) {
+        Write-Host '    Python is not available, so the installer script was not checked first.'
     }
 
     $script = Join-Path $RepoRoot 'build\installer\PdfToDicom.iss'
