@@ -199,18 +199,6 @@ public sealed class AppConfiguration
     /// </summary>
     public bool ConfirmBeforeSending { get; set; } = true;
 
-    // ---------------------------------------------------------------- Licensing
-
-    /// <summary>
-    /// The licence code supplied to this site, entered in Settings.
-    /// </summary>
-    /// <remarks>
-    /// Ignored entirely unless the build carries a publisher public key. A build without
-    /// one behaves exactly as though this setting did not exist, so an existing
-    /// installation is unaffected by the presence of the field.
-    /// </remarks>
-    public string LicenceCode { get; set; } = string.Empty;
-
     // ---------------------------------------------------------------- Templates
 
     /// <summary>Saved, non identifying form templates.</summary>

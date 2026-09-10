@@ -13,7 +13,6 @@
 
     <Window.Resources>
         <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-        <conv:BooleanToVisibilityConverter x:Key="InverseBoolToVisibility" Invert="True" />
         <conv:StringToVisibilityConverter x:Key="StringToVisibility" />
     </Window.Resources>
 
@@ -318,99 +317,6 @@
                                     IsEnabled="{Binding Working.EnableFolderMonitoring}"
                                     MinWidth="96" Margin="8,0,0,0" />
                         </Grid>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <!-- ==================================================== Licence -->
-            <!--
-                Always shown. It was previously hidden when the build carried no publisher
-                key, on the reasoning that a field which does nothing only confuses an
-                operator. That reasoning was wrong for the person who owns the software:
-                the tab simply could not be found. The panel below states plainly whether
-                codes are being checked, which serves both readers.
-            -->
-            <TabItem Header="{loc:Localize Settings.Tab.Licence}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
-                    <StackPanel MaxWidth="560" HorizontalAlignment="Left">
-
-                        <!--
-                            Shown only in a build that does not check codes, so nobody
-                            enters a code and then wonders why nothing happened.
-                        -->
-                        <Border Background="{DynamicResource SubtleBackgroundBrush}"
-                                BorderBrush="{DynamicResource CardBorderBrush}"
-                                BorderThickness="1" CornerRadius="6" Padding="14" Margin="0,0,0,18"
-                                Visibility="{Binding IsLicensingEnforced, Converter={StaticResource InverseBoolToVisibility}}">
-                            <StackPanel>
-                                <TextBlock Text="{loc:Localize Settings.Licence.NotEnforced.Title}"
-                                           Style="{StaticResource FieldLabelTextStyle}" Margin="0,0,0,6" />
-                                <TextBlock Text="{loc:Localize Settings.Licence.NotEnforced.Body}"
-                                           TextWrapping="Wrap"
-                                           Foreground="{DynamicResource SecondaryTextBrush}" />
-                            </StackPanel>
-                        </Border>
-
-                        <TextBlock Text="{loc:Localize Settings.LicenceCode}" Style="{StaticResource FieldLabelTextStyle}" />
-                        <TextBox Text="{Binding LicenceCode, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource InputTextBoxStyle}"
-                                 AcceptsReturn="True" TextWrapping="Wrap"
-                                 MinHeight="72" VerticalContentAlignment="Top"
-                                 ToolTip="Paste the code exactly as supplied. Line breaks and spaces are ignored." />
-                        <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,6,0,16"
-                                   Text="{loc:Localize Settings.LicenceCode.Help}" TextWrapping="Wrap" />
-
-                        <!--
-                            Status of whatever is currently in the box, updated as it is
-                            typed. The border turns to the warning colour when the code
-                            would not permit transmission, so the answer is visible at a
-                            glance without having to read the sentence.
-                        -->
-                        <Border BorderThickness="1" CornerRadius="6" Padding="14" Margin="0,0,0,18">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Setter Property="Background" Value="{DynamicResource SubtleBackgroundBrush}" />
-                                    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding LicenceHasProblem}" Value="True">
-                                            <Setter Property="Background" Value="{DynamicResource WarningBackgroundBrush}" />
-                                            <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <StackPanel>
-                                <TextBlock Text="{loc:Localize Settings.LicenceStatus}"
-                                           Style="{StaticResource FieldLabelTextStyle}" Margin="0,0,0,6" />
-                                <TextBlock Text="{Binding LicenceStatusText}" TextWrapping="Wrap"
-                                           Foreground="{DynamicResource PrimaryTextBrush}" />
-                            </StackPanel>
-                        </Border>
-
-                        <TextBlock Text="{loc:Localize Settings.MachineId}" Style="{StaticResource FieldLabelTextStyle}" />
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <!--
-                                Read only, so the binding must say OneWay: TextBox.Text is
-                                two way by default and would reject a source with no setter.
-                            -->
-                            <TextBox Grid.Column="0"
-                                     Text="{Binding MachineId, Mode=OneWay}"
-                                     Style="{StaticResource InputTextBoxStyle}"
-                                     IsReadOnly="True" FontFamily="Consolas, Courier New" />
-
-                            <Button Grid.Column="1" Margin="10,0,0,0"
-                                    Content="{loc:Localize Action.Copy}"
-                                    Style="{StaticResource SecondaryButtonStyle}"
-                                    Command="{Binding CopyMachineIdCommand}"
-                                    MinWidth="110" MinHeight="40" />
-                        </Grid>
-                        <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,6,0,0"
-                                   Text="{loc:Localize Settings.MachineId.Help}" TextWrapping="Wrap" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

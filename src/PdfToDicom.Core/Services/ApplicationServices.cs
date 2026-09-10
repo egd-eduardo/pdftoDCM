@@ -1,7 +1,6 @@
 using PdfToDicom.Core.Abstractions;
 using PdfToDicom.Core.Configuration;
 using PdfToDicom.Core.Dicom;
-using PdfToDicom.Core.Licensing;
 using PdfToDicom.Core.Localization;
 using PdfToDicom.Core.Logging;
 using PdfToDicom.Core.Monitoring;
@@ -56,7 +55,6 @@ public sealed class ApplicationServices : IDisposable
         DicomValidator = new EncapsulatedPdfValidator();
         NetworkService = new DicomNetworkService(Logger);
         TagInspector = new DicomTagInspector();
-        LicenceService = new LicenceService(Logger);
         FolderMonitor = new FolderMonitor(Logger, configuration.MonitorSettleDelayMilliseconds);
 
         RebuildConfigurationDependentServices(configuration);
@@ -102,12 +100,6 @@ public sealed class ApplicationServices : IDisposable
     /// <summary>Monitored folder watcher.</summary>
     public FolderMonitor FolderMonitor { get; }
 
-    /// <summary>
-    /// Licence checker. Reports <see cref="LicenceState.NotEnforced"/> and withholds
-    /// nothing unless a publisher public key has been compiled into the build.
-    /// </summary>
-    public ILicenceService LicenceService { get; }
-
     /// <summary>UID source, rebuilt when the UID settings change.</summary>
     public IUidGenerator UidGenerator { get; private set; } = null!;
 
@@ -152,8 +144,7 @@ public sealed class ApplicationServices : IDisposable
             NetworkService,
             FileWriter,
             Logger,
-            AuditLogger,
-            LicenceService);
+            AuditLogger);
     }
 
     /// <inheritdoc />

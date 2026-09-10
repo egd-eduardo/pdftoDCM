@@ -72,89 +72,43 @@ executable **before** building the installer, then sign the installer.
 
 ---
 
-## Layer 3 — Licence keys with machine binding (the practical mechanism)
+## Layer 3 — Licence keys (built, then removed)
 
-This is what actually limits how many workstations run your software.
+A signed offline licence key mechanism was built for version 1.1 and then **removed at the
+copyright holder's request**. Nothing in the application checks entitlement today.
 
-**The constraint that shapes the design:** this application must work entirely offline
-except for DICOM transmission. Online activation is therefore unavailable. The right
-answer is a **signed offline licence file**.
+It is recorded here because the decision, not the code, is the useful part.
 
-### How it works
+### What it was
 
-```
-  You (once)                          The customer's workstation
-  ─────────────────────               ────────────────────────────────────
-  Generate an ECDSA key pair
-  Keep the private key secret
-  Embed the public key in the app  ──►  Public key compiled into the binary
+An ECDSA P-256 code the customer pasted into Settings, carrying the licensee name, an
+optional expiry, a seat count and an optional workstation binding. A licence problem
+withheld transmission only: the application still opened, converted and saved, and an
+expired licence kept working for a further fourteen days.
 
-  Customer buys a 20 seat licence
-  You issue licence.lic containing:
-     customer name
-     seat count
-     expiry date (optional)
-     allowed machine fingerprints
-     ECDSA signature over all of it
-                                   ──►  App reads licence.lic on startup
-                                        Verifies the signature with the public key
-                                        Compares the machine fingerprint
-                                        Refuses to run if either fails
-```
+### Why it was removed
 
-### Why it is reasonably robust
+It is worth being blunt about what it would have bought. Against a hospital IT department
+copying the application to twenty more workstations, it works. Against anyone willing to
+open the assembly in a decompiler, it does not: the check is four lines and deleting them
+is trivial. It therefore bought protection against casual copying, at the price of a
+subsystem that could refuse to transmit a clinical document, plus a private key to keep
+safe for the life of the product, plus a code to issue and reissue for every site and
+every hardware change.
 
-- The customer **cannot forge a licence**, because they do not have your private key.
-- The customer **cannot edit an existing licence**, because any change breaks the
-  signature.
-- A licence copied to an unlicensed machine **fails the fingerprint check**.
-- It works **completely offline**, which the clinical requirement demands.
+For a product distributed to a handful of known sites under a written agreement, that
+trade is not obviously worth making. **The licence agreement and controlling who receives
+a build are doing most of the work in any case.**
 
-### Its honest limits
+### If it is ever wanted again
 
-- A capable person can decompile the .NET assembly and remove the check entirely. Layer 4
-  raises that bar; nothing eliminates it.
-- Machine fingerprints change when hardware is replaced, so you need a re-issue process.
-  Base the fingerprint on something stable, for example the Windows machine GUID plus the
-  motherboard serial, and expect perhaps five percent of licences to need re-issuing each
-  year.
+It is in the git history, complete with tests, on the commits leading to version 1.1. It
+was removed cleanly rather than disabled, so restoring it means reverting a known commit
+rather than reconstructing anything.
 
-### This is now built
-
-Layer 3 is implemented and in the repository. It differs from the sketch above in one
-respect: there is **no licence file**. The licence is a single code the customer pastes
-into Settings, which removes an entire class of support call about a file in the wrong
-folder.
-
-| Part | Where |
-|---|---|
-| `ILicenceService`, `LicenceState`, `LicenceStatus` | `src/PdfToDicom.Core/Abstractions/ILicenceService.cs` |
-| Signing, verification and the code format | `src/PdfToDicom.Core/Licensing/` |
-| Workstation fingerprint | `src/PdfToDicom.Core/Licensing/MachineFingerprint.cs` |
-| Transmission gate | `src/PdfToDicom.Core/Services/ConversionWorkflowService.cs` |
-| Licence tab and notice band | `SettingsWindow.xaml`, `MainWindow.xaml` |
-| The generator, **publisher only** | `src/PdfToDicom.LicenceTool/` |
-| Prebuilt generators, **publisher only** | `dist/licence-tool/` |
-
-**It is switched on from version 1.1.** The publisher key is embedded, so a 1.1 build
-requires a valid code before it will transmit. Blanking the constant disables the whole
-subsystem and restores the pre-licensing behaviour byte for byte, and that path stays
-tested, so withdrawing licensing in a hurry is a one line change rather than a revert.
-
-See **[the licensing workflow](LicensingWorkflow.md)** for how to switch it on and issue
-codes.
-
-### Grace and failure behaviour matters clinically
-
-Whatever you build, decide deliberately what happens when a licence is missing, expired or
-invalid. In a hospital this is not a neutral choice.
-
-**Recommended:** the application still opens, still converts, still saves locally, but
-**refuses to transmit** and displays a prominent licence warning. A hard refusal to start
-means a ward cannot send a report at two in the morning because a licence expired at
-midnight, and that turns your commercial protection into a clinical incident. A soft
-degradation protects your revenue without ever standing between a clinician and a patient
-record.
+Before doing so, note what changes: whoever holds the private key can issue licences
+forever, losing it means reissuing every code in the field, and every build shipped must
+carry the matching public key. Those are the real costs, and they are permanent.
 
 ---
 
@@ -210,11 +164,12 @@ Cheap, and surprisingly effective at answering *"who leaked it?"*.
 | 2 | Lawyer reviews the licence | 300 to 800 EUR | One meeting |
 | 3 | Code signing certificate | 200 to 600 EUR per year | Half a day to set up |
 | 4 | Make the repository private | Free | **Done** |
-| 5 | Signed offline licence keys | Free | **Done, live from 1.1** |
+| 5 | Signed offline licence keys | Free | Built, then removed by choice |
 | 6 | Per customer build watermarking | Free | Half a day |
 | 7 | Obfuscation | Free to 400 EUR | One day, plus ongoing care |
 
-Items 1 to 4 give you most of the protection available. Item 5 is built and live. Item 6 is what you add when you have real customers, and item 7 is
+Items 1 to 4 give you most of the protection available. Item 5 was built and removed;
+the reasoning is in Layer 3 above. Item 6 is what you add when you have real customers, and item 7 is
 for when you have a competitor.
 
 **Item 4 is the one that would undercut everything else, and it is done.** The repository
@@ -224,24 +179,29 @@ layers 3 to 5 changes that. Everything below rests on the repository staying pri
 
 ---
 
-## Decisions still outstanding on commercial policy
+## What is actually protecting the product today
 
-The mechanism is built and supports every model below, so none of these blocks you any
-longer. They are commercial choices to make before you issue the first code:
+With licence keys removed, the answer is short and worth being clear-eyed about:
 
-1. **What does a licence cover?** Per workstation, per site, per hospital, or unlimited
-   within one organisation? The code carries a seat count, and can be bound to a single
-   workstation with `--machine`. The seat count is **recorded, not enforced**: nothing in
-   the application counts installations, because an offline application cannot.
-2. **Perpetual or subscription?** Both work. Omit `--expires` for perpetual; pass
-   `--days 365` for an annual subscription.
-3. **What happens when a licence is invalid?** Decided, and implemented as the soft
-   degradation described above: the application opens, converts and saves, and withholds
-   only transmission.
-4. **How will you deliver codes?** Email is normal and works offline. The code is one
-   line of text; the Settings field tolerates the line breaks an email client inserts.
-5. **Do you want a trial mode?** `--days 30` gives exactly that, with the fourteen day
-   grace period after it.
+1. **The licence agreement**, which every installation accepts before the installer runs.
+   This is the layer with real teeth, because it is the one a court recognises.
+2. **The repository being private**, so the source, and therefore a trivially modified
+   build, is not available to anyone.
+3. **Controlling who receives a build.** You hand out executables; there is no public
+   download.
+4. **The audit trail**, which names the machine and user on every document. A licensee
+   under audit can be asked to produce it.
+
+Nothing in the software enforces anything. That is a deliberate choice, and it means the
+commercial questions below no longer block any work.
+
+### Still worth deciding, when you sell
+
+- **What does a licence cover?** Per workstation, per site, or unlimited within one
+  organisation. This now lives entirely in the written agreement.
+- **Perpetual or subscription?** Likewise a contractual matter.
+- **Trial terms.** A time limited trial would need the mechanism back; a trial governed by
+  agreement would not.
 
 ---
 
