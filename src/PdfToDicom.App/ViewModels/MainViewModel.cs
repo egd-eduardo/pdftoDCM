@@ -502,6 +502,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             // trusting the extension would reject a file that converts perfectly well.
             SourceDocumentKind kind = _services.ImageInspector.DetectKind(path);
 
+            // Reported here rather than left to the PDF validator. That validator would say
+            // the file has no PDF header, which is true and unhelpful: it does not mention
+            // that an image would have been accepted, and the operator who dragged in a
+            // Word document deserves to be told what this application does take.
+            if (kind == SourceDocumentKind.Unsupported)
+            {
+                ClearSelection();
+                ReplaceValidationIssues(Array.Empty<ValidationIssue>());
+                SetState(WorkflowState.Error, UnsupportedFileMessage(path));
+                return;
+            }
+
             ValidationResult validation = kind == SourceDocumentKind.Image
                 ? _services.ImageInspector.Validate(path)
                 : _services.PdfInspector.Validate(path);
@@ -580,6 +592,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             LoadPdf(dialog.FileName);
         }
+    }
+
+    /// <summary>
+    /// Explains that a file cannot be converted, and says what can be, naming the formats
+    /// the inspector actually supports so the message cannot drift from the code.
+    /// </summary>
+    private string UnsupportedFileMessage(string path)
+    {
+        string formats = string.Join(
+            ", ",
+            _services.ImageInspector.SupportedExtensions.Select(e => e.ToUpperInvariant()).Distinct());
+
+        return $"'{Path.GetFileName(path)}' is neither a PDF nor an image this application can read. " +
+               $"PDF documents and these image formats can be converted: {formats}.";
     }
 
     /// <summary>

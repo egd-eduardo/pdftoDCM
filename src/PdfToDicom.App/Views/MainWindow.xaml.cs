@@ -61,12 +61,19 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Accepts the drag only when it carries exactly one PDF file, and reflects that in
-    /// the cursor so the operator knows before releasing whether the drop will work.
+    /// Accepts the drag when it carries exactly one file, and reflects that in the cursor
+    /// so the operator knows before releasing whether the drop will be taken.
     /// </summary>
+    /// <remarks>
+    /// Whether the file is convertible is decided after the drop, from its content, not
+    /// here from its name. Rejecting during the drag would mean either opening the file on
+    /// every mouse move, which is wasteful, or judging it by its extension, which is
+    /// exactly the guess the rest of this application refuses to make. A file that turns
+    /// out to be unconvertible is reported plainly instead.
+    /// </remarks>
     private void UpdateDragState(DragEventArgs e)
     {
-        bool acceptable = TryGetPdfPath(e, out _);
+        bool acceptable = TryGetDroppedFile(e, out _);
 
         e.Effects = acceptable ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
@@ -88,21 +95,21 @@ public partial class MainWindow : Window
 
         ViewModel.IsDragOver = false;
 
-        if (TryGetPdfPath(e, out string? path) && path is not null)
+        if (TryGetDroppedFile(e, out string? path) && path is not null)
         {
             ViewModel.LoadPdf(path);
         }
     }
 
     /// <summary>
-    /// Extracts a single PDF path from the drag payload.
+    /// Extracts a single file path from the drag payload.
     /// </summary>
     /// <remarks>
     /// Only a single file is accepted. Silently taking the first of several dropped files
     /// would be ambiguous, and a document filed against the wrong patient is exactly the
     /// error this application must not make easy.
     /// </remarks>
-    private static bool TryGetPdfPath(DragEventArgs e, out string? path)
+    private static bool TryGetDroppedFile(DragEventArgs e, out string? path)
     {
         path = null;
 
@@ -118,8 +125,7 @@ public partial class MainWindow : Window
 
         string candidate = files[0];
 
-        if (!File.Exists(candidate) ||
-            !candidate.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        if (!File.Exists(candidate))
         {
             return false;
         }

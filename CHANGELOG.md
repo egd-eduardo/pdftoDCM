@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.1
+
+- **Dragging an image onto the window did nothing.** The drop handler still required a
+  `.pdf` extension, so every image was refused even though the window invited one and the
+  Browse button accepted one. It now takes any single file and decides what it is from the
+  content, as everything else in the application does.
+- **A file that is neither a PDF nor an image** was reported as not having a PDF header,
+  which is true and unhelpful. The message now names what can be converted.
+
 ## 2.0.0
 
 **Images can now be converted, and several files can share one study.** The major version
