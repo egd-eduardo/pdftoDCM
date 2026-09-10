@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -58,6 +59,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private string? _pdfPath;
     private PdfDocumentInfo? _pdfInfo;
+    private ImageDocumentInfo? _imageInfo;
+    private SourceDocumentKind _sourceKind = SourceDocumentKind.Unsupported;
     private string _patientId = string.Empty;
     private string _familyName = string.Empty;
     private string _givenName = string.Empty;
@@ -145,12 +148,74 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Descriptive information about the selected image, when one is selected.</summary>
+    public ImageDocumentInfo? ImageInfo
+    {
+        get => _imageInfo;
+        private set
+        {
+            if (SetProperty(ref _imageInfo, value))
+            {
+                OnPropertyChanged(nameof(PdfPageCountDisplay));
+                OnPropertyChanged(nameof(SourceDescription));
+            }
+        }
+    }
+
+    /// <summary>What kind of file is currently selected.</summary>
+    public SourceDocumentKind SourceKind
+    {
+        get => _sourceKind;
+        private set
+        {
+            if (SetProperty(ref _sourceKind, value))
+            {
+                OnPropertyChanged(nameof(IsImageSelected));
+                OnPropertyChanged(nameof(SourceDescription));
+            }
+        }
+    }
+
+    /// <summary>True when the selected file is an image rather than a document.</summary>
+    public bool IsImageSelected => SourceKind == SourceDocumentKind.Image;
+
+    /// <summary>
+    /// One line describing what was selected and what it will become, so the operator can
+    /// see before converting that the file was understood the way they expected.
+    /// </summary>
+    public string SourceDescription
+    {
+        get
+        {
+            if (ImageInfo is not null)
+            {
+                string instances = ImageInfo.PageCount > 1
+                    ? string.Format(
+                        CultureInfo.CurrentCulture,
+                        Localize("Step1.ImageMultiPage"),
+                        ImageInfo.PageCount)
+                    : Localize("Step1.ImageSinglePage");
+
+                return $"{ImageInfo.FormatName}, {ImageInfo.PixelSummary}. {instances}";
+            }
+
+            if (PdfInfo is not null)
+            {
+                return $"PDF, {PdfInfo.PageCount?.ToString(CultureInfo.CurrentCulture) ?? "?"} page(s).";
+            }
+
+            return string.Empty;
+        }
+    }
+
     /// <summary>True when a document is selected.</summary>
     public bool HasPdf => PdfPath is not null;
 
     /// <summary>Page count rendered for display, or a dash when it is unknown.</summary>
     public string PdfPageCountDisplay =>
-        PdfInfo?.PageCount?.ToString() ?? "-";
+        ImageInfo is not null
+            ? ImageInfo.PageCount.ToString(CultureInfo.CurrentCulture)
+            : PdfInfo?.PageCount?.ToString(CultureInfo.CurrentCulture) ?? "-";
 
     /// <summary>True while a file is being dragged over the drop zone.</summary>
     public bool IsDragOver
@@ -432,39 +497,72 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            ValidationResult validation = _services.PdfInspector.Validate(path);
+            // What the file is decided from its content. An operator who renamed a scan,
+            // or a scanner that writes a TIFF with a .jpg extension, is commonplace, and
+            // trusting the extension would reject a file that converts perfectly well.
+            SourceDocumentKind kind = _services.ImageInspector.DetectKind(path);
+
+            ValidationResult validation = kind == SourceDocumentKind.Image
+                ? _services.ImageInspector.Validate(path)
+                : _services.PdfInspector.Validate(path);
+
             ReplaceValidationIssues(validation.Issues);
 
             if (!validation.IsValid)
             {
-                PdfPath = null;
-                PdfInfo = null;
+                ClearSelection();
                 SetState(WorkflowState.Error, validation.Errors.First().Message);
                 return;
             }
 
             PdfPath = path;
-            PdfInfo = _services.PdfInspector.Inspect(path);
+            SourceKind = kind;
 
-            // A document title from the PDF metadata is a better default than the
-            // configured generic one, so it is offered when the field is still empty.
-            if (string.IsNullOrWhiteSpace(DocumentTitle) && !string.IsNullOrWhiteSpace(PdfInfo.Title))
+            if (kind == SourceDocumentKind.Image)
             {
-                DocumentTitle = PdfInfo.Title;
+                PdfInfo = null;
+                ImageInfo = _services.ImageInspector.Inspect(path);
+
+                _services.Logger.Information(
+                    $"The operator selected the image '{ImageInfo.FileName}' " +
+                    $"({ImageInfo.FormatName}, {ImageInfo.PixelSummary}, {ImageInfo.FormattedSize}).");
+            }
+            else
+            {
+                ImageInfo = null;
+                PdfInfo = _services.PdfInspector.Inspect(path);
+
+                // A document title from the PDF metadata is a better default than the
+                // configured generic one, so it is offered when the field is still empty.
+                if (string.IsNullOrWhiteSpace(DocumentTitle) && !string.IsNullOrWhiteSpace(PdfInfo.Title))
+                {
+                    DocumentTitle = PdfInfo.Title;
+                }
+
+                _services.Logger.Information(
+                    $"The operator selected '{PdfInfo.FileName}' ({PdfInfo.FormattedSize}, " +
+                    $"{PdfInfo.PageCount?.ToString() ?? "unknown"} page(s)).");
             }
 
-            _services.Logger.Information(
-                $"The operator selected '{PdfInfo.FileName}' ({PdfInfo.FormattedSize}, " +
-                $"{PdfInfo.PageCount?.ToString() ?? "unknown"} page(s)).");
+            OnPropertyChanged(nameof(SourceDescription));
 
             SetState(WorkflowState.Ready, Localize("Status.Ready"));
             ResultMessage = string.Empty;
         }
         catch (Exception ex)
         {
-            _services.Logger.Error($"The PDF '{path}' could not be loaded.", ex);
+            _services.Logger.Error($"The file '{path}' could not be loaded.", ex);
             SetState(WorkflowState.Error, Localize("Error.PdfNotReadable"));
         }
+    }
+
+    /// <summary>Forgets the selected file and everything read from it.</summary>
+    private void ClearSelection()
+    {
+        PdfPath = null;
+        PdfInfo = null;
+        ImageInfo = null;
+        SourceKind = SourceDocumentKind.Unsupported;
     }
 
     private void BrowseForPdf()
@@ -472,7 +570,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var dialog = new OpenFileDialog
         {
             Title = Localize("Step1.Browse"),
-            Filter = "PDF documents (*.pdf)|*.pdf|All files (*.*)|*.*",
+            Filter = BuildFileDialogFilter(),
             CheckFileExists = true,
             Multiselect = false,
             InitialDirectory = ResolveInitialDirectory()
@@ -497,10 +595,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     }
 
+    /// <summary>
+    /// Builds the file picker filter from the formats the inspector actually supports, so
+    /// the dialog and the converter can never disagree about what can be opened.
+    /// </summary>
+    private string BuildFileDialogFilter()
+    {
+        string imagePatterns = string.Join(
+            ";", _services.ImageInspector.SupportedExtensions.Select(e => $"*.{e}"));
+
+        return
+            $"Documents and images|*.pdf;{imagePatterns}|" +
+            "PDF documents (*.pdf)|*.pdf|" +
+            $"Images ({imagePatterns})|{imagePatterns}|" +
+            "All files (*.*)|*.*";
+    }
+
     private void ClearPdf()
     {
-        PdfPath = null;
-        PdfInfo = null;
+        ClearSelection();
         ValidationIssues.Clear();
         OnPropertyChanged(nameof(HasValidationIssues));
         SetState(WorkflowState.Ready, Localize("Status.Ready"));
@@ -834,7 +947,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             $"{Localize("Step2.FamilyName")}: {demographics.FamilyName}, {demographics.GivenName}" + Environment.NewLine +
             $"{Localize("Step2.DateOfBirth")}: {demographics.DateOfBirth:d}" + Environment.NewLine +
             $"{Localize("Step2.AccessionNumber")}: {demographics.AccessionNumber}" + Environment.NewLine +
-            $"{Localize("Step1.FileName")}: {PdfInfo?.FileName}" + Environment.NewLine + Environment.NewLine +
+            $"{Localize("Step1.FileName")}: {PdfInfo?.FileName ?? ImageInfo?.FileName}" + Environment.NewLine +
+            (SourceKind == SourceDocumentKind.Image
+                ? SourceDescription + Environment.NewLine
+                : string.Empty) + Environment.NewLine +
             Localize("Step3.Header") + ":" + Environment.NewLine + destinations;
 
         return MessageBox.Show(
@@ -860,7 +976,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             try
             {
-                _lastBuiltObject = _services.Builder.Build(PdfPath, BuildDemographics(), PdfInfo);
+                // The preview shows the first page, which is the only one whose tags
+                // differ from the rest apart from Instance Number and SOP Instance UID.
+                _lastBuiltObject = SourceKind == SourceDocumentKind.Image
+                    ? _services.ImageBuilder.Build(PdfPath, BuildDemographics(), null, ImageInfo).First()
+                    : _services.Builder.Build(PdfPath, BuildDemographics(), PdfInfo);
+
                 _lastGeneratedFile = _lastBuiltObject.File;
             }
             catch (Exception ex)

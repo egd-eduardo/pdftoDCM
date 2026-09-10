@@ -5,6 +5,7 @@ using PdfToDicom.Core.Localization;
 using PdfToDicom.Core.Logging;
 using PdfToDicom.Core.Monitoring;
 using PdfToDicom.Core.Networking;
+using PdfToDicom.Core.Imaging;
 using PdfToDicom.Core.Pdf;
 
 namespace PdfToDicom.Core.Services;
@@ -51,8 +52,11 @@ public sealed class ApplicationServices : IDisposable
         Localizer = new Localizer(configuration.Language);
 
         PdfInspector = new PdfInspector(Logger);
+        ImageInspector = new ImageInspector(Logger);
         FileWriter = new DicomFileWriter(Logger);
-        DicomValidator = new EncapsulatedPdfValidator();
+        // Dispatches on the SOP Class the object declares, so one validator serves both
+        // the encapsulated documents and the images.
+        DicomValidator = new SopClassDicomValidator();
         NetworkService = new DicomNetworkService(Logger);
         TagInspector = new DicomTagInspector();
         FolderMonitor = new FolderMonitor(Logger, configuration.MonitorSettleDelayMilliseconds);
@@ -85,6 +89,9 @@ public sealed class ApplicationServices : IDisposable
     /// <summary>PDF reader.</summary>
     public IPdfInspector PdfInspector { get; }
 
+    /// <summary>Reads image files and decides what kind of file the operator selected.</summary>
+    public IImageInspector ImageInspector { get; }
+
     /// <summary>Writer for generated objects.</summary>
     public DicomFileWriter FileWriter { get; }
 
@@ -105,6 +112,12 @@ public sealed class ApplicationServices : IDisposable
 
     /// <summary>DICOM object builder, rebuilt when the DICOM settings change.</summary>
     public IDicomObjectBuilder Builder { get; private set; } = null!;
+
+    /// <summary>Builds Secondary Capture objects from images.</summary>
+    public IImageDicomObjectBuilder ImageBuilder { get; private set; } = null!;
+
+    /// <summary>Decides which study several converted files share.</summary>
+    public StudyGroupingService StudyGrouping { get; } = new();
 
     /// <summary>Workflow orchestrator, rebuilt when the DICOM settings change.</summary>
     public ConversionWorkflowService Workflow { get; private set; } = null!;
@@ -135,16 +148,20 @@ public sealed class ApplicationServices : IDisposable
         }
 
         Builder = new EncapsulatedPdfBuilder(configuration, UidGenerator, PdfInspector, Logger);
+        ImageBuilder = new SecondaryCaptureImageBuilder(configuration, UidGenerator, ImageInspector, Logger);
 
         Workflow = new ConversionWorkflowService(
             ConfigurationService,
             PdfInspector,
+            ImageInspector,
             Builder,
+            ImageBuilder,
             DicomValidator,
             NetworkService,
             FileWriter,
             Logger,
-            AuditLogger);
+            AuditLogger,
+            StudyGrouping);
     }
 
     /// <inheritdoc />

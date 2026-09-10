@@ -1,5 +1,100 @@
 # Changelog
 
+## 2.0.0
+
+**Images can now be converted, and several files can share one study.** The major version
+reflects a new SOP Class and a new way of forming studies, not a rewrite: the PDF
+conversion is unchanged and its objects are byte for byte what 1.5.5 produced.
+
+### Images
+
+JPEG, PNG, TIFF, BMP, GIF, WebP and TGA files are converted to **Secondary Capture Image
+Storage** objects (`1.2.840.10008.5.1.4.1.1.7`), transmitted the same way documents are.
+
+- **A multi page source, typically a scanned TIFF, becomes one DICOM image per page**, all
+  sharing one series and numbered in order, so a viewer pages through them as one document.
+  Single frame Secondary Capture is used rather than the multi frame SOP Classes because it
+  is the most widely supported image class in the field, including on older archives.
+- **Greyscale stays greyscale, decided from the pixels rather than the file format.** A
+  flatbed scanner emitting an RGB JPEG of a black and white page produces a `MONOCHROME2`
+  object: two thirds smaller, and nothing is lost, because if red, green and blue are equal
+  in every pixel there is no colour to discard.
+- **What a file is comes from its content, not its name.** A scanner that writes a TIFF and
+  calls it `.jpg`, or a renamed file, converts correctly. This applies to PDFs too.
+- **Lossy history is recorded.** A JPEG source sets Lossy Image Compression to `01` and the
+  method to `ISO_10918_1`, because the pixels have already lost information that no later
+  step recovers and a clinician judging fine detail is entitled to know it.
+- **Modality for images is configured separately** from the document modality, so a site
+  using `DOC` for documents does not end up labelling photographs as encapsulated documents.
+
+Pixel data is stored uncompressed, as the documents are, so every conformant archive
+accepts it and no codec library is needed. The cost is size: a twelve megapixel photograph
+becomes an object of roughly 36 MB. The operator is shown the pixel dimensions before
+converting, and a page beyond roughly 1.2 GB raises a warning.
+
+### Study grouping
+
+A new setting decides how converted files are gathered into studies:
+
+| Mode | Behaviour |
+|---|---|
+| Each file in its own study | Every conversion creates a new study. **This is the default** and is what every earlier version did |
+| Files for the same patient share one study | Conversions for the same Patient ID reuse one Study Instance UID |
+
+**Each file always gets its own Series Instance UID, in both modes.** That is what keeps
+the files distinguishable inside a study, and it is why grouping loses nothing: a viewer
+still shows each document or image separately, it simply shows them together.
+
+The association is held in memory and **never written to disk**. A patient returning in
+three months is having a new examination, and their new report must not silently join the
+study created for the old one. Changing the Patient ID, or closing the application, starts
+a new study. Patient identifiers are compared exactly, including case, because they are
+opaque strings from another system and treating `ab1` and `AB1` as one patient is a guess.
+
+A Study Instance UID typed on the form, or passed as `--study-uid`, overrides grouping.
+
+### Command line
+
+- `--file` converts anything; `--pdf` and `--image` are accepted as the same option, since
+  the content decides what the file is.
+- **`--file` may be repeated** to convert several files in one run. That is what makes
+  grouping usable from a script, because the association lives for one run of the tool.
+- Multi page results are reported page by page.
+
+### Executables carry their version
+
+The standalone builds are now named `PdfToDicom-2.0.0-win-x64.exe` and so on, so a
+downloaded file says which build it is without anyone opening its properties. The
+executable **inside** the package and the installer stays `PdfToDicom.exe`, because the
+manuals, the Start Menu shortcut and the file associations all name it; those already sit
+inside a folder and an installer that carry the version.
+
+### Under the hood
+
+- The modules shared by both kinds of object, Patient, General Study, General Series,
+  General Equipment, SC Equipment, SOP Common and the file meta information, are written in
+  one place rather than two. A correction applied to one and forgotten in the other would
+  land on the attributes that decide which patient a document is filed against.
+- `SopClassDicomValidator` applies the rules for whichever SOP Class an object declares, so
+  the workflow does not decide what kind of object it is holding in a second place.
+- The image validator checks that the pixel data is exactly the length the dimensions
+  promise. A viewer handed a buffer of the wrong length renders a torn image rather than
+  refusing it, which is the worst outcome for a clinical image.
+
+### Not changed
+
+The PDF conversion path. Its objects were compared tag for tag against 1.5.5 output and are
+identical, and the DCMTK interoperability check still proves the embedded PDF byte
+identical to the input.
+
+### Verification
+
+136 tests, up from 113. The DCMTK check now also converts a hand built three page greyscale
+TIFF, transmits it to a real archive, and confirms the archive stored three instances in
+one series and one study with **every pixel of every page identical** after rendering back.
+
+---
+
 ## 1.5.5
 
 ### A registered UID root
@@ -104,7 +199,7 @@ is running, not restricting who may run it. See [`LICENSE`](LICENSE).
   and no development environment. It checks prerequisites, runs the tests, refuses to build
   if any fails, and reports where the result is. See
   [`docs/BuildingItYourself.md`](docs/BuildingItYourself.md).
-- **DICOM Implementation Version Name** is now `PDFTODICOM_1_5`, which is how a PACS
+- **DICOM Implementation Version Name** is now `PDFTODICOM_2_0`, which is how a PACS
   administrator identifies which build produced an object.
 
 ### Upgrading

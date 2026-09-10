@@ -89,11 +89,15 @@ Fields marked with a red asterisk (**\***) are mandatory.
 
 ---
 
-## 3. Step 1 — Choose the PDF
+## 3. Step 1 — Choose the document or image
 
-You can do this in three ways. Use whichever suits you.
+**From version 2.0 you can convert images as well as PDF documents.** JPEG, PNG, TIFF,
+BMP, GIF, WebP and TGA are all accepted, which covers anything a scanner, a camera or a
+phone is likely to produce.
 
-**a) Drag and drop.** Drag the PDF from Windows Explorer or from your desktop and drop it
+You can select a file in three ways. Use whichever suits you.
+
+**a) Drag and drop.** Drag the file from Windows Explorer or from your desktop and drop it
 anywhere on the window. The drop area highlights when the file will be accepted.
 
 **b) Browse.** Click **Browse...** and pick the file.
@@ -102,9 +106,33 @@ anywhere on the window. The drop area highlights when the file will be accepted.
 into the watched folder is picked up on its own. The status bar says *Picked up from the
 monitored folder*.
 
-Once a document is selected you will see its name, size, creation date and page count.
-**Check these before continuing.** The page count in particular is a quick way to confirm
-you have the whole report and not a single page.
+Once a file is selected you will see its name, size, date and page count, and a line
+describing what it was recognised as. **Check these before continuing.** The page count in
+particular is a quick way to confirm you have the whole report and not a single page.
+
+### What happens to an image
+
+A line under the file details tells you exactly what will be produced, for example
+*JPEG, 2480 x 3508, greyscale. It will become one DICOM image.*
+
+- **A single image** becomes one DICOM image.
+- **A scan with several pages**, which usually means a multi page TIFF, becomes one DICOM
+  image per page. They all stay together as one item in the archive, and a viewer lets you
+  page through them.
+
+Two things are worth knowing:
+
+- **A greyscale scan stays greyscale.** The application looks at the actual pixels rather
+  than trusting the file, so a scanner that saves a black and white page as a colour file
+  still produces a greyscale DICOM image. That is about a third of the size, and nothing is
+  lost.
+- **The DICOM image is larger than the file you started with**, often much larger, because
+  DICOM stores the picture uncompressed. A four megabyte photograph can become a thirty
+  megabyte DICOM image. This is normal and is what archives expect. If a transfer seems
+  slow, this is why.
+
+**It is not one file at a time only for PDFs.** The same rule applies to images: drop one
+file, convert it, then drop the next.
 
 > **Only one file at a time.** If you drop several files nothing happens. This is
 > deliberate: guessing which one you meant is exactly how a document ends up filed
@@ -117,6 +145,8 @@ you have the whole report and not a single page.
 | *does not exist* | The file was moved or deleted after you chose it. | Find it again. |
 | *is empty* | The file has no content. | The system that produced it did not finish. Produce it again. |
 | *does not begin with a PDF header* | It is not really a PDF, whatever the name says. | Ask the sending system for a real PDF. |
+| *is neither a PDF nor an image in a supported format* | The file is something else entirely, such as a Word document or a spreadsheet. | Print or export it to PDF first, then convert that. |
+| *is damaged and could not be read* | The image file is incomplete or corrupt. | Scan or export it again. |
 | *is password protected* | The PDF is encrypted. | Save an unprotected copy and select that instead. Nobody could open an encrypted document from the PACS. |
 | *may be damaged or still being written* | The file is incomplete. | Wait a few seconds and try again. |
 
@@ -288,6 +318,26 @@ Two settings are worth knowing about as a user:
 
 > **Leave "Ask for confirmation before sending" switched on.** It is the last check that
 > the document matches the patient.
+
+---
+
+### Putting several files in one study
+
+Normally each file you convert becomes its own study in the archive. If your department
+prefers everything for one patient to appear together, your IT department can switch on
+**study grouping** in Settings.
+
+With grouping on, every file you convert for the **same Patient ID** joins one study. Each
+file still appears separately inside it, so nothing is merged or lost; they are simply
+filed together.
+
+Two things to know:
+
+- **Changing the Patient ID starts a new study.** So does closing the application. This is
+  deliberate: a patient's next visit is a new examination and must not be added to an old
+  one.
+- **The status area shows the study being used** while grouping is active, so you can see
+  it is working.
 
 ---
 

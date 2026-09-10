@@ -15,7 +15,7 @@ utilizar esta aplicação.
 
 1. [Antes de começar](#1-antes-de-começar)
 2. [A janela principal](#2-a-janela-principal)
-3. [Passo 1 — Escolher o PDF](#3-passo-1--escolher-o-pdf)
+3. [Passo 1 — Escolher o documento ou a imagem](#3-passo-1--escolher-o-documento-ou-a-imagem)
 4. [Passo 2 — Introduzir os dados do doente](#4-passo-2--introduzir-os-dados-do-doente)
 5. [Passo 3 — Confirmar o destino](#5-passo-3--confirmar-o-destino)
 6. [Enviar o documento](#6-enviar-o-documento)
@@ -88,13 +88,17 @@ Os campos marcados com asterisco vermelho (**\***) são obrigatórios.
 
 ---
 
-## 3. Passo 1 — Escolher o PDF
+## 3. Passo 1 — Escolher o documento ou a imagem
 
-Pode fazê-lo de três formas. Utilize a que lhe for mais cómoda.
+**A partir da versão 2.0 pode converter imagens além de documentos PDF.** São aceites
+JPEG, PNG, TIFF, BMP, GIF, WebP e TGA, o que cobre tudo o que um digitalizador, uma máquina
+fotográfica ou um telemóvel costumam produzir.
 
-**a) Arrastar e largar.** Arraste o PDF do Explorador do Windows ou do ambiente de trabalho
-e largue-o em qualquer ponto da janela. A área de largada fica realçada quando o ficheiro
-vai ser aceite.
+Pode selecionar um ficheiro de três formas. Utilize a que lhe for mais cómoda.
+
+**a) Arrastar e largar.** Arraste o ficheiro do Explorador do Windows ou do ambiente de
+trabalho e largue-o em qualquer ponto da janela. A área de largada fica realçada quando o
+ficheiro vai ser aceite.
 
 **b) Procurar.** Clique em **Procurar...** e escolha o ficheiro.
 
@@ -102,9 +106,34 @@ vai ser aceite.
 pastas, um PDF guardado na pasta vigiada é recolhido sozinho. A barra de estado indica
 *Recolhido da pasta monitorizada*.
 
-Depois de selecionado, verá o nome, o tamanho, a data de criação e o número de páginas.
-**Confirme estes dados antes de continuar.** O número de páginas é a forma mais rápida de
-confirmar que tem o relatório completo e não apenas uma página.
+Depois de selecionado, verá o nome, o tamanho, a data e o número de páginas, e uma linha a
+descrever o que o ficheiro foi reconhecido como sendo. **Confirme estes dados antes de
+continuar.** O número de páginas é a forma mais rápida de confirmar que tem o relatório
+completo e não apenas uma página.
+
+### O que acontece a uma imagem
+
+Uma linha por baixo dos detalhes do ficheiro indica exatamente o que vai ser produzido,
+por exemplo *JPEG, 2480 x 3508, tons de cinzento. Será convertida numa imagem DICOM.*
+
+- **Uma imagem única** dá origem a uma imagem DICOM.
+- **Uma digitalização com várias páginas**, normalmente um TIFF de várias páginas, dá
+  origem a uma imagem DICOM por página. Ficam todas juntas como um só item no arquivo e um
+  visualizador permite percorrê-las.
+
+Vale a pena saber duas coisas:
+
+- **Uma digitalização a preto e branco continua em tons de cinzento.** A aplicação observa
+  os pixels em vez de confiar no ficheiro, pelo que um digitalizador que guarde uma página
+  a preto e branco como ficheiro a cores produz na mesma uma imagem DICOM em tons de
+  cinzento. Ocupa cerca de um terço e não se perde nada.
+- **A imagem DICOM é maior do que o ficheiro de origem**, muitas vezes bastante maior,
+  porque o DICOM guarda a imagem sem compressão. Uma fotografia de quatro megabytes pode
+  dar origem a uma imagem DICOM de trinta megabytes. Isto é normal e é o que os arquivos
+  esperam. Se uma transferência parecer lenta, a razão é esta.
+
+**A regra de um ficheiro de cada vez também se aplica às imagens:** largue um ficheiro,
+converta-o e só depois largue o seguinte.
 
 > **Apenas um ficheiro de cada vez.** Se largar vários ficheiros não acontece nada. Isto é
 > intencional: adivinhar qual pretendia é exatamente a forma como um documento acaba
@@ -117,6 +146,8 @@ confirmar que tem o relatório completo e não apenas uma página.
 | *já não existe* | O ficheiro foi movido ou eliminado. | Volte a localizá-lo. |
 | *está vazio* | O ficheiro não tem conteúdo. | O sistema que o produziu não terminou. Produza-o de novo. |
 | *não começa por um cabeçalho PDF* | Não é realmente um PDF, apesar do nome. | Peça um PDF verdadeiro ao sistema de origem. |
+| *não é um PDF nem uma imagem num formato suportado* | O ficheiro é outra coisa, por exemplo um documento Word ou uma folha de cálculo. | Exporte-o primeiro para PDF e converta esse ficheiro. |
+| *está danificada e não pôde ser lida* | O ficheiro de imagem está incompleto ou corrompido. | Digitalize ou exporte novamente. |
 | *está encriptado* | O PDF está protegido por palavra-passe. | Guarde uma cópia sem proteção. Ninguém conseguiria abrir um documento encriptado a partir do PACS. |
 | *pode estar danificado ou ainda a ser escrito* | O ficheiro está incompleto. | Aguarde alguns segundos e tente novamente. |
 

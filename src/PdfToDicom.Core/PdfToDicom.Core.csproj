@@ -20,6 +20,10 @@
     <PackageReference Include="fo-dicom" Version="5.2.2" />
     <!-- PdfPig: fully managed PDF parser, used for page counts and structural checks. -->
     <PackageReference Include="PdfPig" Version="0.1.10" />
+    <!-- Version 2.1.x is Apache-2.0 licensed, which matches the other components and
+         keeps redistribution simple. It is pure managed code, so it adds no native
+         binaries to the single file executable and behaves identically on ARM64. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.11" />
     <!-- Serilog: structured logging with rolling file sinks. -->
     <PackageReference Include="Serilog" Version="4.2.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />

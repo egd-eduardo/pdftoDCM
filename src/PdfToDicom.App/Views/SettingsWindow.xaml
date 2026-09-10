@@ -202,6 +202,23 @@
                         <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,14"
                                    Text="{loc:Localize Settings.OrganizationUidRoot.Caption}" />
 
+                        <TextBlock Text="{loc:Localize Settings.StudyGrouping}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <ComboBox ItemsSource="{Binding StudyGroupingModes}"
+                                  SelectedValue="{Binding Working.StudyGrouping}"
+                                  SelectedValuePath="Value" DisplayMemberPath="Display"
+                                  Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,14"
+                                   TextWrapping="Wrap"
+                                   Text="{loc:Localize Settings.StudyGrouping.Caption}" />
+
+                        <TextBlock Text="{loc:Localize Settings.ImageModality}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <ComboBox ItemsSource="{Binding ImageModalityOptions}"
+                                  SelectedItem="{Binding Working.ImageModality}"
+                                  Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,14"
+                                   TextWrapping="Wrap"
+                                   Text="{loc:Localize Settings.ImageModality.Caption}" />
+
                         <TextBlock Text="{loc:Localize Settings.Modality}" Style="{StaticResource FieldLabelTextStyle}" />
                         <ComboBox ItemsSource="{Binding ModalityOptions}"
                                   SelectedItem="{Binding Working.Modality}"

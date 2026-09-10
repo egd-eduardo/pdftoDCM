@@ -202,6 +202,13 @@
                                             MinWidth="84" />
                                 </StackPanel>
                             </Grid>
+                                    <!-- Says what the file was recognised as and what it will become. An
+                                         operator who dropped the wrong file, or whose scanner produced
+                                         something unexpected, sees it here rather than in the archive. -->
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}"
+                                               Margin="0,6,0,0" TextWrapping="Wrap"
+                                               Text="{Binding SourceDescription}"
+                                               Visibility="{Binding HasPdf, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
                     </Border>
 

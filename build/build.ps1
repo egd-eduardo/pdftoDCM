@@ -293,10 +293,19 @@ function Invoke-Assemble {
     $zip = Join-Path $Artifacts "PdfToDicom-$version-$Runtime.zip"
     Compress-Archive -Path "$package\*" -DestinationPath $zip -Force
 
+    # A standalone copy whose name carries the version and the architecture. The file
+    # inside the package stays PdfToDicom.exe, because the manuals, the shortcuts and the
+    # installer all name it and a version in that name would break them. This copy is for
+    # handing one file to somebody, where "which build is this?" has to be answerable
+    # without opening its properties.
+    $standalone = Join-Path $Artifacts "PdfToDicom-$version-$Runtime.exe"
+    Copy-Item $ApplicationPath $standalone -Force
+
     $fileCount = (Get-ChildItem $package -Recurse -File).Count
 
     Write-Host "    folder : $package"
     Write-Host "    zip    : $zip"
+    Write-Host "    exe    : $standalone"
     Write-Host "    $fileCount file(s): the application and the command line tool, the"
     Write-Host "    licence and third party notices, five documents and two samples"
 }
@@ -363,9 +372,9 @@ function New-StartHereFile {
 PDF to DICOM $Version
 Copyright (c) 2026 Eduardo Dias
 
-Converts a PDF document into a DICOM Encapsulated PDF object and sends it to a
-PACS, so a report from another system becomes part of the patient's imaging
-record.
+Converts a PDF document or an image into a DICOM object and sends it to a
+PACS, so a report or a scan from another system becomes part of the patient's
+imaging record.
 
 
 TO RUN IT
@@ -392,6 +401,15 @@ BEFORE THE FIRST REAL DOCUMENT
 
 4. Convert the sample in Samples with "Generate only" and check the result
    before sending anything belonging to a patient.
+
+
+WHAT IT CONVERTS
+----------------
+
+  PDF documents           Become DICOM Encapsulated PDF objects.
+  JPEG, PNG, TIFF, BMP,   Become DICOM Secondary Capture images. A scan with
+  GIF, WebP, TGA          several pages becomes one image per page, kept
+                          together as a single item in the archive.
 
 
 WHAT IS IN THIS FOLDER

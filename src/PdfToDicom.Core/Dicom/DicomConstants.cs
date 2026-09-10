@@ -16,6 +16,19 @@ public static class DicomConstants
     /// </summary>
     public const string EncapsulatedPdfStorageSopClassUid = "1.2.840.10008.5.1.4.1.1.104.1";
 
+    /// <summary>
+    /// Secondary Capture Image Storage, PS3.4 B.5. The SOP Class for an image that was
+    /// digitised or captured from something that was not itself a DICOM device, which is
+    /// exactly what a scanned document or a clinical photograph is.
+    /// </summary>
+    /// <remarks>
+    /// Single frame Secondary Capture is used in preference to the multi frame variants
+    /// even for a multi page source. It is the most widely supported image SOP Class in
+    /// the field, including on older archives, and a page of a scanned document is more
+    /// useful to a viewer as an instance it can page through than as a frame.
+    /// </remarks>
+    public const string SecondaryCaptureImageStorageSopClassUid = "1.2.840.10008.5.1.4.1.1.7";
+
     /// <summary>Verification SOP Class UID, used for C-ECHO.</summary>
     public const string VerificationSopClassUid = "1.2.840.10008.1.1";
 

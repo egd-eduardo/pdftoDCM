@@ -19,8 +19,23 @@ public sealed class ConversionResult
     /// <summary>Series Instance UID of the generated object.</summary>
     public string? SeriesInstanceUid { get; init; }
 
-    /// <summary>SOP Instance UID of the generated object.</summary>
+    /// <summary>
+    /// SOP Instance UID of the generated object, or of the first page when the source had
+    /// several.
+    /// </summary>
     public string? SopInstanceUid { get; init; }
+
+    /// <summary>
+    /// Every SOP Instance UID produced, in page order. A PDF or a single page image
+    /// yields one; a multi page TIFF yields one per page, all in the same series.
+    /// </summary>
+    public IReadOnlyList<string> SopInstanceUids { get; init; } = Array.Empty<string>();
+
+    /// <summary>Absolute paths of every generated file that was written to disk.</summary>
+    public IReadOnlyList<string> GeneratedFilePaths { get; init; } = Array.Empty<string>();
+
+    /// <summary>How many DICOM instances the conversion produced.</summary>
+    public int InstanceCount => SopInstanceUids.Count;
 
     /// <summary>Validation issues raised before or after generation.</summary>
     public IReadOnlyList<ValidationIssue> ValidationIssues { get; init; } = Array.Empty<ValidationIssue>();

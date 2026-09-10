@@ -1,8 +1,8 @@
 # PDF to DICOM
 
-**A Windows desktop application that converts PDF documents into DICOM Encapsulated PDF
-objects and sends them to a PACS, so that a report produced by a third party system becomes
-part of the patient's imaging record.**
+**A Windows desktop application that converts PDF documents and images into DICOM objects
+and sends them to a PACS, so that a report or a scan produced by a third party system
+becomes part of the patient's imaging record.**
 
 Built for hospital staff with no technical background: one window, three steps, large
 buttons, and error messages written in plain language.
@@ -19,7 +19,8 @@ buttons, and error messages written in plain language.
 | **Deployment** | One self contained `.exe`, or a per user installer with no UAC prompt |
 | **Administrator rights** | Not required, to install or to run |
 | **Network use** | Outbound DICOM only, to configured destinations. Everything else is offline |
-| **SOP class produced** | Encapsulated PDF Storage `1.2.840.10008.5.1.4.1.1.104.1` |
+| **Accepts** | PDF, and JPEG, PNG, TIFF, BMP, GIF, WebP, TGA images |
+| **SOP classes produced** | Encapsulated PDF Storage `1.2.840.10008.5.1.4.1.1.104.1`, Secondary Capture Image Storage `1.2.840.10008.5.1.4.1.1.7` |
 | **Languages** | English, Portuguese (Portugal) |
 | **Author** | Eduardo Dias |
 | **Licence** | Free to use, commercially and privately. Not open source; copyright retained |
@@ -76,7 +77,7 @@ cd pdftoDCM
 .\build\build.ps1                          # test, publish and build the installer (x64)
 .\build\build.ps1 -Runtime win-arm64       # native ARM64 build
 .\build\build.ps1 -Runtime win-x86         # 32 bit build
-.\build\build.ps1 -Task test               # run the 113 tests only
+.\build\build.ps1 -Task test               # run the 136 tests only
 ```
 
 The product is Windows only. The build tooling itself is not: `build/build.sh` cross
@@ -120,7 +121,7 @@ BUILD.bat                One click build, for anyone without a development setup
 src/PdfToDicom.Core/     All logic. net8.0, no presentation code, fully testable
 src/PdfToDicom.App/      WPF desktop application. net8.0-windows
 src/PdfToDicom.Cli/      Command line front end for scripted conversion
-tests/                   113 xUnit tests
+tests/                   136 xUnit tests
 build/                   Build scripts, installer, interoperability verification
 dist/app/                The application, prebuilt for x86, x64 and ARM64
 docs/                    User manual (EN + PT), technical docs, conformance statement
@@ -155,7 +156,7 @@ application and the CLI provably identical in behaviour.
 
 ## Verification status
 
-**113 unit and workflow tests pass**, covering validation rules, VR limits, UID uniqueness
+**136 unit and workflow tests pass**, covering validation rules, VR limits, UID uniqueness
 across 20,000 identifiers per strategy, every mandatory attribute, payload padding, UTF-8
 round trips, configuration corruption recovery and the complete workflow.
 

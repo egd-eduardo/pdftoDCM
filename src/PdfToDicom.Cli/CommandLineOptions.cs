@@ -16,8 +16,22 @@ public sealed class CommandLineOptions
     /// <summary>The verb the user asked for.</summary>
     public string Command { get; private set; } = "help";
 
-    /// <summary>Path of the PDF to convert.</summary>
-    public string? PdfPath { get; private set; }
+    /// <summary>
+    /// Path of the first file to convert, kept for the commands that operate on exactly
+    /// one file: inspect and extract.
+    /// </summary>
+    public string? PdfPath => SourcePaths.FirstOrDefault();
+
+    /// <summary>
+    /// Every file to convert, in the order they were given.
+    /// </summary>
+    /// <remarks>
+    /// Repeating the option converts several files in one run. That is what makes study
+    /// grouping usable from a script: the association between a patient and their study
+    /// is held in memory and deliberately not persisted, so it lasts for one run of the
+    /// tool and no longer.
+    /// </remarks>
+    public List<string> SourcePaths { get; } = new();
 
     /// <summary>Patient and order information assembled from the arguments.</summary>
     public PatientDemographics Demographics { get; } = new();
@@ -113,7 +127,12 @@ public sealed class CommandLineOptions
         switch (name)
         {
             case "pdf":
-                PdfPath = value;
+            case "image":
+            case "file":
+                // One list behind three names. The workflow decides what each file
+                // actually is by reading its content, so which name was typed changes
+                // nothing; "--image report.pdf" converts a PDF quite happily.
+                SourcePaths.Add(value);
                 break;
             case "patient-id":
                 Demographics.PatientId = value;
@@ -192,14 +211,14 @@ public sealed class CommandLineOptions
     /// <summary>The help text shown for --help and for an unrecognised verb.</summary>
     public static string HelpText =>
         """
-        pdftodicom - convert a PDF into a DICOM Encapsulated PDF object and send it to a PACS
+        pdftodicom - convert a PDF or an image into a DICOM object and send it to a PACS
 
         USAGE
           pdftodicom <command> [options]
 
         COMMANDS
-          send        Convert a PDF and transmit it to the configured destination(s).
-          generate    Convert a PDF and save it locally, without transmitting.
+          send        Convert a file and transmit it to the configured destination(s).
+          generate    Convert a file and save it locally, without transmitting.
           echo        Send a C-ECHO verification to the configured destination(s).
           inspect     Print the DICOM tags of an existing .dcm file.
           extract     Recover the original PDF from a .dcm file, byte for byte.
@@ -207,7 +226,15 @@ public sealed class CommandLineOptions
           help        Show this text.
 
         PATIENT OPTIONS (mandatory for send and generate)
-          --pdf <path>                 The PDF document to convert.
+          --file <path>                The file to convert. May be repeated to convert
+                                       several files in one run, which is what lets study
+                                       grouping put them in the same study. A PDF becomes an Encapsulated
+                                       PDF object; a JPEG, PNG, TIFF, BMP, GIF, WebP or
+                                       TGA becomes Secondary Capture image object(s).
+                                       --pdf and --image are accepted as the same option,
+                                       because the file's content decides, not its name.
+                                       A multi page TIFF produces one instance per page,
+                                       all in one series.
           --patient-id <value>         Patient ID.
           --surname <value>            Patient surname.
           --given-name <value>         Patient given name.
@@ -222,6 +249,7 @@ public sealed class CommandLineOptions
           --series-description <text>  Series description.
           --document-title <text>      Document title.
           --study-uid <uid>            File into an existing study instead of creating one.
+                                       Overrides the study grouping setting.
           --study-id <value>           Study ID.
           --destination <name>         Use only this destination. May be repeated.
           --config <path>              Use a specific configuration file.
@@ -235,6 +263,8 @@ public sealed class CommandLineOptions
           pdftodicom generate --pdf report.pdf --patient-id 12345 --surname Silva \
                               --given-name Maria --dob 1970-05-21 --accession ACC001
           pdftodicom send --pdf report.pdf --patient-id 12345 --surname Silva \
+                          --given-name Maria --dob 1970-05-21 --accession ACC001
+          pdftodicom send --image scan.tiff --patient-id 12345 --surname Silva \
                           --given-name Maria --dob 1970-05-21 --accession ACC001
           pdftodicom inspect --pdf out/12345_ACC001_1234.dcm
           pdftodicom extract --pdf out/12345_ACC001_1234.dcm --out recovered.pdf
