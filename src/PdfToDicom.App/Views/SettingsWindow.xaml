@@ -13,6 +13,7 @@
 
     <Window.Resources>
         <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <conv:BooleanToVisibilityConverter x:Key="InverseBoolToVisibility" Invert="True" />
         <conv:StringToVisibilityConverter x:Key="StringToVisibility" />
     </Window.Resources>
 
@@ -323,13 +324,32 @@
 
             <!-- ==================================================== Licence -->
             <!--
-                Hidden entirely when the build carries no publisher key, because then
-                nothing is enforced and a licence field would only confuse an operator.
+                Always shown. It was previously hidden when the build carried no publisher
+                key, on the reasoning that a field which does nothing only confuses an
+                operator. That reasoning was wrong for the person who owns the software:
+                the tab simply could not be found. The panel below states plainly whether
+                codes are being checked, which serves both readers.
             -->
-            <TabItem Header="{loc:Localize Settings.Tab.Licence}"
-                     Visibility="{Binding IsLicensingEnforced, Converter={StaticResource BoolToVisibility}}">
+            <TabItem Header="{loc:Localize Settings.Tab.Licence}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
                     <StackPanel MaxWidth="560" HorizontalAlignment="Left">
+
+                        <!--
+                            Shown only in a build that does not check codes, so nobody
+                            enters a code and then wonders why nothing happened.
+                        -->
+                        <Border Background="{DynamicResource SubtleBackgroundBrush}"
+                                BorderBrush="{DynamicResource CardBorderBrush}"
+                                BorderThickness="1" CornerRadius="6" Padding="14" Margin="0,0,0,18"
+                                Visibility="{Binding IsLicensingEnforced, Converter={StaticResource InverseBoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="{loc:Localize Settings.Licence.NotEnforced.Title}"
+                                           Style="{StaticResource FieldLabelTextStyle}" Margin="0,0,0,6" />
+                                <TextBlock Text="{loc:Localize Settings.Licence.NotEnforced.Body}"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" />
+                            </StackPanel>
+                        </Border>
 
                         <TextBlock Text="{loc:Localize Settings.LicenceCode}" Style="{StaticResource FieldLabelTextStyle}" />
                         <TextBox Text="{Binding LicenceCode, UpdateSourceTrigger=PropertyChanged}"

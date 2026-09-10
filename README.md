@@ -67,7 +67,7 @@ cd pdftoDCM
 .\build\build.ps1                          # test, publish and build the installer (x64)
 .\build\build.ps1 -Runtime win-arm64       # native ARM64 build
 .\build\build.ps1 -Runtime win-x86         # 32 bit build
-.\build\build.ps1 -Task test               # run the 140 tests only
+.\build\build.ps1 -Task test               # run the 150 tests only
 ```
 
 The product is Windows only. The build tooling itself is not: `build/build.sh` cross
@@ -111,9 +111,9 @@ src/PdfToDicom.Core/     All logic. net8.0, no presentation code, fully testable
 src/PdfToDicom.App/      WPF desktop application. net8.0-windows
 src/PdfToDicom.Cli/      Command line front end for scripted conversion
 src/PdfToDicom.LicenceTool/  Licence generator. Publisher only, never distributed
-tests/                   140 xUnit tests
+tests/                   150 xUnit tests
 build/                   Build scripts, installer, interoperability verification
-dist/                    Prebuilt ARM64 executable, for convenience during development
+dist/                    Prebuilt ARM64 application, and the licence generator
 docs/                    User manual (EN + PT), technical docs, conformance statement
 samples/                 Annotated configuration, example PDF, example DICOM object
 ```
@@ -144,7 +144,7 @@ application and the CLI provably identical in behaviour.
 
 ## Verification status
 
-**140 unit and workflow tests pass**, covering validation rules, VR limits, UID uniqueness
+**150 unit and workflow tests pass**, covering validation rules, VR limits, UID uniqueness
 across 20,000 identifiers per strategy, every mandatory attribute, payload padding, UTF-8
 round trips, configuration corruption recovery, licence signing and expiry, and the
 complete workflow.
@@ -208,21 +208,22 @@ optionally bound to one workstation and optionally time limited, entered by the 
 
 **It is switched off in this repository and in every published build.**
 `LicenceService.PublisherPublicKey` is blank, and a build with a blank key enforces
-nothing: the Licence tab is hidden, no notice ever appears, and the workflow is identical
-to the one that shipped before the feature existed. A test asserts the constant is still
-blank, so it cannot be switched on by accident.
+nothing: codes entered in Settings are stored but never checked, no notice ever appears,
+and the workflow is identical to the one that shipped before the feature existed. A test
+asserts the constant is still blank, so it cannot be switched on by accident.
 
-Switching it on is one `keygen` command and one pasted constant. See
-**[the licensing workflow](docs/LicensingWorkflow.md)**.
+Switching it on is one `keygen` command and one pasted constant. The generator is
+prebuilt at [`dist/licence-tool/`](dist/licence-tool/) for all three architectures, so it
+needs nothing installed. See **[the licensing workflow](docs/LicensingWorkflow.md)**.
 
 When it is in force, a licence problem withholds **only transmission**. The application
 still opens, still converts and still saves locally, and an expired licence keeps
 transmitting for a further fourteen days. A licence that stops working at midnight, in a
 hospital, is a clinical incident rather than a commercial success.
 
-> **Note.** While this repository is public, none of this protects anything: anyone can
-> read the source, remove the check and build their own copy. Making the repository
-> private is free and is the single highest value action available.
+> **The repository is private**, which is what makes any of this worth having. Were the
+> source public, anyone could read it, remove the check and build their own copy, and no
+> amount of work on the licensing would change that. Keep it private.
 
 ---
 

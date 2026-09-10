@@ -16,10 +16,42 @@
     <RootNamespace>PdfToDicom.LicenceTool</RootNamespace>
     <AssemblyName>pdftodicom-licence</AssemblyName>
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
+  <!--
+    The licensing source files are compiled in directly rather than reached through a
+    reference to PdfToDicom.Core.
+
+    They are the same files, so there is exactly one implementation of the code format and
+    it cannot drift between the tool that issues a code and the application that checks it.
+    What is avoided is everything else in Core: fo-dicom, PdfPig and Serilog have no
+    business inside a key signing utility, and dragging them in would take the published
+    executable from about twelve megabytes to seventy, and rule out trimming, because
+    fo-dicom resolves types by reflection.
+  -->
   <ItemGroup>
-    <ProjectReference Include="..\PdfToDicom.Core\PdfToDicom.Core.csproj" />
+    <Compile Include="..\PdfToDicom.Core\Licensing\*.cs" LinkBase="Licensing" />
+    <Compile Include="..\PdfToDicom.Core\Abstractions\ILicenceService.cs" LinkBase="Abstractions" />
+    <Compile Include="..\PdfToDicom.Core\Abstractions\IAppLogger.cs" LinkBase="Abstractions" />
   </ItemGroup>
+
+  <!--
+    Publish settings, applied only when a runtime is named so that an ordinary build and
+    an ordinary "dotnet run" are unaffected.
+
+    Trimming is safe here, unlike in the desktop application: this tool has no XAML, no
+    reflection over its own types, and no third party dependencies. The only framework
+    areas it touches are cryptography and network adapter enumeration, both of which are
+    annotated for trimming.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
 
 </Project>

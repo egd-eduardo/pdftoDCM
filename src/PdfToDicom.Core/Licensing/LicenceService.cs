@@ -32,6 +32,10 @@ public sealed class LicenceService : ILicenceService
     /// </remarks>
     public const int GracePeriodDays = 14;
 
+    // Dates in these messages are written as yyyy-MM-dd. The current culture's short date
+    // renders the same day as 09/10/2027 in one locale and 10/09/2027 in another, and an
+    // operator reading a licence expiry has no way to tell which convention is in use.
+
     /// <summary>
     /// The publisher's ECDSA P-256 public key, in base64 encoded SubjectPublicKeyInfo form.
     /// </summary>
@@ -181,7 +185,7 @@ public sealed class LicenceService : ILicenceService
             {
                 return new LicenceStatus(
                     LicenceState.Expired, payload.Licensee, expiry, payload.Seats, payload.IsMachineBound,
-                    $"The licence expired on {expiry:d} and the grace period has ended. " +
+                    $"The licence expired on {expiry:yyyy-MM-dd} and the grace period has ended. " +
                     "Documents can still be generated and saved, but not transmitted.");
             }
 
@@ -191,7 +195,7 @@ public sealed class LicenceService : ILicenceService
 
                 return new LicenceStatus(
                     LicenceState.ExpiringSoon, payload.Licensee, expiry, payload.Seats, payload.IsMachineBound,
-                    $"The licence expired on {expiry:d}. Transmission continues for a further " +
+                    $"The licence expired on {expiry:yyyy-MM-dd}. Transmission continues for a further " +
                     $"{remaining} day(s). Please renew.");
             }
 
@@ -199,14 +203,14 @@ public sealed class LicenceService : ILicenceService
             {
                 return new LicenceStatus(
                     LicenceState.Valid, payload.Licensee, expiry, payload.Seats, payload.IsMachineBound,
-                    $"Licensed to {payload.Licensee}. Expires on {expiry:d}.");
+                    $"Licensed to {payload.Licensee}. Expires on {expiry:yyyy-MM-dd}.");
             }
         }
 
         return new LicenceStatus(
             LicenceState.Valid, payload.Licensee, payload.ExpiresOn, payload.Seats, payload.IsMachineBound,
             payload.ExpiresOn is { } end
-                ? $"Licensed to {payload.Licensee} until {end:d}."
+                ? $"Licensed to {payload.Licensee} until {end:yyyy-MM-dd}."
                 : $"Licensed to {payload.Licensee}.");
     }
 

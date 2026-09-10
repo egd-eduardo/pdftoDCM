@@ -97,6 +97,8 @@
   "Settings.Tab.Folders": "Pastas",
   "Settings.Tab.Appearance": "Aspeto",
   "Settings.Tab.Licence": "Licença",
+  "Settings.Licence.NotEnforced.Title": "Esta versão não verifica códigos de licença",
+  "Settings.Licence.NotEnforced.Body": "Um código aqui introduzido é guardado, e é descrito abaixo para poder confirmar que chegou intacto, mas não é verificado e nada fica restringido. A verificação de licenças só começa numa versão que inclua a chave do editor. Consulte a documentação do fluxo de licenciamento.",
   "Settings.LicenceCode": "Código de licença",
   "Settings.LicenceCode.Help": "Cole o código fornecido com a sua licença. Pode ocupar várias linhas; espaços e mudanças de linha são ignorados.",
   "Settings.LicenceStatus": "Estado",
