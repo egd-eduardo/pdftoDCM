@@ -205,5 +205,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PdfToDicom-exe-${{ matrix.rid }}
-          path: artifacts/${{ matrix.rid }}/app/PdfToDicom.exe
+          # The versioned copy, so a downloaded file says which build it is without
+          # anyone having to open its properties.
+          path: artifacts/PdfToDicom-*-${{ matrix.rid }}.exe
           if-no-files-found: error

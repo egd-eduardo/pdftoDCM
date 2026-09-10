@@ -2,6 +2,7 @@ using FellowOakDicom;
 using PdfToDicom.Core.Abstractions;
 using PdfToDicom.Core.Configuration;
 using PdfToDicom.Core.Dicom;
+using PdfToDicom.Core.Imaging;
 using PdfToDicom.Core.Models;
 using PdfToDicom.Core.Validation;
 
@@ -34,7 +35,10 @@ public sealed class ConversionWorkflowService
 {
     private readonly IConfigurationService _configurationService;
     private readonly IPdfInspector _pdfInspector;
+    private readonly IImageInspector _imageInspector;
     private readonly IDicomObjectBuilder _builder;
+    private readonly IImageDicomObjectBuilder _imageBuilder;
+    private readonly StudyGroupingService _studyGrouping;
     private readonly IDicomValidator _dicomValidator;
     private readonly IDicomNetworkService _networkService;
     private readonly DicomFileWriter _fileWriter;
@@ -47,16 +51,22 @@ public sealed class ConversionWorkflowService
     public ConversionWorkflowService(
         IConfigurationService configurationService,
         IPdfInspector pdfInspector,
+        IImageInspector imageInspector,
         IDicomObjectBuilder builder,
+        IImageDicomObjectBuilder imageBuilder,
         IDicomValidator dicomValidator,
         IDicomNetworkService networkService,
         DicomFileWriter fileWriter,
         IAppLogger logger,
-        IAuditLogger auditLogger)
+        IAuditLogger auditLogger,
+        StudyGroupingService? studyGrouping = null)
     {
         _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
         _pdfInspector = pdfInspector ?? throw new ArgumentNullException(nameof(pdfInspector));
+        _imageInspector = imageInspector ?? throw new ArgumentNullException(nameof(imageInspector));
         _builder = builder ?? throw new ArgumentNullException(nameof(builder));
+        _imageBuilder = imageBuilder ?? throw new ArgumentNullException(nameof(imageBuilder));
+        _studyGrouping = studyGrouping ?? new StudyGroupingService();
         _dicomValidator = dicomValidator ?? throw new ArgumentNullException(nameof(dicomValidator));
         _networkService = networkService ?? throw new ArgumentNullException(nameof(networkService));
         _fileWriter = fileWriter ?? throw new ArgumentNullException(nameof(fileWriter));
@@ -66,6 +76,18 @@ public sealed class ConversionWorkflowService
         _demographicsValidator = new PatientDemographicsValidator();
         _destinationValidator = new PacsDestinationValidator();
     }
+
+    /// <summary>
+    /// The study grouping in force, so the user interface can show which study files are
+    /// currently joining and let the operator start a new one.
+    /// </summary>
+    public StudyGroupingService StudyGrouping => _studyGrouping;
+
+    /// <summary>
+    /// Decides what kind of file this is by reading its content, so the caller can show
+    /// the right preview and the workflow can choose the right builder.
+    /// </summary>
+    public SourceDocumentKind DetectKind(string? sourcePath) => _imageInspector.DetectKind(sourcePath);
 
     /// <summary>
     /// Validates everything that must be correct before a conversion is attempted.
@@ -84,7 +106,35 @@ public sealed class ConversionWorkflowService
         AppConfiguration configuration = _configurationService.Current;
         var result = new ValidationResult();
 
-        result.Merge(_pdfInspector.Validate(pdfPath));
+        // Which validator applies depends on what the file actually is, not on what it is
+        // called. A PDF renamed to .jpg is still a PDF and converts perfectly well.
+        switch (DetectKind(pdfPath))
+        {
+            case SourceDocumentKind.Pdf:
+                result.Merge(_pdfInspector.Validate(pdfPath));
+                break;
+
+            case SourceDocumentKind.Image:
+                result.Merge(_imageInspector.Validate(pdfPath));
+                break;
+
+            default:
+                // Falls back to the PDF inspector so that the familiar messages about a
+                // missing or empty file are still produced. Only a file that exists and is
+                // readable, but is neither a PDF nor an image, reaches the second branch.
+                result.Merge(_pdfInspector.Validate(pdfPath));
+
+                if (result.IsValid)
+                {
+                    result.AddError(
+                        "PdfPath",
+                        "The file is neither a PDF nor an image in a supported format. " +
+                        "PDF, JPEG, PNG, TIFF, BMP, GIF, WebP and TGA can be converted.");
+                }
+
+                break;
+        }
+
         result.Merge(_demographicsValidator.Validate(demographics, configuration.CharacterSetSupportsUnicode));
 
         if (requireDestination)
@@ -141,15 +191,20 @@ public sealed class ConversionWorkflowService
             _logger.Warning($"Validation warning: {warning.Message}");
         }
 
-        // ---------------------------------------------------------- 2. Build the object
-        PdfDocumentInfo pdfInfo = _pdfInspector.Inspect(pdfPath);
-        _auditLogger.PdfSelected(pdfInfo);
-        _auditLogger.PatientInformationEntered(demographics);
+        // ---------------------------------------------------------- 2. Build the object(s)
+        SourceDocumentKind kind = DetectKind(pdfPath);
 
-        BuiltDicomObject built;
+        // Grouping asks for the study the previous file for this patient used. It returns
+        // null when grouping is off, when the patient has changed, or for the first file.
+        string? groupedStudyUid = _studyGrouping.ResolveStudyInstanceUid(
+            configuration.StudyGrouping, demographics.PatientId);
+
+        IReadOnlyList<BuiltDicomObject> built;
         try
         {
-            built = _builder.Build(pdfPath, demographics, pdfInfo);
+            built = kind == SourceDocumentKind.Image
+                ? BuildImageObjects(pdfPath!, demographics, groupedStudyUid)
+                : BuildPdfObject(pdfPath!, demographics, groupedStudyUid);
         }
         catch (Exception ex)
         {
@@ -166,80 +221,138 @@ public sealed class ConversionWorkflowService
             };
         }
 
-        // ---------------------------------------------------------- 3. Validate the object
-        ValidationResult objectValidation = _dicomValidator.Validate(built.File);
+        if (built.Count == 0)
+        {
+            return new ConversionResult
+            {
+                DicomGenerated = false,
+                ValidationIssues = new[]
+                {
+                    ValidationIssue.Error("Generation", "The file produced no pages to convert.")
+                },
+                Summary = "The file produced no pages to convert."
+            };
+        }
 
-        if (!objectValidation.IsValid)
+        // Recorded from what the builder actually used, which may be a Study Instance UID
+        // the operator typed rather than the one grouping suggested.
+        _studyGrouping.Remember(configuration.StudyGrouping, demographics.PatientId, built[0].StudyInstanceUid);
+
+        // ---------------------------------------------------------- 3. Validate the objects
+        var objectIssues = new ValidationResult();
+
+        foreach (BuiltDicomObject candidate in built)
+        {
+            ValidationResult objectValidation = _dicomValidator.Validate(candidate.File);
+            objectIssues.Merge(objectValidation);
+        }
+
+        if (!objectIssues.IsValid)
         {
             // Transmitting an object known to be non conformant would place a defective
-            // record in the patient's imaging history, so the workflow stops here.
+            // record in the patient's imaging history, so the workflow stops here. Nothing
+            // is sent, not even the pages that passed, because half a document in the
+            // archive is worse than none.
             _logger.Error(
                 "The generated object failed validation and was not transmitted: " +
-                string.Join(" | ", objectValidation.Errors.Select(e => e.Message)));
+                string.Join(" | ", objectIssues.Errors.Select(e => e.Message)));
 
             return new ConversionResult
             {
                 DicomGenerated = false,
-                StudyInstanceUid = built.StudyInstanceUid,
-                SeriesInstanceUid = built.SeriesInstanceUid,
-                SopInstanceUid = built.SopInstanceUid,
-                ValidationIssues = objectValidation.Issues,
-                Summary = "The generated DICOM object did not pass validation, so it was not transmitted."
+                StudyInstanceUid = built[0].StudyInstanceUid,
+                SeriesInstanceUid = built[0].SeriesInstanceUid,
+                SopInstanceUid = built[0].SopInstanceUid,
+                SopInstanceUids = built.Select(b => b.SopInstanceUid).ToArray(),
+                ValidationIssues = objectIssues.Issues,
+                Summary = built.Count == 1
+                    ? "The generated DICOM object did not pass validation, so it was not transmitted."
+                    : "One or more of the generated DICOM objects did not pass validation, so none were transmitted."
             };
         }
 
-        foreach (ValidationIssue warning in objectValidation.Warnings)
+        foreach (ValidationIssue warning in objectIssues.Warnings)
         {
             _logger.Warning($"DICOM validation warning: {warning.Message}");
         }
 
-        // ---------------------------------------------------------- 4. Save the object
-        string? savedPath = null;
+        // ---------------------------------------------------------- 4. Save the objects
         bool saveRequested = configuration.AlwaysSaveDicomLocally || !options.Transmit;
+        var savedPaths = new List<string>(built.Count);
 
-        if (saveRequested)
+        foreach (BuiltDicomObject candidate in built)
         {
-            try
+            string? savedPath = null;
+
+            if (saveRequested)
             {
-                savedPath = _fileWriter.Write(built.File, configuration.OutputFolder, built.SuggestedFileName);
+                try
+                {
+                    savedPath = _fileWriter.Write(candidate.File, configuration.OutputFolder, candidate.SuggestedFileName);
+                }
+                catch (Exception ex)
+                {
+                    // The transmission can still proceed from the in memory object, so a
+                    // failure to write locally is a warning rather than a fatal error.
+                    _logger.Error("The generated object could not be saved locally.", ex);
+                    objectIssues.AddWarning(
+                        "Output", $"The DICOM file could not be saved to '{configuration.OutputFolder}': {ex.Message}");
+                }
             }
-            catch (Exception ex)
+
+            if (savedPath is not null)
             {
-                // The transmission can still proceed from the in memory object, so a
-                // failure to write locally is a warning rather than a fatal error.
-                _logger.Error("The generated object could not be saved locally.", ex);
-                objectValidation.AddWarning(
-                    "Output", $"The DICOM file could not be saved to '{configuration.OutputFolder}': {ex.Message}");
+                savedPaths.Add(savedPath);
             }
+
+            _auditLogger.DicomGenerated(
+                candidate.StudyInstanceUid, candidate.SeriesInstanceUid, candidate.SopInstanceUid, savedPath);
         }
 
-        _auditLogger.DicomGenerated(
-            built.StudyInstanceUid, built.SeriesInstanceUid, built.SopInstanceUid, savedPath);
+        string? firstSavedPath = savedPaths.FirstOrDefault();
 
         if (!options.Transmit)
         {
             return new ConversionResult
             {
                 DicomGenerated = true,
-                GeneratedFilePath = savedPath,
-                StudyInstanceUid = built.StudyInstanceUid,
-                SeriesInstanceUid = built.SeriesInstanceUid,
-                SopInstanceUid = built.SopInstanceUid,
-                ValidationIssues = objectValidation.Issues,
-                Summary = savedPath is null
+                GeneratedFilePath = firstSavedPath,
+                GeneratedFilePaths = savedPaths,
+                StudyInstanceUid = built[0].StudyInstanceUid,
+                SeriesInstanceUid = built[0].SeriesInstanceUid,
+                SopInstanceUid = built[0].SopInstanceUid,
+                SopInstanceUids = built.Select(b => b.SopInstanceUid).ToArray(),
+                ValidationIssues = objectIssues.Issues,
+                Summary = firstSavedPath is null
                     ? "The DICOM object was generated but could not be saved."
-                    : $"The DICOM object was generated and saved to '{savedPath}'."
+                    : built.Count == 1
+                        ? $"The DICOM object was generated and saved to '{firstSavedPath}'."
+                        : $"{built.Count} DICOM objects were generated and saved to '{configuration.OutputFolder}'."
             };
         }
 
         // ---------------------------------------------------------- 5. Transmit
-        IReadOnlyList<TransmissionResult> transmissions = await _networkService
-            .StoreToAllAsync(built.File, destinations, configuration.CallingAeTitle, progress, cancellationToken)
-            .ConfigureAwait(false);
+        var transmissions = new List<TransmissionResult>();
 
-        foreach (TransmissionResult transmission in transmissions)
+        foreach (BuiltDicomObject candidate in built)
         {
-            _auditLogger.TransmissionAttempted(transmission, built.SopInstanceUid);
+            IReadOnlyList<TransmissionResult> attempts = await _networkService
+                .StoreToAllAsync(candidate.File, destinations, configuration.CallingAeTitle, progress, cancellationToken)
+                .ConfigureAwait(false);
+
+            foreach (TransmissionResult transmission in attempts)
+            {
+                _auditLogger.TransmissionAttempted(transmission, candidate.SopInstanceUid);
+            }
+
+            transmissions.AddRange(attempts);
+
+            // A failure on one page means the rest of the document would land in the
+            // archive without it. Stopping leaves less to reconcile than carrying on.
+            if (attempts.Count > 0 && !attempts.All(t => t.IsSuccess))
+            {
+                break;
+            }
         }
 
         // Persist the "last used" timestamps that the network service recorded, so the
@@ -250,30 +363,78 @@ public sealed class ConversionWorkflowService
         bool allSucceeded = transmissions.Count > 0 && transmissions.All(t => t.IsSuccess);
         bool deleted = false;
 
-        if (allSucceeded &&
-            configuration.AutoDeleteAfterSuccessfulTransmission &&
-            savedPath is not null)
+        if (allSucceeded && configuration.AutoDeleteAfterSuccessfulTransmission && savedPaths.Count > 0)
         {
-            deleted = _fileWriter.TryDelete(savedPath);
+            deleted = true;
 
-            if (deleted)
+            foreach (string path in savedPaths)
             {
-                _auditLogger.GeneratedFileDeleted(savedPath);
+                if (_fileWriter.TryDelete(path))
+                {
+                    _auditLogger.GeneratedFileDeleted(path);
+                }
+                else
+                {
+                    deleted = false;
+                }
             }
         }
 
         return new ConversionResult
         {
             DicomGenerated = true,
-            GeneratedFilePath = deleted ? null : savedPath,
+            GeneratedFilePath = deleted ? null : firstSavedPath,
+            GeneratedFilePaths = deleted ? Array.Empty<string>() : savedPaths,
             GeneratedFileDeleted = deleted,
-            StudyInstanceUid = built.StudyInstanceUid,
-            SeriesInstanceUid = built.SeriesInstanceUid,
-            SopInstanceUid = built.SopInstanceUid,
-            ValidationIssues = objectValidation.Issues,
+            StudyInstanceUid = built[0].StudyInstanceUid,
+            SeriesInstanceUid = built[0].SeriesInstanceUid,
+            SopInstanceUid = built[0].SopInstanceUid,
+            SopInstanceUids = built.Select(b => b.SopInstanceUid).ToArray(),
+            ValidationIssues = objectIssues.Issues,
             Transmissions = transmissions,
-            Summary = BuildSummary(transmissions, savedPath, deleted)
+            Summary = BuildSummary(transmissions, firstSavedPath, deleted)
         };
+    }
+
+    /// <summary>Builds the single object that a PDF produces.</summary>
+    private IReadOnlyList<BuiltDicomObject> BuildPdfObject(
+        string pdfPath,
+        PatientDemographics demographics,
+        string? groupedStudyUid)
+    {
+        PdfDocumentInfo pdfInfo = _pdfInspector.Inspect(pdfPath);
+        _auditLogger.PdfSelected(pdfInfo);
+        _auditLogger.PatientInformationEntered(demographics);
+
+        // The PDF builder takes the study to join through the demographics, which is also
+        // how an operator supplied identifier reaches it. A copy is used so that grouping
+        // never writes into the caller's object.
+        PatientDemographics forBuild = demographics;
+
+        if (!string.IsNullOrWhiteSpace(groupedStudyUid)
+            && string.IsNullOrWhiteSpace(demographics.ExistingStudyInstanceUid))
+        {
+            forBuild = demographics.Clone();
+            forBuild.ExistingStudyInstanceUid = groupedStudyUid;
+        }
+
+        return new[] { _builder.Build(pdfPath, forBuild, pdfInfo) };
+    }
+
+    /// <summary>Builds one object per page of an image.</summary>
+    private IReadOnlyList<BuiltDicomObject> BuildImageObjects(
+        string imagePath,
+        PatientDemographics demographics,
+        string? groupedStudyUid)
+    {
+        ImageDocumentInfo imageInfo = _imageInspector.Inspect(imagePath);
+        _auditLogger.PatientInformationEntered(demographics);
+
+        _logger.Information(
+            $"Converting image '{imageInfo.FileName}' ({imageInfo.FormatName}, {imageInfo.PixelSummary}, " +
+            $"{imageInfo.FormattedSize}).");
+
+        return _imageBuilder.Build(imagePath, demographics, groupedStudyUid, imageInfo);
     }
 
     /// <summary>

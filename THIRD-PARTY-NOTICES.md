@@ -83,6 +83,29 @@ Full text: https://www.apache.org/licenses/LICENSE-2.0
 
 ---
 
+## SixLabors.ImageSharp 2.1.11
+
+Decodes JPEG, PNG, TIFF, BMP, GIF, WebP and TGA files so they can be converted into DICOM
+Secondary Capture image objects.
+
+- Project: https://github.com/SixLabors/ImageSharp
+- Licence: **Apache Licence 2.0**
+
+**The version is pinned deliberately.** ImageSharp changed its licence at version 3.0 to
+the Six Labors Split License, which is free only for open source projects and for
+organisations below a revenue threshold. The 2.1 series remains under the plain Apache
+Licence 2.0, which imposes no such condition and matches every other component here. That
+keeps the licence position of this software simple to state and simple for a hospital's
+procurement to accept.
+
+It is also pure managed code, with no native libraries, which is what allows the
+application to remain a single self contained executable that behaves identically on x86,
+x64 and ARM64.
+
+Full text: https://www.apache.org/licenses/LICENSE-2.0
+
+---
+
 ## Microsoft .NET 8 runtime and WPF
 
 Embedded in the published executable so that no runtime need be installed on the target

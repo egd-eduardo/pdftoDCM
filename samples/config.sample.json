@@ -56,6 +56,18 @@
   "//OrganizationUidRoot": "Obsolete and ignored. The registered root is fixed in the software because it identifies its registrant rather than the site. This entry is read and discarded so that a configuration file written by an earlier version still loads.",
   "OrganizationUidRoot": "",
 
+  "//StudyGrouping": "SeparateStudy gives every converted file its own study, which is what every version before 2.0 did. GroupByPatient puts files converted for the same Patient ID into one study, each file still in its own series. The association is held in memory for the session and never written to disk, so a patient's later examination cannot join an old study by accident. A Study Instance UID supplied on the form or with --study-uid overrides it.",
+  "StudyGrouping": "SeparateStudy",
+
+  "//ImageModality": "Written to Modality (0008,0060) on converted images. Kept separate from Modality because DOC describes an encapsulated document and would be wrong on a photograph or a scan. OT (Other) is accepted everywhere; XC is the defined term for external camera photography.",
+  "ImageModality": "OT",
+
+  "//DefaultImageStudyDescription": "Study Description used for a converted image when the operator does not supply one.",
+  "DefaultImageStudyDescription": "Imported Image",
+
+  "//DefaultImageSeriesDescription": "Series Description used for a converted image when the operator does not supply one.",
+  "DefaultImageSeriesDescription": "Imported Image",
+
   "//Modality": "OT (Other) is the default because essentially every archive in the field accepts it. DOC is the value defined by the current standard for encapsulated document series. Change this only if your PACS administrator asks you to.",
   "Modality": "OT",
 

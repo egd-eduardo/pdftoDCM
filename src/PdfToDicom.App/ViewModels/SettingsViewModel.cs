@@ -98,6 +98,23 @@ public sealed class SettingsViewModel : ObservableObject
     public IReadOnlyList<string> ModalityOptions { get; } = new[] { "OT", "DOC" };
 
     /// <summary>
+    /// Modality values offered for a converted image.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not the same list as for documents. "DOC" describes an encapsulated
+    /// document and would be wrong on a photograph or a scan; "XC" is the defined term
+    /// for external camera photography, and "OT" suits anything.
+    /// </remarks>
+    public IReadOnlyList<string> ImageModalityOptions { get; } = new[] { "OT", "XC" };
+
+    /// <summary>How several converted files are gathered into studies.</summary>
+    public IReadOnlyList<EnumOption<StudyGroupingMode>> StudyGroupingModes { get; } = new[]
+    {
+        new EnumOption<StudyGroupingMode>(StudyGroupingMode.SeparateStudy, "Settings.StudyGrouping.Separate"),
+        new EnumOption<StudyGroupingMode>(StudyGroupingMode.GroupByPatient, "Settings.StudyGrouping.ByPatient")
+    };
+
+    /// <summary>
     /// Every defined term for Conversion Type (0008,0064) in PS3.3 C.8.6.1.1, each with a
     /// plain description.
     /// </summary>
@@ -210,6 +227,11 @@ public sealed class SettingsViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(Working.Modality))
         {
             Working.Modality = _original.Modality;
+        }
+
+        if (string.IsNullOrWhiteSpace(Working.ImageModality))
+        {
+            Working.ImageModality = _original.ImageModality;
         }
 
         ValidationResult validation = _destinationValidator.ValidateAll(Working);
@@ -375,6 +397,8 @@ public sealed class SettingsViewModel : ObservableObject
         Compare("CallingAeTitle", _original.CallingAeTitle, Working.CallingAeTitle);
         Compare("CharacterSet", _original.CharacterSet, Working.CharacterSet);
         Compare("Modality", _original.Modality, Working.Modality);
+        Compare("ImageModality", _original.ImageModality, Working.ImageModality);
+        Compare("StudyGrouping", _original.StudyGrouping, Working.StudyGrouping);
         Compare("UidStrategy", _original.UidStrategy, Working.UidStrategy);
         Compare("OutputFolder", _original.OutputFolder, Working.OutputFolder);
         Compare("LogFolder", _original.LogFolder, Working.LogFolder);
@@ -404,6 +428,10 @@ public sealed class SettingsViewModel : ObservableObject
         UidStrategy = source.UidStrategy,
         OrganizationUidRoot = source.OrganizationUidRoot,
         Modality = source.Modality,
+        ImageModality = source.ImageModality,
+        StudyGrouping = source.StudyGrouping,
+        DefaultImageStudyDescription = source.DefaultImageStudyDescription,
+        DefaultImageSeriesDescription = source.DefaultImageSeriesDescription,
         ConversionType = source.ConversionType,
         Manufacturer = source.Manufacturer,
         BurnedInAnnotation = source.BurnedInAnnotation,

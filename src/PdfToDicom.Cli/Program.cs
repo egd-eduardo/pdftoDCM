@@ -60,15 +60,15 @@ finally
 
 // ---------------------------------------------------------------------- Commands
 
-/// <summary>Converts a PDF and, unless suppressed, transmits the result.</summary>
+/// <summary>Converts a PDF or an image and, unless suppressed, transmits the result.</summary>
 static async Task<int> RunConversionAsync(
     ApplicationServices services,
     CommandLineOptions options,
     bool transmit)
 {
-    if (string.IsNullOrWhiteSpace(options.PdfPath))
+    if (options.SourcePaths.Count == 0)
     {
-        Console.Error.WriteLine("error: --pdf is required.");
+        Console.Error.WriteLine("error: --file is required (--pdf and --image mean the same thing).");
         return ExitCodes.InvalidArguments;
     }
 
@@ -87,10 +87,50 @@ static async Task<int> RunConversionAsync(
     var progress = new Progress<TransmissionProgress>(p =>
         Console.WriteLine($"  [{p.Stage}] {p.Message}"));
 
-    Console.WriteLine($"Converting '{options.PdfPath}'...");
+    // Converted in one run so that study grouping, which is held in memory and never
+    // written to disk, can put several files for one patient into the same study.
+    int worstExitCode = ExitCodes.Success;
+
+    foreach (string sourcePath in options.SourcePaths)
+    {
+        if (options.SourcePaths.Count > 1)
+        {
+            Console.WriteLine();
+        }
+
+        int exitCode = await ConvertOneAsync(services, options, sourcePath, conversionOptions, progress);
+
+        // The first real failure is what the caller is told about, but every file is
+        // still attempted: a script converting a folder should not stop dead because one
+        // page of one document was malformed.
+        if (exitCode != ExitCodes.Success && worstExitCode == ExitCodes.Success)
+        {
+            worstExitCode = exitCode;
+        }
+    }
+
+    return worstExitCode;
+}
+
+/// <summary>Converts a single file and reports what happened to it.</summary>
+static async Task<int> ConvertOneAsync(
+    ApplicationServices services,
+    CommandLineOptions options,
+    string sourcePath,
+    ConversionOptions conversionOptions,
+    IProgress<TransmissionProgress> progress)
+{
+    string kindDescription = services.Workflow.DetectKind(sourcePath) switch
+    {
+        SourceDocumentKind.Pdf => "PDF document",
+        SourceDocumentKind.Image => "image",
+        _ => "file of an unrecognised type"
+    };
+
+    Console.WriteLine($"Converting '{sourcePath}' ({kindDescription})...");
 
     ConversionResult result = await services.Workflow.RunAsync(
-        options.PdfPath, options.Demographics, conversionOptions, progress);
+        sourcePath, options.Demographics, conversionOptions, progress);
 
     PrintValidationIssues(result.ValidationIssues);
 
@@ -106,12 +146,34 @@ static async Task<int> RunConversionAsync(
     }
 
     Console.WriteLine();
-    Console.WriteLine("DICOM object generated:");
+    Console.WriteLine(result.InstanceCount > 1
+        ? $"{result.InstanceCount} DICOM objects generated, one per page, all in one series:"
+        : "DICOM object generated:");
+
     Console.WriteLine($"  Study Instance UID  : {result.StudyInstanceUid}");
     Console.WriteLine($"  Series Instance UID : {result.SeriesInstanceUid}");
-    Console.WriteLine($"  SOP Instance UID    : {result.SopInstanceUid}");
 
-    if (result.GeneratedFilePath is not null)
+    if (result.InstanceCount > 1)
+    {
+        for (int i = 0; i < result.SopInstanceUids.Count; i++)
+        {
+            Console.WriteLine($"  SOP Instance {i + 1,-6} : {result.SopInstanceUids[i]}");
+        }
+    }
+    else
+    {
+        Console.WriteLine($"  SOP Instance UID    : {result.SopInstanceUid}");
+    }
+
+    if (result.GeneratedFilePaths.Count > 1)
+    {
+        Console.WriteLine("  Saved to            :");
+        foreach (string path in result.GeneratedFilePaths)
+        {
+            Console.WriteLine($"      {path}");
+        }
+    }
+    else if (result.GeneratedFilePath is not null)
     {
         Console.WriteLine($"  Saved to            : {result.GeneratedFilePath}");
     }
@@ -404,7 +466,7 @@ static bool IsInputField(string field) =>
 
 /// <summary>The product version reported in the audit trail.</summary>
 static string ProductVersion() =>
-    typeof(CommandLineOptions).Assembly.GetName().Version?.ToString(3) ?? "1.5.0";
+    typeof(CommandLineOptions).Assembly.GetName().Version?.ToString(3) ?? "2.0.0";
 
 /// <summary>Exit codes returned to the shell.</summary>
 static class ExitCodes

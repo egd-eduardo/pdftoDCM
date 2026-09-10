@@ -124,7 +124,7 @@ pdftoDCM/
 │   │
 │   └── PdfToDicom.Cli/              Headless front end for scripted conversion
 │
-├── tests/PdfToDicom.Core.Tests/     113 xUnit tests
+├── tests/PdfToDicom.Core.Tests/     136 xUnit tests
 │
 ├── build/
 │   ├── build.sh                     Cross compiles the Windows binaries from Unix
@@ -273,6 +273,101 @@ constructors of both the builder and the network service so it cannot be forgott
 
 Without it, every object would be attributed to the underlying library rather than to this
 application, making an instance impossible to trace back to its source.
+
+---
+
+## 6a. Image conversion
+
+An image file becomes one or more Secondary Capture Image Storage objects
+(`1.2.840.10008.5.1.4.1.1.7`). The pipeline is deliberately parallel to the PDF one:
+`ImageInspector` reads the file, `SecondaryCaptureImageBuilder` constructs the objects, and
+`SecondaryCaptureImageValidator` checks them, with `SopClassDicomValidator` choosing
+between the two validators by reading the SOP Class the object declares.
+
+### Decoding
+
+Decoding uses **SixLabors.ImageSharp 2.1.11**, which handles JPEG, PNG, TIFF, BMP, GIF,
+WebP, TGA and PBM.
+
+Two things about that choice are deliberate:
+
+- **The 2.1 series is pinned** because it is licensed under the plain Apache Licence 2.0.
+  ImageSharp 3.0 moved to the Six Labors Split License, which is free only for open source
+  projects and organisations under a revenue threshold. Pinning keeps the licence position
+  of this software uniform and simple for a hospital's procurement to accept.
+- **It is pure managed code.** No native codec libraries means the application stays a
+  single self contained executable, behaves identically on ARM64, and does not depend on
+  any imaging component installed on the workstation.
+
+### What the file is, is read rather than assumed
+
+`ImageInspector.DetectKind` looks at content: `%PDF-` within the first kilobyte means a
+PDF, otherwise ImageSharp's format sniffing decides. The extension is used only to populate
+the file picker's filter.
+
+This is not pedantry. Scanners that write a TIFF and give it a `.jpg` extension are
+commonplace, and so are renamed files. Trusting the name would reject files that convert
+perfectly well.
+
+### Colour is decided from the pixels
+
+`ImagePixelAnalyzer` scans every frame and reports colour only if some pixel has channels
+that are not all equal.
+
+Asking the decoder is not an option: ImageSharp's non generic loader promotes almost
+everything to a 32 bit RGBA buffer, so a greyscale PNG reports itself as colour. The first
+version of this code did exactly that and would have tripled the size of every scanned
+document.
+
+Reading the file's own metadata would be format specific and would still answer wrongly
+for the commonest case here: a flatbed scanner emitting an RGB JPEG of a black and white
+page. Deciding from content is simpler and better, and it cannot lose information.
+
+### Multi page sources
+
+One SOP Instance per page, sharing one Series Instance UID, numbered sequentially in
+Instance Number. Single frame Secondary Capture is chosen over the multi frame SOP Classes
+because it is the most widely supported image class in the field.
+
+### Padding
+
+Every DICOM value must occupy an even number of bytes. A greyscale image with an odd pixel
+count cannot manage that on its own, so one null byte is appended. It sits outside the
+declared `Rows` by `Columns` extent, so no viewer ever sees it, and the validator allows
+exactly one such byte and no more.
+
+---
+
+## 6b. Study grouping
+
+`StudyGroupingService` decides which study a conversion joins.
+
+| Mode | Behaviour |
+|---|---|
+| `SeparateStudy` (default) | Every conversion creates a new study |
+| `GroupByPatient` | Conversions for the same Patient ID reuse one Study Instance UID |
+
+Each file always gets its own Series Instance UID, in both modes. That is what keeps the
+files distinguishable inside a study and why grouping loses nothing.
+
+**The association is held in memory and never persisted.** A patient returning in three
+months is having a new examination; their new report must not silently join the study
+created for the old one. Restarting the application, or moving to a different patient,
+starts a new study.
+
+Patient identifiers are compared with `StringComparison.Ordinal`. They are opaque strings
+assigned by another system, and treating `ab1` and `AB1` as one patient is a guess whose
+failure mode is filing a document against the wrong person.
+
+Precedence, strongest first:
+
+1. a Study Instance UID typed by the operator or passed as `--study-uid`;
+2. the study grouping supplied for this run;
+3. a newly generated study.
+
+Because the command line tool is a fresh process per invocation, grouping there works
+within a single run. `--file` may be repeated for that reason; a script that needs to group
+across separate invocations should generate a UID itself and pass `--study-uid`.
 
 ---
 
@@ -515,7 +610,7 @@ differ only in case.
 dotnet test tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj
 ```
 
-113 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
+136 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
 strategy), person name construction, every mandatory attribute, payload integrity and odd
 length padding, UTF-8 round trips, configuration persistence and corruption recovery, and
 the full workflow with a stubbed network.
@@ -542,7 +637,7 @@ launching it. It reports:
 > This check exists because exactly that defect shipped. `ProgressBar.Value` was bound to
 > a property with a private setter, and because `RangeBase.Value` binds two way by
 > default, the main window failed to load on a Windows ARM64 machine. The build was clean
-> and all 113 tests passed. Only running the application would have revealed it.
+> and all 136 tests passed. Only running the application would have revealed it.
 
 ### Interoperability verification
 
@@ -663,7 +758,7 @@ networking, validation and workflow layers need no change.
 
 Stated plainly, because a hospital deploying this needs to know what it does not do.
 
-1. **The user interface is not covered by automated tests.** The 113 tests cover Core in
+1. **The user interface is not covered by automated tests.** The 136 tests cover Core in
    depth, but WPF cannot run on a build agent without a desktop session, so no test opens
    a window. `build/validate-xaml-bindings.py` catches the binding errors that stop the
    application starting, and is not a substitute for running it. **Launch the application

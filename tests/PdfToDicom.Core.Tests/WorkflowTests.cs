@@ -158,12 +158,15 @@ public sealed class ConversionWorkflowServiceTests : IDisposable
         Workflow = new ConversionWorkflowService(
             _services.ConfigurationService,
             _services.PdfInspector,
+            _services.ImageInspector,
             _services.Builder,
+            _services.ImageBuilder,
             _services.DicomValidator,
             _network,
             _services.FileWriter,
             _services.Logger,
-            _services.AuditLogger);
+            _services.AuditLogger,
+            _services.StudyGrouping);
     }
 
     private ConversionWorkflowService Workflow { get; }

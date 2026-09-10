@@ -53,7 +53,7 @@ step() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 
 step "Checking prerequisites"
 
-for tool in dotnet dcmdump storescp; do
+for tool in dotnet dcmdump storescp dcm2pnm; do
     if command -v "$tool" >/dev/null 2>&1; then
         pass "$tool is available"
     else
@@ -270,6 +270,204 @@ PYTHON
 PYTHON_STATUS=$?
 if (( PYTHON_STATUS != 0 )); then
     FAILURES=$((FAILURES + 1))
+fi
+
+# ------------------------------------------------------------------ Images
+
+step "Converting and transmitting an image, and checking its pixels survive"
+
+# A three page greyscale TIFF with an odd number of pixels per page. Every part of that
+# is deliberate: multi page exercises one series holding several instances, greyscale
+# exercises MONOCHROME2, and an odd pixel count exercises the padding byte that DICOM
+# requires because every value must occupy an even number of bytes.
+IMAGE_DIR="$WORK_DIR/image"
+mkdir -p "$IMAGE_DIR" "$WORK_DIR/image-received"
+
+python3 - "$IMAGE_DIR" <<'PYTHON'
+import struct, sys, zlib
+from pathlib import Path
+
+out = Path(sys.argv[1])
+WIDTH, HEIGHT, PAGES = 33, 17, 3
+
+def page_bytes(page):
+    return bytes(((x + y + page * 11) * 5) & 0xFF
+                 for y in range(HEIGHT) for x in range(WIDTH))
+
+# A minimal baseline TIFF, written by hand so the fixture depends on nothing that the
+# software under test also depends on. Uncompressed 8 bit greyscale, one strip per page.
+def ifd(entries, next_offset):
+    out = struct.pack('<H', len(entries))
+    for tag, typ, count, value in entries:
+        out += struct.pack('<HHI', tag, typ, count)
+        out += struct.pack('<I', value) if typ != 3 else struct.pack('<HH', value, 0)
+    return out + struct.pack('<I', next_offset)
+
+pages = [page_bytes(p) for p in range(PAGES)]
+header = struct.pack('<2sHI', b'II', 42, 8)
+
+ENTRIES = 9
+ifd_size = 2 + ENTRIES * 12 + 4
+offset = len(header)
+ifd_offsets, data_offsets = [], []
+for p in range(PAGES):
+    ifd_offsets.append(offset)
+    offset += ifd_size
+for p in range(PAGES):
+    data_offsets.append(offset)
+    offset += len(pages[p])
+
+body = b''
+for p in range(PAGES):
+    nxt = ifd_offsets[p + 1] if p + 1 < PAGES else 0
+    body += ifd([
+        (256, 3, 1, WIDTH),          # ImageWidth
+        (257, 3, 1, HEIGHT),         # ImageLength
+        (258, 3, 1, 8),              # BitsPerSample
+        (259, 3, 1, 1),              # Compression: none
+        (262, 3, 1, 1),              # PhotometricInterpretation: BlackIsZero
+        (273, 4, 1, data_offsets[p]),# StripOffsets
+        (277, 3, 1, 1),              # SamplesPerPixel
+        (279, 4, 1, len(pages[p])),  # StripByteCounts
+        (278, 3, 1, HEIGHT),         # RowsPerStrip
+    ], nxt)
+
+(out / 'scan.tiff').write_bytes(header + body + b''.join(pages))
+(out / 'expected.raw').write_bytes(b''.join(pages))
+print(f"  built a {PAGES} page {WIDTH}x{HEIGHT} greyscale TIFF fixture")
+PYTHON
+
+if dotnet "$CLI" send \
+    --config "$CONFIG_FILE" \
+    --image "$IMAGE_DIR/scan.tiff" \
+    --patient-id "TEST000123" \
+    --surname "Gonçalves Aparício" \
+    --given-name "João" \
+    --dob 1968-03-14 \
+    --sex M \
+    --accession "ACCTEST0002" > "$WORK_DIR/send-image.log" 2>&1; then
+    pass "the application reported a successful image transmission"
+else
+    fail "the image transmission failed; see below"
+    cat "$WORK_DIR/send-image.log"
+fi
+
+# storescp names each stored file after the SOP Class it received, so the names cannot be
+# predicted from here. Every file is asked what it is instead.
+mapfile -t SC_OBJECTS < <(
+    find "$RECEIVED_DIR" -type f | sort | while read -r f; do
+        if dcmdump "$f" 2>/dev/null | grep -q "SecondaryCaptureImageStorage"; then
+            echo "$f"
+        fi
+    done
+)
+
+if (( ${#SC_OBJECTS[@]} == 3 )); then
+    pass "the archive stored three instances, one per page"
+else
+    fail "the archive stored ${#SC_OBJECTS[@]} image instance(s); three were expected"
+fi
+
+if (( ${#SC_OBJECTS[@]} > 0 )); then
+    SERIES_COUNT=$(
+        for f in "${SC_OBJECTS[@]}"; do
+            dcmdump "$f" 2>/dev/null | grep "SeriesInstanceUID" | head -1
+        done | sort -u | wc -l
+    )
+
+    if [[ "$SERIES_COUNT" == "1" ]]; then
+        pass "all three pages share one Series Instance UID"
+    else
+        fail "the pages were spread across $SERIES_COUNT series; one was expected"
+    fi
+
+    STUDY_COUNT=$(
+        for f in "${SC_OBJECTS[@]}"; do
+            dcmdump "$f" 2>/dev/null | grep "StudyInstanceUID" | head -1
+        done | sort -u | wc -l
+    )
+
+    if [[ "$STUDY_COUNT" == "1" ]]; then
+        pass "all three pages share one Study Instance UID"
+    else
+        fail "the pages were spread across $STUDY_COUNT studies; one was expected"
+    fi
+
+    step "Confirming the pixels survived the round trip"
+
+    # dcm2pnm renders the stored object back to a portable greyscale bitmap, so the
+    # comparison is against what a viewer would actually display rather than against the
+    # bytes this software wrote.
+    PIXEL_FAILURES=0
+    for i in 0 1 2; do
+        f="${SC_OBJECTS[$i]}"
+        INSTANCE=$(dcmdump "$f" 2>/dev/null | grep "InstanceNumber" | grep -oE '\[[0-9]+\]' | tr -d '[]')
+
+        if dcm2pnm "$f" "$WORK_DIR/page-$INSTANCE.pgm" > /dev/null 2>&1; then
+            :
+        else
+            fail "dcm2pnm could not render instance $INSTANCE"
+            PIXEL_FAILURES=$((PIXEL_FAILURES + 1))
+        fi
+    done
+
+    if (( PIXEL_FAILURES == 0 )); then
+        pass "every stored instance rendered without error"
+    fi
+
+    python3 - "$WORK_DIR" "$IMAGE_DIR/expected.raw" <<'PYTHON'
+import sys
+from pathlib import Path
+
+work = Path(sys.argv[1])
+expected = Path(sys.argv[2]).read_bytes()
+WIDTH, HEIGHT = 33, 17
+page_size = WIDTH * HEIGHT
+
+def read_pnm(path):
+    data = path.read_bytes()
+    fields, i = [], 0
+    while len(fields) < 4:
+        while data[i:i + 1].isspace():
+            i += 1
+        if data[i:i + 1] == b'#':
+            while data[i:i + 1] != b'\n':
+                i += 1
+            continue
+        j = i
+        while not data[j:j + 1].isspace():
+            j += 1
+        fields.append(data[i:j])
+        i = j
+    return int(fields[1]), int(fields[2]), data[i + 1:]
+
+ok = True
+for page in range(3):
+    path = work / f"page-{page + 1}.pgm"
+    if not path.exists():
+        print(f"  \033[31mFAIL\033[0m  page {page + 1} was not rendered")
+        ok = False
+        continue
+
+    width, height, payload = read_pnm(path)
+    want = expected[page * page_size:(page + 1) * page_size]
+
+    if (width, height) != (WIDTH, HEIGHT):
+        print(f"  \033[31mFAIL\033[0m  page {page + 1} is {width}x{height}, expected {WIDTH}x{HEIGHT}")
+        ok = False
+    elif payload[:page_size] != want:
+        differing = sum(1 for a, b in zip(payload[:page_size], want) if a != b)
+        print(f"  \033[31mFAIL\033[0m  page {page + 1} differs from the source in {differing} pixel(s)")
+        ok = False
+    else:
+        print(f"  \033[32mPASS\033[0m  page {page + 1} is pixel for pixel identical to the source")
+
+sys.exit(0 if ok else 1)
+PYTHON
+
+    if (( $? != 0 )); then
+        FAILURES=$((FAILURES + 1))
+    fi
 fi
 
 # ------------------------------------------------------------------ Result

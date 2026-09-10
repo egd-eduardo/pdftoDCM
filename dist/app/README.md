@@ -1,4 +1,4 @@
-# PDF to DICOM 1.5.5 — ready to run
+# PDF to DICOM 2.0.0 — ready to run
 
 These are the application itself, built for each Windows architecture. Nothing needs to be
 installed: no .NET, no Java, no Python, no Visual C++ runtime, and no administrator rights,
@@ -9,13 +9,13 @@ either to run them or to copy them onto a workstation.
 ## Which file?
 
 **If you want one file that runs on anything, use
-[`PdfToDicom-win-x86.exe`](PdfToDicom-win-x86.exe).**
+[`PdfToDicom-2.0.0-win-x86.exe`](PdfToDicom-2.0.0-win-x86.exe).**
 
 | File | Runs on | Notes |
 |---|---|---|
-| `PdfToDicom-win-x86.exe` | **Everything**: 32 bit, 64 bit, ARM64, Windows Server | Runs natively on 32 bit, under WOW64 on 64 bit, and under x86 emulation on Windows on ARM |
-| `PdfToDicom-win-x64.exe` | 64 bit Windows and Windows Server; Windows 11 on ARM | The usual choice for a normal hospital PC |
-| `PdfToDicom-win-arm64.exe` | Windows 10 and 11 on ARM | Native, so no emulation layer |
+| `PdfToDicom-2.0.0-win-x86.exe` | **Everything**: 32 bit, 64 bit, ARM64, Windows Server | Runs natively on 32 bit, under WOW64 on 64 bit, and under x86 emulation on Windows on ARM |
+| `PdfToDicom-2.0.0-win-x64.exe` | 64 bit Windows and Windows Server; Windows 11 on ARM | The usual choice for a normal hospital PC |
+| `PdfToDicom-2.0.0-win-arm64.exe` | Windows 10 and 11 on ARM | Native, so no emulation layer |
 
 **Matching the architecture is worth it here.** This is a desktop application that stays
 open, renders a window and holds documents in memory, so on an ARM machine the native
@@ -51,10 +51,10 @@ Each build is checked in CI for its PE machine type, so a build cannot silently 
 to the runner's own architecture. To confirm one by hand in PowerShell:
 
 ```powershell
-(Get-Item .\PdfToDicom-win-x64.exe).VersionInfo.FileVersion
+(Get-Item .\PdfToDicom-2.0.0-win-x64.exe).VersionInfo.FileVersion
 ```
 
-That should report `1.5.5.0`.
+That should report `2.0.0.0`.
 
 ---
 

@@ -141,9 +141,9 @@ write_start_here() {
 PDF to DICOM $version
 Copyright (c) 2026 Eduardo Dias
 
-Converts a PDF document into a DICOM Encapsulated PDF object and sends it to a
-PACS, so a report from another system becomes part of the patient's imaging
-record.
+Converts a PDF document or an image into a DICOM object and sends it to a
+PACS, so a report or a scan from another system becomes part of the patient's
+imaging record.
 
 
 TO RUN IT
@@ -170,6 +170,15 @@ BEFORE THE FIRST REAL DOCUMENT
 
 4. Convert the sample in Samples with "Generate only" and check the result
    before sending anything belonging to a patient.
+
+
+WHAT IT CONVERTS
+----------------
+
+  PDF documents           Become DICOM Encapsulated PDF objects.
+  JPEG, PNG, TIFF, BMP,   Become DICOM Secondary Capture images. A scan with
+  GIF, WebP, TGA          several pages becomes one image per page, kept
+                          together as a single item in the archive.
 
 
 WHAT IS IN THIS FOLDER
@@ -298,8 +307,14 @@ do_publish() {
 
     (cd "$ARTIFACTS" && zip -qr "PdfToDicom-$version-$RUNTIME.zip" "PdfToDicom-$version-$RUNTIME")
 
+    # A standalone copy whose name carries the version and the architecture. The file
+    # inside the package stays PdfToDicom.exe, because the manuals, the shortcuts and the
+    # installer all name it. This copy is for handing one file to somebody.
+    cp "$ARTIFACTS/$RUNTIME/app/PdfToDicom.exe" "$ARTIFACTS/PdfToDicom-$version-$RUNTIME.exe"
+
     info "package: $package"
     info "zip:     $ARTIFACTS/PdfToDicom-$version-$RUNTIME.zip"
+    info "exe:     $ARTIFACTS/PdfToDicom-$version-$RUNTIME.exe"
     info "$(find "$package" -type f | wc -l | tr -d ' ') file(s)"
 
     step "Result"

@@ -22,6 +22,27 @@ public enum DicomCharacterSet
 }
 
 /// <summary>
+/// How several converted files are gathered into DICOM studies.
+/// </summary>
+public enum StudyGroupingMode
+{
+    /// <summary>
+    /// Every file becomes its own study. This is the behaviour of every version before
+    /// 2.0 and remains the default, because it is what a site expects unless it has asked
+    /// for something else.
+    /// </summary>
+    SeparateStudy = 0,
+
+    /// <summary>
+    /// Files converted for the same Patient ID join one study, each in its own series.
+    /// The association lasts until the patient changes or the application is closed; it
+    /// is never written to disk, so a patient's later examination cannot join an old
+    /// study by accident.
+    /// </summary>
+    GroupByPatient = 1
+}
+
+/// <summary>
 /// Strategy used to build new DICOM UIDs.
 /// </summary>
 public enum UidGenerationStrategy
@@ -90,6 +111,16 @@ public sealed class AppConfiguration
     public UidGenerationStrategy UidStrategy { get; set; } = UidGenerationStrategy.UuidDerived;
 
     /// <summary>
+    /// Whether files converted for the same patient are gathered into one study.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to <see cref="StudyGroupingMode.SeparateStudy"/>, which is what every
+    /// earlier version did. A site that turns grouping on gets one study per patient per
+    /// session, with each file in its own series.
+    /// </remarks>
+    public StudyGroupingMode StudyGrouping { get; set; } = StudyGroupingMode.SeparateStudy;
+
+    /// <summary>
     /// Obsolete and ignored. The registered UID root is fixed in the software.
     /// </summary>
     /// <remarks>
@@ -109,6 +140,18 @@ public sealed class AppConfiguration
     /// documents is "DOC"; sites whose PACS expects that value can select it here.
     /// </remarks>
     public string Modality { get; set; } = "OT";
+
+    /// <summary>
+    /// Value written to Modality (0008,0060) for a converted image.
+    /// </summary>
+    /// <remarks>
+    /// Kept separate from <see cref="Modality"/> because the two are not interchangeable.
+    /// A site that sets the document modality to "DOC" would be labelling a scanned
+    /// photograph as an encapsulated document, which is wrong and can make an archive
+    /// route it oddly. "OT" (Other) suits any converted image; "XC" is the defined term
+    /// for external camera photography.
+    /// </remarks>
+    public string ImageModality { get; set; } = "OT";
 
     /// <summary>
     /// Value written to Conversion Type (0008,0064). "WSD" means Workstation, which
@@ -134,6 +177,12 @@ public sealed class AppConfiguration
 
     /// <summary>Default Series Description when the operator does not supply one.</summary>
     public string DefaultSeriesDescription { get; set; } = "PDF Document";
+
+    /// <summary>Default Series Description for a converted image.</summary>
+    public string DefaultImageSeriesDescription { get; set; } = "Imported Image";
+
+    /// <summary>Default Study Description for a converted image.</summary>
+    public string DefaultImageStudyDescription { get; set; } = "Imported Image";
 
     /// <summary>Series Number (0020,0011) applied to generated series.</summary>
     public int SeriesNumber { get; set; } = 1;

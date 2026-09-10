@@ -1,7 +1,7 @@
 # DICOM Conformance Statement
 
 **Product:** PDF to DICOM
-**Version:** 1.5.5
+**Version:** 2.0.0
 **Document version:** 1.0
 **Date:** 2026
 
@@ -75,6 +75,7 @@ Provides standard conformance to the following SOP classes as an **SCU**:
 |---|---|---|
 | Verification | 1.2.840.10008.1.1 | SCU |
 | Encapsulated PDF Storage | 1.2.840.10008.5.1.4.1.1.104.1 | SCU |
+| Secondary Capture Image Storage | 1.2.840.10008.5.1.4.1.1.7 | SCU |
 
 No SOP class is supported as an SCP.
 
@@ -87,7 +88,7 @@ No SOP class is supported as an SCP.
 | Maximum PDU size (receive) | 16,384 bytes (toolkit default) |
 | Maximum PDU size (send) | Negotiated with the association acceptor |
 | Implementation Class UID | `2.25.164837465109381728394657283910473625` |
-| Implementation Version Name | `PDFTODICOM_1_5` |
+| Implementation Version Name | `PDFTODICOM_2_0` |
 | Application Context Name | `1.2.840.10008.3.1.1.1` |
 | Asynchronous operations | Not supported |
 | SOP class extended negotiation | Not supported |
@@ -147,6 +148,8 @@ patient data is transmitted.**
 |---|---|---|---|
 | Encapsulated PDF Storage (1.2.840.10008.5.1.4.1.1.104.1) | Explicit VR Little Endian (1.2.840.10008.1.2.1) | SCU | None |
 | Encapsulated PDF Storage (1.2.840.10008.5.1.4.1.1.104.1) | Implicit VR Little Endian (1.2.840.10008.1.2) | SCU | None |
+| Secondary Capture Image Storage (1.2.840.10008.5.1.4.1.1.7) | Explicit VR Little Endian (1.2.840.10008.1.2.1) | SCU | None |
+| Secondary Capture Image Storage (1.2.840.10008.5.1.4.1.1.7) | Implicit VR Little Endian (1.2.840.10008.1.2) | SCU | None |
 
 Both are offered so that negotiation succeeds against archives with a narrow context list.
 Objects are encoded in Explicit VR Little Endian.
@@ -248,7 +251,7 @@ not implement a Media Storage Application Profile and performs no media creation
 | File Meta Information Version | `00\01` |
 | Transfer Syntax UID | 1.2.840.10008.1.2.1 |
 | Implementation Class UID | `2.25.164837465109381728394657283910473625` |
-| Implementation Version Name | `PDFTODICOM_1_5` |
+| Implementation Version Name | `PDFTODICOM_2_0` |
 | Source Application Entity Title | The configured Calling AE Title |
 
 ---
@@ -352,7 +355,90 @@ not implement a Media Storage Application Profile and performs no media creation
 | Instance Creator UID | (0008,0014) | UI | 3 | Fixed | The Implementation Class UID |
 | Timezone Offset From UTC | (0008,0201) | SH | 3 | Generated | For example `+0100` |
 
-### 7.3 Character set support
+### 7.3 Secondary Capture Image Storage IOD (PS3.3 A.8.1)
+
+Produced from an ordinary image file: JPEG, PNG, TIFF, BMP, GIF, WebP or TGA. The modules
+written are Patient, General Study, General Series, General Equipment, SC Equipment,
+General Image, Image Pixel and SOP Common.
+
+**Pixel encoding.** Always uncompressed, 8 bits allocated, 8 bits stored, high bit 7,
+unsigned.
+
+| Source | Samples per Pixel | Photometric Interpretation | Planar Configuration |
+|---|---|---|---|
+| Carries colour | 3 | `RGB` | 0 (interleaved) |
+| Greyscale, or colour channels all equal | 1 | `MONOCHROME2` | not written |
+
+Whether a source carries colour is decided from its pixels rather than from its file
+format. A flatbed scanner emitting an RGB JPEG of a black and white page therefore
+produces a `MONOCHROME2` object: two thirds smaller, and a more honest description of the
+content. Nothing is lost, because if red, green and blue are equal in every pixel there is
+no colour present to discard.
+
+**Object size.** Uncompressed pixel data is large. A twelve megapixel colour photograph
+becomes an object of roughly 36 MB. Uncompressed Explicit VR Little Endian is used
+regardless, because every conformant archive accepts it and it needs no codec library.
+Sites whose archive limits object size should reduce the resolution before converting; the
+application warns when a single page would exceed roughly 1.2 GB.
+
+**Multi page sources.** A multi page TIFF, or an animated GIF, produces **one SOP Instance
+per page**, all sharing one Series Instance UID and numbered sequentially in Instance
+Number (0020,0013). Single frame Secondary Capture is used in preference to the multi
+frame SOP Classes because it is the most widely supported image storage class in the
+field, including on older archives.
+
+| Attribute | Tag | VR | Type | Value |
+|---|---|---|---|---|
+| SOP Class UID | (0008,0016) | UI | 1 | 1.2.840.10008.5.1.4.1.1.7 |
+| Modality | (0008,0060) | CS | 1 | Configurable, `OT` by default, `XC` available |
+| Conversion Type | (0008,0064) | CS | 1 | Configurable; see 7.4 |
+| Image Type | (0008,0008) | CS | 1 | `DERIVED\SECONDARY` |
+| Instance Number | (0020,0013) | IS | 2 | Page number, from 1 |
+| Patient Orientation | (0020,0020) | CS | 2C | Empty; it has no meaning for a scan |
+| Burned In Annotation | (0028,0301) | CS | 1 | `YES` |
+| Lossy Image Compression | (0028,2110) | CS | 3 | `01` for a JPEG or WebP source, `00` otherwise |
+| Lossy Image Compression Method | (0028,2114) | CS | 3 | `ISO_10918_1` for a JPEG source |
+
+**Modality is configured separately for images.** A site that sets the document modality
+to `DOC` must not have its photographs labelled as encapsulated documents, so the two
+settings are independent.
+
+**Lossy history is recorded, not hidden.** PS3.3 C.7.6.1 requires Lossy Image Compression
+to say so whenever the pixels have *ever* been lossily compressed, not merely when the
+object itself is compressed. A JPEG scan has already lost information that no later step
+recovers, and a clinician judging fine detail is entitled to learn that from the object.
+
+**Burned In Annotation is always `YES`.** A scanned report or a clinical photograph almost
+certainly carries the patient's name in its pixels. Asserting `YES` warns a receiving
+system that the pixel data cannot be treated as anonymous, which is the safe answer when
+the truth cannot be known.
+
+---
+
+### 7.4 Study and series construction
+
+Each converted file always receives **its own Series Instance UID**. What varies is how
+studies are formed, which the site chooses:
+
+| Study grouping | Behaviour |
+|---|---|
+| Each file in its own study (default) | Every conversion creates a new Study Instance UID |
+| Files for the same patient share one study | Conversions for the same Patient ID reuse one Study Instance UID, each still in its own series |
+
+Grouping is held in memory for the duration of a session and is **never written to disk**.
+A patient returning months later is having a new examination, and their new report must
+not silently join the study created for the old one. Closing the application, or moving to
+a different patient, starts a new study.
+
+Patient identifiers are compared exactly, including case. They are opaque strings assigned
+by another system, and treating `ab1` and `AB1` as the same patient would be a guess.
+
+A Study Instance UID supplied by the operator overrides grouping entirely, which is how a
+document is filed into a study that already exists in the archive.
+
+---
+
+### 7.5 Character set support
 
 | Setting | Defined Term | Coverage |
 |---|---|---|
@@ -363,7 +449,7 @@ Specific Character Set is always written, so the receiving system never has to i
 encoding. When Latin 1 is configured, a name containing characters outside that repertoire
 is **rejected with an explanation** rather than being silently corrupted.
 
-### 7.4 Identifier generation
+### 7.6 Identifier generation
 
 | Strategy | Form | Notes |
 |---|---|---|
