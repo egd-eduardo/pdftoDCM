@@ -57,7 +57,7 @@
   "//Modality": "OT (Other) is the default because essentially every archive in the field accepts it. DOC is the value defined by the current standard for encapsulated document series. Change this only if your PACS administrator asks you to.",
   "Modality": "OT",
 
-  "//ConversionType": "Written to Conversion Type (0008,0064). WSD (Workstation) correctly describes a document produced by another application on a computer. Other defined terms are SD, SI, DF, DI, DRW and SYN.",
+  "//ConversionType": "Written to Conversion Type (0008,0064). WSD (Workstation) correctly describes a document produced by another application on a computer, and is the right answer for this application in almost every case. The full set of defined terms is WSD (Workstation), SD (Scanned Document), SI (Scanned Image), DV (Digitized Video), DI (Digital Interface), DF (Digitized Film), DRW (Drawing) and SYN (Synthetic Image). The Settings dialog lists each with a description.",
   "ConversionType": "WSD",
 
   "Manufacturer": "PDF to DICOM",

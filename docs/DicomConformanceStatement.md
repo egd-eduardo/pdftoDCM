@@ -322,7 +322,7 @@ not implement a Media Storage Application Profile and performs no media creation
 
 | Attribute | Tag | VR | Type | Source | Notes |
 |---|---|---|---|---|---|
-| Conversion Type | (0008,0064) | CS | 1 | Configuration | Default `WSD` (Workstation) |
+| Conversion Type | (0008,0064) | CS | 1 | Configuration | Default `WSD` (Workstation). Any defined term of PS3.3 C.8.6.1.1 may be selected: `WSD`, `SD`, `SI`, `DV`, `DI`, `DF`, `DRW`, `SYN` |
 
 #### Encapsulated Document module
 
