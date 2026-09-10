@@ -205,8 +205,15 @@
                                    Text="OT is accepted by essentially every archive. DOC is the value defined by the current standard for encapsulated documents. Change this only if your PACS administrator asks you to." />
 
                         <TextBlock Text="{loc:Localize Settings.ConversionType}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <!--
+                            DisplayMemberPath shows the description while SelectedValuePath
+                            keeps the bound value as the bare DICOM code, so the attribute
+                            still receives "WSD" and not the sentence explaining it.
+                        -->
                         <ComboBox ItemsSource="{Binding ConversionTypeOptions}"
-                                  SelectedItem="{Binding Working.ConversionType}"
+                                  DisplayMemberPath="Display"
+                                  SelectedValuePath="Code"
+                                  SelectedValue="{Binding Working.ConversionType}"
                                   Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,14" />
 
                         <TextBlock Text="{loc:Localize Settings.Manufacturer}" Style="{StaticResource FieldLabelTextStyle}" />

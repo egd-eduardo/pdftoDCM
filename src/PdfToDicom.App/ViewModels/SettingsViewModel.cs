@@ -87,10 +87,29 @@ public sealed class SettingsViewModel : ObservableObject
     public IReadOnlyList<string> ModalityOptions { get; } = new[] { "OT", "DOC" };
 
     /// <summary>
-    /// Conversion Type values from the defined terms of PS3.3 C.8.6.1.1: workstation,
-    /// scanned document, scanned image, digitised film and digital interface.
+    /// Every defined term for Conversion Type (0008,0064) in PS3.3 C.8.6.1.1, each with a
+    /// plain description.
     /// </summary>
-    public IReadOnlyList<string> ConversionTypeOptions { get; } = new[] { "WSD", "SD", "SI", "DF", "DI", "DRW", "SYN" };
+    /// <remarks>
+    /// The code alone is what goes into the attribute, but a list reading "WSD, SD, SI,
+    /// DV, DI, DF, DRW, SYN" asks an administrator to already know the standard. The
+    /// description is what makes the choice possible; the code is kept in front of it so
+    /// that anyone who does know can still find the value at a glance.
+    ///
+    /// DV was previously missing from this list. It is a defined term like the others, and
+    /// its absence meant a site that needed it had no way to select it.
+    /// </remarks>
+    public IReadOnlyList<ConversionTypeOption> ConversionTypeOptions { get; } = new[]
+    {
+        new ConversionTypeOption("WSD", "ConversionType.WSD"),
+        new ConversionTypeOption("SD",  "ConversionType.SD"),
+        new ConversionTypeOption("SI",  "ConversionType.SI"),
+        new ConversionTypeOption("DV",  "ConversionType.DV"),
+        new ConversionTypeOption("DI",  "ConversionType.DI"),
+        new ConversionTypeOption("DF",  "ConversionType.DF"),
+        new ConversionTypeOption("DRW", "ConversionType.DRW"),
+        new ConversionTypeOption("SYN", "ConversionType.SYN")
+    };
 
     /// <summary>The destination currently selected in the list.</summary>
     public PacsDestination? SelectedDestination
@@ -163,6 +182,23 @@ public sealed class SettingsViewModel : ObservableObject
         if (SelectedLanguage is not null)
         {
             Working.Language = SelectedLanguage.CultureName;
+        }
+
+        // A ComboBox bound by SelectedValue has nothing to select when the stored value
+        // matches no item, which happens if a configuration file was hand edited to a
+        // value outside the defined terms. Whether WPF then writes null back to the source
+        // is not something that can be established without running WPF, so the value is
+        // simply put back rather than relying on an answer either way. Silently changing a
+        // site's configured value by opening a dialog and pressing Save would be a poor way
+        // to find out.
+        if (string.IsNullOrWhiteSpace(Working.ConversionType))
+        {
+            Working.ConversionType = _original.ConversionType;
+        }
+
+        if (string.IsNullOrWhiteSpace(Working.Modality))
+        {
+            Working.Modality = _original.Modality;
         }
 
         ValidationResult validation = _destinationValidator.ValidateAll(Working);
@@ -401,6 +437,25 @@ public sealed class SettingsViewModel : ObservableObject
             DocumentTitle = t.DocumentTitle
         }).ToList()
     };
+}
+
+/// <summary>
+/// A DICOM Conversion Type defined term paired with a description of what it means.
+/// </summary>
+/// <remarks>
+/// Not an <see cref="EnumOption{T}"/> because the underlying value is a DICOM string
+/// rather than an enumeration. The attribute stores a code defined by the standard, and
+/// modelling it as an enumeration would mean translating back and forth for no gain.
+/// </remarks>
+/// <param name="Code">The value written to Conversion Type (0008,0064).</param>
+/// <param name="ResourceKey">Localization key for the description.</param>
+public sealed record ConversionTypeOption(string Code, string ResourceKey)
+{
+    /// <summary>
+    /// What is shown in the picker: the code, then what it means. Resolved in the active
+    /// language, so a Portuguese interface describes them in Portuguese.
+    /// </summary>
+    public string Display => $"{Code}: {LocalizationSource.Instance[ResourceKey]}";
 }
 
 /// <summary>An enumeration value paired with a localized label.</summary>
