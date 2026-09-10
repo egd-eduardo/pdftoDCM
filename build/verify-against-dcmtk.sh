@@ -35,20 +35,10 @@ SAMPLE_PDF="$REPO_ROOT/samples/example-report.pdf"
 SCP_PID=""
 FAILURES=0
 
-LICENCE_SERVICE="$REPO_ROOT/src/PdfToDicom.Core/Licensing/LicenceService.cs"
-LICENCE_BACKUP="$WORK_DIR/LicenceService.cs.orig"
-
 cleanup() {
     if [[ -n "$SCP_PID" ]] && kill -0 "$SCP_PID" 2>/dev/null; then
         kill "$SCP_PID" 2>/dev/null || true
         wait "$SCP_PID" 2>/dev/null || true
-    fi
-
-    # The publisher key is swapped for a throwaway one while the tool is built. Restoring
-    # it here rather than only on the happy path means an interrupted or failing run can
-    # never leave a test key in the working tree.
-    if [[ -f "$LICENCE_BACKUP" ]]; then
-        cp "$LICENCE_BACKUP" "$LICENCE_SERVICE"
     fi
 
     rm -rf "$WORK_DIR"
@@ -63,7 +53,7 @@ step() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 
 step "Checking prerequisites"
 
-for tool in dotnet dcmdump storescp python3; do
+for tool in dotnet dcmdump storescp; do
     if command -v "$tool" >/dev/null 2>&1; then
         pass "$tool is available"
     else
@@ -80,87 +70,11 @@ if (( FAILURES > 0 )); then
     exit 1
 fi
 
-# ------------------------------------------------------------------ Licence
-
-# From version 1.1 the application refuses to transmit without a valid licence, so this
-# check needs one or it could only ever prove that transmission is refused, quietly
-# retiring the most valuable test in the build.
-#
-# The licence is minted here rather than committed. A real code checked into the
-# repository would be a live, perpetual credential sitting in source control, and the
-# publisher's private key is deliberately not available to any automated build. Instead
-# the check generates its own key pair, builds the tool against the public half, and
-# signs a licence with the private half. Both halves live and die with the work
-# directory.
-#
-# What this verifies is the shipped code path: the same LicenceService, the same codec,
-# the same gate in the workflow. Only the value of one constant differs.
-
-step "Minting a throwaway licence for the transmission leg"
-
-LICENCE_TOOL="$REPO_ROOT/src/PdfToDicom.LicenceTool"
-
-dotnet run --project "$LICENCE_TOOL" -- keygen --out "$WORK_DIR/test.key" \
-    > "$WORK_DIR/keygen.log" 2>&1
-
-TEST_PUBLIC_KEY="$(sed -n 's/.*PublisherPublicKey = "\(.*\)".*/\1/p' "$WORK_DIR/keygen.log")"
-
-if [[ -z "$TEST_PUBLIC_KEY" ]]; then
-    fail "the throwaway key pair could not be generated; see $WORK_DIR/keygen.log"
-    exit 1
-fi
-
-pass "a throwaway publisher key pair was generated"
-
-dotnet run --project "$LICENCE_TOOL" -- issue \
-    --key "$WORK_DIR/test.key" \
-    --licensee "Interoperability Test" \
-    --out "$WORK_DIR/licence.txt" > "$WORK_DIR/issue.log" 2>&1
-
-TEST_LICENCE="$(tr -d '[:space:]' < "$WORK_DIR/licence.txt")"
-
-if [[ -z "$TEST_LICENCE" ]]; then
-    fail "the test licence could not be issued; see $WORK_DIR/issue.log"
-    exit 1
-fi
-
-pass "a test licence was issued"
-
 # ------------------------------------------------------------------ Build
 
 step "Building the command line front end"
 
-cp "$LICENCE_SERVICE" "$LICENCE_BACKUP"
-
-TEST_PUBLIC_KEY="$TEST_PUBLIC_KEY" LICENCE_SERVICE="$LICENCE_SERVICE" python3 - <<'PYTHON'
-import os
-import re
-
-path = os.environ["LICENCE_SERVICE"]
-key = os.environ["TEST_PUBLIC_KEY"]
-
-with open(path, encoding="utf-8") as handle:
-    source = handle.read()
-
-patched, count = re.subn(
-    r'(public const string PublisherPublicKey\s*=\s*)"[^"]*"',
-    lambda m: m.group(1) + '"' + key + '"',
-    source,
-    count=1)
-
-if count != 1:
-    raise SystemExit("the publisher key constant could not be located")
-
-with open(path, "w", encoding="utf-8") as handle:
-    handle.write(patched)
-PYTHON
-
 dotnet build "$REPO_ROOT/src/PdfToDicom.Cli/PdfToDicom.Cli.csproj" -c Release --nologo -v q >/dev/null
-
-# Restored immediately, so the working tree carries the test key for seconds rather than
-# for the length of the run. The trap covers the case where the build above fails.
-cp "$LICENCE_BACKUP" "$LICENCE_SERVICE"
-
 CLI="$REPO_ROOT/src/PdfToDicom.Cli/bin/Release/net8.0/pdftodicom.dll"
 
 if [[ -f "$CLI" ]]; then
@@ -217,7 +131,6 @@ cat > "$CONFIG_FILE" <<JSON
   "UidStrategy": "UuidDerived",
   "Modality": "OT",
   "ConversionType": "WSD",
-  "LicenceCode": "$TEST_LICENCE",
   "LogFolder": "$WORK_DIR/logs",
   "OutputFolder": "$WORK_DIR/out",
   "AlwaysSaveDicomLocally": true,
