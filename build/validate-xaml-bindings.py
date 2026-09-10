@@ -33,6 +33,7 @@ Exit:   0 when the XAML passes, 1 when a problem is found.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -125,14 +126,71 @@ class XamlBindingValidator:
             return False
 
         defined_keys = self._collect_resource_keys(xaml_files)
+        localized_keys = self._collect_localization_keys()
 
         for path in xaml_files:
             text = path.read_text(encoding="utf-8")
             self._check_two_way_bindings(path, text)
             self._check_static_resources(path, text, defined_keys)
             self._check_resource_order(path, text)
+            self._check_localization_keys(path, text, localized_keys)
 
         return self._report(len(xaml_files))
+
+    def _collect_localization_keys(self) -> set[str] | None:
+        """
+        Every key in the English string table, which is the fallback layer and so the one
+        a key must appear in to resolve at all.
+
+        Returns None when the table cannot be found or read, so that a missing file is
+        reported once rather than as a failure against every key in the interface.
+        """
+        table = (
+            self.project_root.parent
+            / "PdfToDicom.Core" / "Localization" / "Strings" / "en-US.json"
+        )
+
+        if not table.is_file():
+            self.problems.append(
+                f"  The English string table was not found at {table}, so "
+                f"{{loc:Localize}} keys could not be checked."
+            )
+            return None
+
+        try:
+            return set(json.loads(table.read_text(encoding="utf-8")))
+        except json.JSONDecodeError as error:
+            self.problems.append(f"  {table.name} is not valid JSON: {error}")
+            return None
+
+    def _check_localization_keys(
+        self, path: Path, text: str, known: set[str] | None
+    ) -> None:
+        """
+        Finds {loc:Localize} keys with no entry in the string table.
+
+        A missing key does not throw. The localizer returns the key itself, so the label
+        renders as "Settings.OrganizationUidRoot.Caption" on a clinical workstation. That
+        is not something a compiler or a running test can catch, and nobody notices until
+        a user is looking at it.
+        """
+        if known is None:
+            return
+
+        for match in re.finditer(r"\{loc:Localize\s+([^\s}]+)\s*\}", text):
+            key = match.group(1)
+            self.checked += 1
+
+            if key in known:
+                continue
+
+            line = text[: match.start()].count("\n") + 1
+            self.problems.append(
+                f"  {path.name}:{line}  the localization key '{key}' is not in "
+                f"en-US.json.\n"
+                f"      The label will render as that key rather than as text. Add it to "
+                f"the English table, and to pt-PT.json to translate it."
+            )
 
     def _collect_resource_keys(self, xaml_files: list[Path]) -> set[str]:
         """Every x:Key defined anywhere, since dictionaries are merged application wide."""

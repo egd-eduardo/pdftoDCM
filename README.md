@@ -76,7 +76,7 @@ cd pdftoDCM
 .\build\build.ps1                          # test, publish and build the installer (x64)
 .\build\build.ps1 -Runtime win-arm64       # native ARM64 build
 .\build\build.ps1 -Runtime win-x86         # 32 bit build
-.\build\build.ps1 -Task test               # run the 107 tests only
+.\build\build.ps1 -Task test               # run the 113 tests only
 ```
 
 The product is Windows only. The build tooling itself is not: `build/build.sh` cross
@@ -120,7 +120,7 @@ BUILD.bat                One click build, for anyone without a development setup
 src/PdfToDicom.Core/     All logic. net8.0, no presentation code, fully testable
 src/PdfToDicom.App/      WPF desktop application. net8.0-windows
 src/PdfToDicom.Cli/      Command line front end for scripted conversion
-tests/                   107 xUnit tests
+tests/                   113 xUnit tests
 build/                   Build scripts, installer, interoperability verification
 dist/app/                The application, prebuilt for x86, x64 and ARM64
 docs/                    User manual (EN + PT), technical docs, conformance statement
@@ -155,7 +155,7 @@ application and the CLI provably identical in behaviour.
 
 ## Verification status
 
-**107 unit and workflow tests pass**, covering validation rules, VR limits, UID uniqueness
+**113 unit and workflow tests pass**, covering validation rules, VR limits, UID uniqueness
 across 20,000 identifiers per strategy, every mandatory attribute, payload padding, UTF-8
 round trips, configuration corruption recovery and the complete workflow.
 

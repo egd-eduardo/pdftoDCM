@@ -50,8 +50,10 @@
   "//CharacterSet": "Utf8 writes Specific Character Set as ISO_IR 192 and represents any accented or non Latin name correctly. Change to Latin1 only if your archive is known to reject UTF-8.",
   "CharacterSet": "Utf8",
 
-  "//UidStrategy": "UuidDerived builds identifiers under the 2.25 prefix defined by DICOM PS3.5 Annex B.2 and needs no registration. Use RegisteredRoot only if your organisation owns a UID root, and set OrganizationUidRoot to it. The root must be at most 31 characters so the generated UIDs stay within the 64 character limit.",
+  "//UidStrategy": "UuidDerived builds identifiers under the 2.25 prefix defined by DICOM PS3.5 Annex B.2 and needs no registration. RegisteredRoot builds them under 1.2.826.0.1.3680043.9.6008, registered to the author of this software with Medical Connections Ltd. Choose it if your archive prefers identifiers under a registered arc. Both are conformant and neither needs anything set here.",
   "UidStrategy": "UuidDerived",
+
+  "//OrganizationUidRoot": "Obsolete and ignored. The registered root is fixed in the software because it identifies its registrant rather than the site. This entry is read and discarded so that a configuration file written by an earlier version still loads.",
   "OrganizationUidRoot": "",
 
   "//Modality": "OT (Other) is the default because essentially every archive in the field accepts it. DOC is the value defined by the current standard for encapsulated document series. Change this only if your PACS administrator asks you to.",

@@ -1,5 +1,72 @@
 # Changelog
 
+## 1.5.5
+
+### A registered UID root
+
+The software now owns a UID root registered with Medical Connections Ltd,
+`1.2.826.0.1.3680043.9.6008`, and the "Registered UID root" field in Settings is filled in
+from it rather than left for a site to complete.
+
+- **The field is fixed and disabled.** A registered root identifies its registrant, so it
+  is not a site's to set: a hospital generating identifiers beneath it would be claiming an
+  arc it does not own. Anything left in `OrganizationUidRoot` by an earlier version is read
+  and discarded rather than obeyed.
+- **It is shown partly masked**, as `1.2.826.0.1.3680043.*.****`, and the field is disabled
+  rather than merely read only, so the text cannot be selected and copied either. This
+  stops the prefix being taken off a screen. It is **not** secrecy: every DICOM object the
+  software produces carries UIDs built from the root, so anyone holding one can read it,
+  and it is present in the executable.
+- **The uniqueness undertaking is tested, not asserted.** The registration requires that
+  UIDs beneath the prefix cannot be duplicated. The random component of each identifier is
+  widened from twelve digits to fifteen, a thousand million million values within any one
+  millisecond, and a new test generates 20,000 identifiers in a tight loop where most share
+  a timestamp, so uniqueness rests entirely on that component. A generated UID is 62
+  characters, two inside the 64 character limit.
+- **The choice of strategy is unchanged.** UUID derived (`2.25.`) remains the default and
+  is unique by construction. Select the registered root if your archive prefers identifiers
+  under a registered arc.
+
+### Two packaging faults, both of which only appeared on Windows
+
+- **The handover folder and the installer lost the desktop application.** The two
+  executables are named `PdfToDicom.exe` and `pdftodicom.exe`, which differ only in case.
+  Windows filesystems are case insensitive, so copying both into one folder did not
+  produce two files: the second overwrote the first and kept the first one's spelling.
+  What was handed over was a `PdfToDicom.exe` that was really the command line tool, and
+  double clicking it opened a console rather than the application. The installer put both
+  into its application directory too, so the Start Menu shortcut had the same problem.
+
+  The command line tool now goes into a `Command line` subfolder in both.
+
+  This was invisible on Linux and macOS, where the two names are distinct, which is why an
+  assembly verified there looked correct. The Windows build reported 11 files in the
+  package where the same code on Linux reported 12.
+
+- **The installer shipped three documents written for the copyright holder**, on building
+  the software, code signing and protecting against unauthorised distribution, the last of
+  which discusses the customer. It copied `docs\*` with a wildcard. It now copies the same
+  named list the handover package uses.
+
+- **The build refuses to produce either fault again.** Before the package is zipped it
+  asserts that the required files are present under their exact names, and that no two
+  entries differ only in case. The first catches the loss as Windows shows it, a missing
+  name; the second catches it as Linux shows it, two names that cannot coexist. Both
+  checks are in `build.ps1` and `build.sh`.
+
+### Also
+
+- **The XAML validator now checks localization keys.** A mistyped `{loc:Localize}` key does
+  not throw; the localizer returns the key, so the label renders as
+  `Settings.OrganizationUidRoot.Caption` on a clinical workstation. Nothing caught that
+  before a user was looking at it. All 114 keys in the interface are now checked against
+  the English string table on every build.
+
+### Not changed
+
+The conversion, validation and transmission behaviour is as in 1.5.0. 113 tests pass, six
+more than 1.5.0, all six covering the registered root.
+
 ## 1.5.0
 
 **Licensing dropped. The software is free to use, commercially and privately.**

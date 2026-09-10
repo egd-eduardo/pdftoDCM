@@ -124,7 +124,7 @@ pdftoDCM/
 │   │
 │   └── PdfToDicom.Cli/              Headless front end for scripted conversion
 │
-├── tests/PdfToDicom.Core.Tests/     107 xUnit tests
+├── tests/PdfToDicom.Core.Tests/     113 xUnit tests
 │
 ├── build/
 │   ├── build.sh                     Cross compiles the Windows binaries from Unix
@@ -286,12 +286,34 @@ A version 4 UUID is read as a big endian 128 bit unsigned integer and appended t
 as permitted by **PS3.5 Annex B.2**. Requires no registered root and cannot collide with
 any other system's identifiers.
 
-### Registered organisation root
+### Registered root
 
-`<root>.<discriminator>.<yyyyMMddHHmmssfff>.<random>`
+`1.2.826.0.1.3680043.9.6008.<discriminator>.<yyyyMMddHHmmssfff>.<random>`
 
-The random component is cryptographic and bounded to twelve digits, giving a known maximum
-width. The maximum root length is **derived** from the component widths:
+The root is registered with Medical Connections Ltd to the author of this software. It is
+a constant, `UidGenerator.RegisteredUidRoot`, and is **not configurable**: a registered
+root identifies its registrant, so a site generating identifiers beneath it would be
+claiming an arc it does not own. `OrganizationUidRoot` survives in the configuration file
+only so that a file written by an earlier version still loads; its value is ignored.
+
+The registration carries two conditions, and both are met:
+
+- **UIDs beneath the prefix must not be capable of duplication.** The suffix combines the
+  UTC time to the millisecond with a fifteen digit cryptographically random component,
+  which is a thousand million million values within any one millisecond, so two
+  workstations generating simultaneously still do not collide. The property is tested
+  rather than asserted: `UidsBeneathTheRegisteredRootDoNotDuplicate` generates 20,000
+  identifiers in a tight loop, where most share a timestamp and uniqueness therefore rests
+  entirely on the random component.
+- **Sub-delegation is permitted where it is not for profit, or forms part of another
+  product.** This is the latter, and the software is supplied free of charge.
+
+A generated identifier is 62 characters, two inside the 64 character limit. The settings
+dialog shows the root partly masked and disabled. That stops it being read off or copied
+from a screen; it is not secrecy, since every object the software produces carries UIDs
+built from it.
+
+The maximum root length is **derived** from the component widths:
 
 ```csharp
 private const int MaximumRootLength =
@@ -469,10 +491,19 @@ Output is written per architecture, so all three can coexist.
 
 | Path | Contents |
 |---|---|
-| `artifacts/<rid>/app/PdfToDicom.exe` | Self contained desktop application (~65 to 69 MB) |
+| `artifacts/<rid>/app/PdfToDicom.exe` | Self contained desktop application (~62 to 69 MB) |
 | `artifacts/<rid>/cli/pdftodicom.exe` | Self contained command line tool |
-| `artifacts/PdfToDicom-portable-<rid>.zip` | Portable package with docs and samples |
-| `artifacts/PdfToDicom-Setup-1.0.0-<arch>.exe` | Per user installer (Windows build only) |
+| `artifacts/PdfToDicom-<version>-<rid>/` | The folder handed to a site |
+| `artifacts/PdfToDicom-<version>-<rid>.zip` | The same, zipped |
+| `artifacts/PdfToDicom-Setup-<version>-<arch>.exe` | Per user installer (Windows build only) |
+
+Inside the handover folder and under the installer's application directory, the command
+line tool sits in a `Command line` subfolder rather than beside `PdfToDicom.exe`. The two
+assembly names differ only in case, and a case insensitive filesystem cannot hold both in
+one directory: the second write overwrites the first and keeps the first one's spelling.
+`Invoke-Assemble` and its shell counterpart both assert, before the zip is made, that the
+required files are present under their exact names and that no two entries in the package
+differ only in case.
 
 ---
 
@@ -484,7 +515,7 @@ Output is written per architecture, so all three can coexist.
 dotnet test tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj
 ```
 
-107 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
+113 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
 strategy), person name construction, every mandatory attribute, payload integrity and odd
 length padding, UTF-8 round trips, configuration persistence and corruption recovery, and
 the full workflow with a stubbed network.
@@ -511,7 +542,7 @@ launching it. It reports:
 > This check exists because exactly that defect shipped. `ProgressBar.Value` was bound to
 > a property with a private setter, and because `RangeBase.Value` binds two way by
 > default, the main window failed to load on a Windows ARM64 machine. The build was clean
-> and all 107 tests passed. Only running the application would have revealed it.
+> and all 113 tests passed. Only running the application would have revealed it.
 
 ### Interoperability verification
 
@@ -632,7 +663,7 @@ networking, validation and workflow layers need no change.
 
 Stated plainly, because a hospital deploying this needs to know what it does not do.
 
-1. **The user interface is not covered by automated tests.** The 107 tests cover Core in
+1. **The user interface is not covered by automated tests.** The 113 tests cover Core in
    depth, but WPF cannot run on a build agent without a desktop session, so no test opens
    a window. `build/validate-xaml-bindings.py` catches the binding errors that stop the
    application starting, and is not a substitute for running it. **Launch the application

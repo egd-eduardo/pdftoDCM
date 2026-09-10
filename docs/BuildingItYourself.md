@@ -101,7 +101,7 @@ Nothing hidden, and nothing that touches your system outside this folder:
    Store, and anything that merely checks the name is fooled by them.
 4. Runs `build\build.ps1`, which restores, builds, validates, tests, publishes, assembles
    the handover package and builds the installer.
-5. **Refuses to continue if any of the 107 tests fails.** A build that fails its tests is
+5. **Refuses to continue if any of the 113 tests fails.** A build that fails its tests is
    not one to hand to a hospital.
 6. Offers to sign the files if a code signing certificate exists, and tells you how to
    create one if not.
@@ -121,8 +121,8 @@ Two things appear under `artifacts\`:
 
 ```
 artifacts\
-  PdfToDicom-1.5.0-win-x64\        <- the folder to hand over
-  PdfToDicom-1.5.0-win-x64.zip     <- the same, ready to email
+  PdfToDicom-1.5.5-win-x64\        <- the folder to hand over
+  PdfToDicom-1.5.5-win-x64.zip     <- the same, ready to email
 ```
 
 The folder contains everything a site needs and nothing it should not have:
@@ -130,9 +130,11 @@ The folder contains everything a site needs and nothing it should not have:
 ```
   READ ME FIRST.txt          What to do, in plain language.
   PdfToDicom.exe             The application.
-  pdftodicom.exe             Command line version.
   LICENCE.txt                The terms.
   THIRD-PARTY-NOTICES.txt    Licences of the components used.
+
+  Command line\
+    pdftodicom.exe           Command line version.
 
   Documentation\
     User Manual (English)
@@ -146,7 +148,15 @@ The folder contains everything a site needs and nothing it should not have:
     example-report.pdf
 ```
 
-Two points about that list are deliberate.
+Three points about that list are deliberate.
+
+**The command line tool is in a subfolder, not beside the application.** The two
+executables are called `PdfToDicom.exe` and `pdftodicom.exe`, which differ only in case,
+and a Windows filesystem cannot hold both in one folder. Copying them together does not
+fail: the second silently overwrites the first and keeps the first one's spelling, so
+what is left is a `PdfToDicom.exe` that is really the command line tool and opens a
+console when double clicked. The build now refuses to produce a package in which any two
+names differ only in case.
 
 **The third party notices are not optional.** PdfPig is MIT licensed and Serilog is Apache
 2.0, and both require their notice to accompany any redistribution. Leaving the file out
@@ -154,9 +164,12 @@ would put you in breach of them.
 
 **Three documents are excluded on purpose**: the ones on building it yourself, code signing
 and protecting against unauthorised distribution. They are written for you, not for a
-customer, and the last one discusses the customer. The package copies a named list rather
-than the whole `docs` folder, so a new document has to be considered rather than shipped by
-accident.
+customer, and the last one discusses the customer. Both the package and the installer copy
+a named list rather than the whole `docs` folder, so a new document has to be considered
+rather than shipped by accident.
+
+The installer did not always do this. It used a wildcard, and so put all three of those
+documents into every hospital's application folder. That is fixed.
 
 ---
 

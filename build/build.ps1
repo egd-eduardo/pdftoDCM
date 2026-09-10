@@ -232,8 +232,25 @@ function Invoke-Assemble {
     # ---------------------------------------------------------------- the software
     Copy-Item $ApplicationPath $package
 
+    # The command line tool goes into a subfolder rather than beside the application,
+    # because the two assembly names differ only in case: PdfToDicom and pdftodicom.
+    #
+    # Windows filesystems are case insensitive, so copying both into one folder does not
+    # produce two files. The second copy matches the first by name, overwrites its
+    # contents and leaves the first one's spelling in place. The handover folder then
+    # holds a single PdfToDicom.exe which is really the command line tool, so double
+    # clicking it opens a console instead of the application.
+    #
+    # None of that is visible on Linux or macOS, where the two names are distinct, which
+    # is why an assembly verified there looked correct. The Windows CI job reported 11
+    # files in the package where the same code on Linux reported 12.
     $cli = Join-Path $Artifacts "$Runtime\cli\pdftodicom.exe"
-    if (Test-Path $cli) { Copy-Item $cli $package }
+
+    if (Test-Path $cli) {
+        $commandLine = Join-Path $package 'Command line'
+        New-Item -ItemType Directory -Path $commandLine -Force | Out-Null
+        Copy-Item $cli $commandLine
+    }
 
     # ---------------------------------------------------------------- legal
     # LICENCE and the third party notices are not optional courtesies. The MIT and Apache
@@ -269,6 +286,9 @@ function Invoke-Assemble {
     # ---------------------------------------------------------------- start here
     New-StartHereFile -Path (Join-Path $package 'READ ME FIRST.txt') -Version $version
 
+    # Checked before the zip is made, so a defective package is never handed over.
+    Assert-PackageIsSound -Package $package -ExpectCli ([bool](Test-Path $cli))
+
     # ---------------------------------------------------------------- archive
     $zip = Join-Path $Artifacts "PdfToDicom-$version-$Runtime.zip"
     Compress-Archive -Path "$package\*" -DestinationPath $zip -Force
@@ -277,8 +297,59 @@ function Invoke-Assemble {
 
     Write-Host "    folder : $package"
     Write-Host "    zip    : $zip"
-    Write-Host "    $fileCount file(s): the application, the licence and third party"
-    Write-Host "    notices, four documents and two samples"
+    Write-Host "    $fileCount file(s): the application and the command line tool, the"
+    Write-Host "    licence and third party notices, five documents and two samples"
+}
+
+<#
+    Checks the assembled folder before anything is zipped or sent.
+
+    Two complementary assertions, because neither one catches the failure on both kinds
+    of filesystem.
+
+    The first compares the names the operating system actually reports against the names
+    that were meant to be there, matching case exactly. On Windows a file lost to a case
+    insensitive overwrite disappears from the listing, so the missing name is detected.
+    Test-Path cannot be used for this: it matches case insensitively and answers "yes"
+    for a name that is really the other file.
+
+    The second looks for two entries in the package that differ only in case. That pair
+    cannot coexist on Windows, but it assembles perfectly happily on Linux and macOS, so
+    this is the check that catches the fault on a developer machine rather than after a
+    hospital has the folder.
+#>
+function Assert-PackageIsSound {
+    param([string]$Package, [bool]$ExpectCli)
+
+    $files = Get-ChildItem $Package -Recurse -File
+    $present = $files | ForEach-Object { $_.FullName.Substring($Package.Length + 1) }
+
+    $required = @('PdfToDicom.exe', 'LICENCE.txt', 'THIRD-PARTY-NOTICES.txt', 'READ ME FIRST.txt')
+    if ($ExpectCli) { $required += (Join-Path 'Command line' 'pdftodicom.exe') }
+
+    # -cne and -notcontains are case insensitive in PowerShell. The case sensitive
+    # operator is the point of the check, so it has to be spelled out.
+    $missing = $required | Where-Object { $present -cnotcontains $_ }
+
+    if ($missing) {
+        throw @"
+The package is incomplete. These files were meant to be in it and are not:
+
+    $($missing -join "`n    ")
+
+If a file was copied but is missing under its own name, another file whose name
+differs only in case has overwritten it. Windows cannot hold both.
+"@
+    }
+
+    $collisions = $present |
+        Group-Object { $_.ToLowerInvariant() } |
+        Where-Object { $_.Count -gt 1 }
+
+    if ($collisions) {
+        $detail = ($collisions | ForEach-Object { $_.Group -join ' and ' }) -join '; '
+        throw "The package holds names that differ only in case and so cannot both exist on Windows: $detail"
+    }
 }
 
 <#
@@ -326,18 +397,23 @@ BEFORE THE FIRST REAL DOCUMENT
 WHAT IS IN THIS FOLDER
 ----------------------
 
-  PdfToDicom.exe           The application.
-  pdftodicom.exe           Command line version, for scripted conversion.
+  PdfToDicom.exe           The application. This is the one to double click.
   LICENCE.txt              The terms. Free to use, commercial and private.
   THIRD-PARTY-NOTICES.txt  Licences of the components used.
 
-  Documentation    User Manual (English)                    For the people using it daily.
+  Command line\
+    pdftodicom.exe           For scripted or bulk conversion. Not needed
+                             for ordinary use.
+
+  Documentation\
+    User Manual (English)                    For the people using it daily.
     Manual do Utilizador (Portugues)         The same, in Portuguese.
     DICOM Conformance Statement              For your PACS administrator.
     Technical Documentation                  For IT.
     Changelog                                What changed in each version.
 
-  Samples    config.sample.json       Annotated settings reference.
+  Samples\
+    config.sample.json       Annotated settings reference.
     example-report.pdf       A document to test with.
 
 

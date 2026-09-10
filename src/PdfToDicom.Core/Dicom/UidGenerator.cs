@@ -7,8 +7,8 @@ using PdfToDicom.Core.Validation;
 namespace PdfToDicom.Core.Dicom;
 
 /// <summary>
-/// Produces DICOM Unique Identifiers using either a UUID derived form or an
-/// organisation's own registered UID root.
+/// Produces DICOM Unique Identifiers using either a UUID derived form or the publisher's
+/// registered UID root.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,10 +18,10 @@ namespace PdfToDicom.Core.Dicom;
 /// collide with identifiers produced by any other system.
 /// </para>
 /// <para>
-/// The alternative strategy appends a timestamp, a process identifier and a
-/// cryptographically random component to a root the organisation already owns. The
-/// components are combined so that the total length never exceeds the 64 character limit
-/// imposed by the UI Value Representation.
+/// The alternative strategy appends a timestamp, an entity discriminator and a
+/// cryptographically random component to <see cref="RegisteredUidRoot"/>, the root
+/// registered to the publisher. The components are combined so that the total length
+/// never exceeds the 64 character limit imposed by the UI Value Representation.
 /// </para>
 /// </remarks>
 public sealed class UidGenerator : IUidGenerator
@@ -40,18 +40,53 @@ public sealed class UidGenerator : IUidGenerator
     public const string DefaultImplementationVersionName = "PDFTODICOM_1_5";
 
     /// <summary>
-    /// Exclusive upper bound of the random component of a registered root UID. Twelve
-    /// decimal digits give roughly a million million values within a single millisecond,
-    /// which makes a collision between concurrent workstations negligible, while keeping
-    /// the component to a known maximum width.
+    /// The UID root registered to the author of this software, beneath which every UID
+    /// produced by the registered root strategy is created.
     /// </summary>
-    private const ulong RandomComponentBound = 1_000_000_000_000UL;
+    /// <remarks>
+    /// <para>
+    /// Issued by Medical Connections Ltd. It is fixed in the software and cannot be
+    /// configured, because it identifies the publisher rather than the site: a hospital
+    /// generating UIDs beneath someone else's registered arc would be claiming an
+    /// identifier space it does not own.
+    /// </para>
+    /// <para>
+    /// Two conditions attach to the registration, and both are met here. UIDs beneath the
+    /// prefix must not be capable of duplication, which is why the suffix combines a
+    /// millisecond timestamp with a large cryptographically random component and why the
+    /// uniqueness of that construction is asserted by the test suite. Sub-delegation of
+    /// ranges is permitted where it is not for profit or forms part of another product;
+    /// this is the latter, and the software is supplied free of charge.
+    /// </para>
+    /// <para>
+    /// It is not a secret. Every DICOM object this software produces carries UIDs built
+    /// from it, so anyone holding one of those objects can read it. The settings dialog
+    /// shows it partly masked to discourage it being copied off a screen, which is a
+    /// different and much weaker claim.
+    /// </para>
+    /// </remarks>
+    public const string RegisteredUidRoot = "1.2.826.0.1.3680043.9.6008";
+
+    /// <summary>
+    /// How the registered root is shown in the user interface: the arcs assigned to this
+    /// publisher are replaced by asterisks, leaving the issuer's own public arc legible so
+    /// that a PACS administrator can still see which registry it comes from.
+    /// </summary>
+    public const string RegisteredUidRootForDisplay = "1.2.826.0.1.3680043.*.****";
+
+    /// <summary>
+    /// Exclusive upper bound of the random component of a registered root UID. Fifteen
+    /// decimal digits give a thousand million million values within a single millisecond,
+    /// which is what makes duplication beneath the registered prefix infeasible rather
+    /// than merely unlikely, while keeping the component to a known maximum width.
+    /// </summary>
+    private const ulong RandomComponentBound = 1_000_000_000_000_000UL;
 
     /// <summary>Width of the timestamp component, "yyyyMMddHHmmssfff".</summary>
     private const int TimestampWidth = 17;
 
     /// <summary>Maximum width of the random component, derived from its bound.</summary>
-    private const int RandomComponentWidth = 12;
+    private const int RandomComponentWidth = 15;
 
     /// <summary>
     /// Longest organisation root that still leaves room for a suffix.
@@ -72,8 +107,10 @@ public sealed class UidGenerator : IUidGenerator
     /// </summary>
     /// <param name="strategy">Which construction method to use.</param>
     /// <param name="organizationUidRoot">
-    /// The organisation's registered root, required when the registered root strategy is
-    /// selected. Ignored otherwise.
+    /// Root to build beneath when the registered root strategy is selected. Leave it unset
+    /// for <see cref="RegisteredUidRoot"/>, which is what the application always does; it
+    /// is accepted only so that the format and length budget can be exercised directly.
+    /// Ignored by the UUID derived strategy.
     /// </param>
     /// <exception cref="ArgumentException">
     /// The registered root strategy was requested with a root that is missing, malformed
@@ -84,7 +121,14 @@ public sealed class UidGenerator : IUidGenerator
         string? organizationUidRoot = null)
     {
         _strategy = strategy;
-        _organizationRoot = (organizationUidRoot ?? string.Empty).Trim().TrimEnd('.');
+
+        // An unspecified root means the publisher's registered one. That is the only path
+        // the application itself uses; the parameter remains so that the length and format
+        // budget can still be exercised by the tests.
+        string requested = (organizationUidRoot ?? string.Empty).Trim().TrimEnd('.');
+        _organizationRoot = requested.Length == 0 && strategy == UidGenerationStrategy.RegisteredRoot
+            ? RegisteredUidRoot
+            : requested;
 
         if (_strategy == UidGenerationStrategy.RegisteredRoot)
         {
@@ -106,10 +150,16 @@ public sealed class UidGenerator : IUidGenerator
     }
 
     /// <summary>Creates a generator from the supplied configuration.</summary>
+    /// <remarks>
+    /// <see cref="AppConfiguration.OrganizationUidRoot"/> is deliberately not consulted.
+    /// The registered root is a property of the publisher, not of the site, so it is fixed
+    /// in the software; a value left in an older configuration file is ignored rather than
+    /// obeyed.
+    /// </remarks>
     public static UidGenerator FromConfiguration(AppConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
-        return new UidGenerator(configuration.UidStrategy, configuration.OrganizationUidRoot);
+        return new UidGenerator(configuration.UidStrategy);
     }
 
     /// <inheritdoc />
