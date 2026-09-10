@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Windows desktop front end.
+
+    Publishing settings deliberately produce a single, self contained executable:
+    the .NET runtime, WPF and every dependency are embedded, so the application runs
+    on a clean Windows 10 or Windows 11 machine with nothing else installed. Trimming
+    is not enabled because WPF relies on reflection over XAML generated types and a
+    trimmed build fails at runtime rather than at build time.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>PdfToDicom.App</RootNamespace>
+    <AssemblyName>PdfToDicom</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!--
+    Runtime identifiers this project can be published for.
+
+    Declaring them here (plural) rather than pinning a single RuntimeIdentifier means
+    "dotnet restore" generates assets for every supported target, so a later Release build
+    that skips restore succeeds whatever configuration was restored.
+
+    Pinning a RID to the Release configuration alone caused exactly that failure in CI:
+    restore defaults to Debug, so the Release build demanded RID specific assets that were
+    never produced.
+
+    The three supported Windows architectures are covered: win-x86 for the 32 bit estate
+    still found on older clinical workstations, win-x64 for the mainstream, and win-arm64
+    for Windows on ARM. A native arm64 build avoids the x64 emulation layer entirely.
+  -->
+  <PropertyGroup>
+    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <!--
+    Deployment settings apply whenever a runtime identifier is supplied, which is the case
+    for every publish. They are deliberately NOT tied to the Release configuration: a
+    self-contained build without a RID is not valid, and would break a plain
+    "dotnet build -c Release".
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PdfToDicom.Core\PdfToDicom.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" Condition="Exists('Assets\app.ico')" />
+  </ItemGroup>
+
+</Project>

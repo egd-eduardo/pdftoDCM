@@ -1,0 +1,97 @@
+PDF to DICOM
+Copyright (c) 2026 Eduardo Dias. All rights reserved.
+
+PROPRIETARY SOFTWARE LICENCE
+
+This software and its source code, documentation and accompanying materials
+(together, "the Software") are the confidential and proprietary property of
+Eduardo Dias ("the Licensor"). The Software is licensed, not sold.
+
+1. GRANT OF LICENCE
+
+   No right to use, copy, modify, merge, publish, distribute, sublicense or
+   sell the Software is granted except under a separate written licence
+   agreement signed by the Licensor. Possession of a copy of the Software,
+   however obtained, confers no such right.
+
+   Where a written licence agreement exists, the rights granted are limited to
+   those it states expressly, for the number of installations, sites or
+   workstations it names, and for the period it specifies.
+
+2. RESTRICTIONS
+
+   Except to the extent that the following cannot lawfully be restricted, you
+   must not:
+
+   a) copy or install the Software on more workstations, or at more sites, than
+      your licence permits;
+   b) distribute, publish, lend, rent, lease, sell or otherwise transfer the
+      Software or any copy of it to any third party;
+   c) reverse engineer, decompile or disassemble the Software, or attempt to
+      derive its source code;
+   d) remove, obscure or alter any copyright notice, licence notice, digital
+      signature, or licence enforcement mechanism within the Software;
+   e) use the Software to provide a bureau, hosting or managed service to a
+      third party.
+
+3. OWNERSHIP
+
+   The Licensor retains all right, title and interest in the Software,
+   including all intellectual property rights. Nothing in this licence
+   transfers ownership of any part of it.
+
+4. THIRD PARTY COMPONENTS
+
+   The Software incorporates third party components distributed under their own
+   permissive licences, which are unaffected by this licence and continue to
+   apply to those components:
+
+     fo-dicom  - Microsoft Public Licence (MS-PL)
+     PdfPig    - MIT Licence
+     Serilog   - Apache Licence 2.0
+
+   Their licence texts are reproduced in THIRD-PARTY-NOTICES.md.
+
+5. CLINICAL USE AND MEDICAL DEVICE STATUS
+
+   THE SOFTWARE IS A DOCUMENT CONVERSION AND TRANSMISSION UTILITY. IT IS NOT
+   CERTIFIED AS A MEDICAL DEVICE UNDER REGULATION (EU) 2017/745, UNDER THE
+   UNITED STATES FEDERAL FOOD, DRUG, AND COSMETIC ACT, OR UNDER ANY EQUIVALENT
+   REGIME. IT IS NOT INTENDED FOR DIAGNOSIS, AND NO CLINICAL DECISION SHOULD BE
+   BASED UPON IT.
+
+   The operator is responsible for confirming that the patient information
+   entered corresponds to the document being converted. The licensee is
+   responsible for validating the Software within its own clinical environment
+   before use, and for its own information governance, data protection and
+   record keeping obligations.
+
+6. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+
+7. LIMITATION OF LIABILITY
+
+   TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE LICENSOR SHALL NOT BE LIABLE FOR
+   ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR
+   OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR ITS
+   USE.
+
+   Nothing in this licence excludes or limits liability for death or personal
+   injury caused by negligence, for fraud, or for any other liability that
+   cannot lawfully be excluded.
+
+8. TERMINATION
+
+   This licence terminates automatically, without notice, if you breach any of
+   its terms. On termination you must cease all use of the Software and destroy
+   every copy in your possession or control.
+
+9. GOVERNING LAW
+
+   This licence is governed by the laws of Portugal, and the courts of Portugal
+   have exclusive jurisdiction over any dispute arising from it.
+
+For licensing enquiries, contact the Licensor.

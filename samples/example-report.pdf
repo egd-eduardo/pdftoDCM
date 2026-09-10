@@ -1,0 +1,67 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 1098 >>
+stream
+BT
+/F1 18 Tf 1 0 0 1 72 760 Tm (RADIOLOGY REPORT) Tj
+/F1 11 Tf 1 0 0 1 72 730 Tm (Example document produced by a third party reporting application.) Tj
+/F1 11 Tf 1 0 0 1 72 710 Tm (This file is provided as a sample input for the PDF to DICOM converter.) Tj
+/F1 11 Tf 1 0 0 1 72 670 Tm (Patient:    SAMPLE, Patient) Tj
+/F1 11 Tf 1 0 0 1 72 652 Tm (Patient ID: 000123456) Tj
+/F1 11 Tf 1 0 0 1 72 634 Tm (Accession:  ACC20260909) Tj
+/F1 11 Tf 1 0 0 1 72 616 Tm (Examination: Chest radiograph, PA and lateral) Tj
+/F1 12 Tf 1 0 0 1 72 576 Tm (FINDINGS) Tj
+/F1 11 Tf 1 0 0 1 72 556 Tm (The lungs are clear. No focal consolidation, effusion or pneumothorax.) Tj
+/F1 11 Tf 1 0 0 1 72 538 Tm (The cardiomediastinal silhouette is within normal limits.) Tj
+/F1 11 Tf 1 0 0 1 72 520 Tm (The visualised skeleton is unremarkable.) Tj
+/F1 12 Tf 1 0 0 1 72 480 Tm (IMPRESSION) Tj
+/F1 11 Tf 1 0 0 1 72 460 Tm (No acute cardiopulmonary abnormality.) Tj
+/F1 10 Tf 1 0 0 1 72 400 Tm (Reported by: Dr. Example Radiologist) Tj
+/F1 10 Tf 1 0 0 1 72 384 Tm (This is sample data. It does not describe a real person.) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 407 >>
+stream
+BT
+/F1 18 Tf 1 0 0 1 72 760 Tm (RADIOLOGY REPORT - page 2) Tj
+/F1 11 Tf 1 0 0 1 72 730 Tm (A second page is included so that the page count detection can be) Tj
+/F1 11 Tf 1 0 0 1 72 712 Tm (demonstrated end to end.) Tj
+/F1 11 Tf 1 0 0 1 72 672 Tm (Comparison: none available.) Tj
+/F1 11 Tf 1 0 0 1 72 654 Tm (Technique: standard departmental protocol.) Tj
+/F1 10 Tf 1 0 0 1 72 614 Tm (End of report.) Tj
+ET
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000127 00000 n 
+0000000224 00000 n 
+0000000350 00000 n 
+0000001499 00000 n 
+0000001625 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R /Info << /Title (Example Radiology Report) /Producer (PDF to DICOM sample generator) >> >>
+startxref
+2082
+%%EOF

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    PdfToDicom.Core contains every piece of logic that is independent of the
+    presentation technology: configuration, validation, DICOM object creation,
+    DICOM networking, PDF inspection, logging and localization.
+
+    It deliberately targets plain net8.0 (not net8.0-windows) so that the same
+    logic can be exercised by the cross platform command line tool and by the
+    automated test suite on a developer's macOS or Linux machine.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>PdfToDicom.Core</RootNamespace>
+    <AssemblyName>PdfToDicom.Core</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Fellow Oak DICOM: the mature, widely deployed .NET DICOM toolkit. -->
+    <PackageReference Include="fo-dicom" Version="5.2.2" />
+    <!-- PdfPig: fully managed PDF parser, used for page counts and structural checks. -->
+    <PackageReference Include="PdfPig" Version="0.1.10" />
+    <!-- Serilog: structured logging with rolling file sinks. -->
+    <PackageReference Include="Serilog" Version="4.2.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\Strings\*.json" />
+  </ItemGroup>
+
+</Project>

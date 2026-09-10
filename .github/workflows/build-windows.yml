@@ -1,0 +1,196 @@
+name: Build Windows release
+
+# The product targets Windows only, in its three architectures: 32 bit, 64 bit and ARM64.
+#
+# The installer requires Inno Setup, which only runs on Windows, so the packaging job runs
+# on a Windows runner. The test job runs on Linux purely because it is faster and because
+# the DICOM interoperability check needs DCMTK, which installs cleanly there. Nothing
+# shipped to a user is produced on Linux.
+
+on:
+  push:
+    branches: [ main, 'claude/**' ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Runs first. There is no point packaging a build whose tests do not pass.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test and verify interoperability
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up the .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        # Restore generates assets for every runtime identifier declared in the project
+        # files, so the Release build below succeeds without restoring again.
+        run: dotnet restore "PDF to DICOM.sln"
+
+      - name: Build
+        # EnableWindowsTargeting lets the WPF project compile on a Linux runner.
+        run: dotnet build "PDF to DICOM.sln" -c Release --no-restore -p:EnableWindowsTargeting=true
+
+      - name: Run the unit and workflow tests
+        run: >-
+          dotnet test tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj
+          -c Release --no-build --verbosity normal
+          --logger "trx;LogFileName=test-results.trx"
+
+      - name: Validate the installer script
+        # Inno Setup only runs on Windows, so a mistake here would otherwise surface
+        # several minutes later in the packaging job as a bare line number. This static
+        # check catches the common classes of error in seconds.
+        run: python3 build/validate-installer-script.py
+
+      - name: Validate the XAML bindings
+        # WPF resolves bindings when a window loads, not when it compiles, so a broken
+        # binding is a clean build and a crash on startup. The application cannot be run
+        # on Linux, so these checks stand in for launching it.
+        run: python3 build/validate-xaml-bindings.py
+
+      - name: Parse check the PowerShell build script
+        # build.ps1 only runs on the Windows job, so a syntax or logic error in it would
+        # otherwise cost a full Windows build to discover. PowerShell is present on the
+        # Linux runner, so the script is at least parsed here first.
+        shell: pwsh
+        run: |
+          $errors = $null
+          $tokens = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'build/build.ps1'), [ref]$tokens, [ref]$errors) | Out-Null
+
+          if ($errors) {
+            $errors | ForEach-Object {
+              Write-Host "::error file=build/build.ps1,line=$($_.Extent.StartLineNumber)::$($_.Message)"
+            }
+            throw "build.ps1 has $($errors.Count) parse error(s)."
+          }
+
+          Write-Host 'build.ps1 parses cleanly.'
+
+      - name: Install DCMTK for the interoperability check
+        run: sudo apt-get update && sudo apt-get install -y dcmtk
+
+      - name: Verify interoperability against a reference DICOM archive
+        # Proves that an independent, standards conformant implementation accepts the
+        # generated object, which the unit tests cannot establish on their own.
+        run: bash build/verify-against-dcmtk.sh 11112
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/test-results.trx'
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Produces the shippable artefacts, one set per Windows architecture.
+  # ---------------------------------------------------------------------------
+  package:
+    name: Package ${{ matrix.rid }}
+    runs-on: windows-latest
+    needs: test
+
+    strategy:
+      # One architecture failing should not hide whether the others are sound.
+      fail-fast: false
+      matrix:
+        rid: [ win-x86, win-x64, win-arm64 ]
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up the .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish the self contained executables
+        run: .\build\build.ps1 -Task publish -Runtime ${{ matrix.rid }}
+        shell: pwsh
+
+      - name: Install Inno Setup
+        # Version 6.3 or later is required for the architecture identifiers the script uses.
+        run: choco install innosetup --no-progress -y
+        shell: pwsh
+
+      - name: Build the installer
+        run: .\build\build.ps1 -Task package -Runtime ${{ matrix.rid }}
+        shell: pwsh
+
+      - name: Confirm the executable is genuinely self contained
+        # A published single file build that still expects a shared runtime would fail on a
+        # clean hospital workstation, so the assumption is checked rather than trusted.
+        # A size well above forty megabytes indicates the runtime is embedded, and the file
+        # must be a valid PE image for the requested architecture.
+        run: |
+          $rid = '${{ matrix.rid }}'
+          $exe = Get-Item "artifacts\$rid\app\PdfToDicom.exe"
+          $sizeMb = [math]::Round($exe.Length / 1MB, 1)
+          Write-Host "PdfToDicom.exe ($rid) is $sizeMb MB"
+
+          if ($exe.Length -lt 40MB) {
+            throw "The executable is only $sizeMb MB, which suggests the .NET runtime was not embedded."
+          }
+
+          $bytes = [System.IO.File]::ReadAllBytes($exe.FullName)
+
+          if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+            throw 'The published file is not a valid Windows executable.'
+          }
+
+          # The COFF machine type sits immediately after the PE signature, whose offset is
+          # stored at 0x3C. Checking it proves the build really targeted this architecture
+          # rather than silently falling back to the runner's own.
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+          $machine  = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+
+          $expected = @{ 'win-x86' = 0x014C; 'win-x64' = 0x8664; 'win-arm64' = 0xAA64 }[$rid]
+
+          if ($machine -ne $expected) {
+            throw ("Expected machine type 0x{0:X4} for {1} but found 0x{2:X4}." -f $expected, $rid, $machine)
+          }
+
+          Write-Host ("The executable is self contained and targets {0} (machine 0x{1:X4})." -f $rid, $machine)
+        shell: pwsh
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: PdfToDicom-installer-${{ matrix.rid }}
+          path: artifacts/PdfToDicom-Setup-*.exe
+          if-no-files-found: error
+
+      - name: Upload the portable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: PdfToDicom-portable-${{ matrix.rid }}
+          path: artifacts/PdfToDicom-portable-${{ matrix.rid }}.zip
+          if-no-files-found: error
+
+      - name: Upload the standalone executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: PdfToDicom-exe-${{ matrix.rid }}
+          path: artifacts/${{ matrix.rid }}/app/PdfToDicom.exe
+          if-no-files-found: error

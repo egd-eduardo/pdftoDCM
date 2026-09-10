@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A headless front end over the same Core library that the desktop application uses.
+
+    It exists for three reasons:
+      1. It runs on Windows, macOS and Linux, so a developer working on a Mac can exercise
+         DICOM generation and transmission against a real PACS without a Windows machine.
+      2. It gives hospital IT a scriptable path for bulk or unattended conversion.
+      3. It is what the automated end to end verification drives.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>PdfToDicom.Cli</RootNamespace>
+    <AssemblyName>pdftodicom</AssemblyName>
+
+    <!--
+      Targets this tool can be published for. Restore generates assets for each, so a
+      subsequent build or publish for any of them succeeds without a further restore.
+      The tool also runs on the developer's own platform straight from "dotnet run".
+    -->
+    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PdfToDicom.Core\PdfToDicom.Core.csproj" />
+  </ItemGroup>
+
+</Project>
