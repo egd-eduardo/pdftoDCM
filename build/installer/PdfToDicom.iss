@@ -80,8 +80,9 @@ ArchitecturesInstallIn64BitMode={#ArchInstallIn64}
 ; Windows 10 version 1809 is the oldest supported build.
 MinVersion=10.0.17763
 
-; The licence must be accepted before installation. Acceptance is what turns the
-; licence from a notice into an agreement, which is the basis of any later enforcement.
+; The licence must be accepted before installation. It is free to use, so this is not
+; about entitlement: acceptance is what makes the clinical and no warranty terms binding
+; rather than merely displayed, and those are the terms that matter in a hospital.
 LicenseFile=..\..\LICENSE
 
 SetupIconFile=..\..\src\PdfToDicom.App\Assets\app.ico
