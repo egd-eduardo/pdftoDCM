@@ -65,6 +65,11 @@ Three routes exist, and only one of them is free:
 >
 > What it is adopted for is below, and those benefits are real.
 
+**Nothing needs to be installed.** Signing uses PowerShell's own
+`Set-AuthenticodeSignature`, which is part of Windows. `signtool.exe` from the Windows SDK
+is **not** required and is not used, so there is no multi gigabyte download to sit through
+for a feature Windows already has.
+
 Run once:
 
 ```powershell
@@ -77,8 +82,8 @@ Then on every release:
 .\build\build.ps1 -Runtime win-x64 -Sign
 ```
 
-The script finds `signtool.exe` from the Windows SDK, signs the application, the command
-line tool and the installer, timestamps each signature, and verifies the result.
+The script creates the certificate if needed, signs the application, the command line tool
+and the installer, timestamps each signature, and verifies the result.
 
 **What this buys, with the warning still present:**
 
@@ -107,28 +112,50 @@ Two routes, either of which can be adopted later without changing anything alrea
 
 #### The mechanics, for reference
 
-`sign.ps1` does all of this. It is written out here so the steps are not a black box.
+`sign.ps1` does all of this. It is written out here so the steps are not a black box, and
+so the same thing can be done by hand on a machine that does not have the repository.
 
 ```powershell
-# Once: create the certificate and export the public half for the customer's IT department
+# Once: create the certificate and export the public half
 $cert = New-SelfSignedCertificate `
     -Type CodeSigningCert `
     -Subject "CN=Eduardo Dias" `
     -CertStoreLocation Cert:\CurrentUser\My `
     -KeyUsage DigitalSignature `
+    -KeyAlgorithm RSA -KeyLength 3072 -HashAlgorithm SHA256 `
     -NotAfter (Get-Date).AddYears(5)
 
 Export-Certificate -Cert $cert -FilePath EduardoDias-CodeSigning.cer
 
-# Each release: sign both files
-$signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe"
-& $signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
-    /sha1 $cert.Thumbprint `
-    artifacts\win-x64\app\PdfToDicom.exe
+# Back it up, with its private key, somewhere safe
+Export-PfxCertificate -Cert $cert -FilePath code-signing-backup.pfx `
+    -Password (Read-Host -AsSecureString)
+
+# Each release: sign, with a timestamp
+Set-AuthenticodeSignature `
+    -FilePath artifacts\win-x64\app\PdfToDicom.exe `
+    -Certificate $cert `
+    -HashAlgorithm SHA256 `
+    -TimestampServer http://timestamp.digicert.com
+
+# Check the result
+Get-AuthenticodeSignature artifacts\win-x64\app\PdfToDicom.exe | Format-List
 ```
 
-> **Always timestamp** (`/tr`). Without it the signature dies with the certificate. With
-> it, files signed today stay valid after the certificate expires.
+Every one of those commands is built into Windows.
+
+> **Always timestamp.** Without it the signature dies with the certificate. With it, files
+> signed today stay valid after the certificate expires. `sign.ps1` tries four public
+> timestamp servers in turn, and judges success on a timestamp actually being attached
+> rather than on the command returning quietly, because signing can succeed while
+> timestamping fails.
+
+##### If you would rather use signtool
+
+`signtool.exe` from the Windows SDK does the same job and additionally supports RFC 3161
+timestamps, a more modern format than the one `Set-AuthenticodeSignature` uses. Windows
+accepts both, and for a self signed certificate the difference is immaterial. It is not
+worth installing the SDK for.
 
 #### Option B — Azure Trusted Signing. Not adopted. About 10 USD a month
 
@@ -250,6 +277,7 @@ gate before any obfuscated build ships.
 | Question | Answer |
 |---|---|
 | How many files need signing? | Two per architecture: the application and the installer. Everything else is embedded inside them |
+| What do I need to install to sign? | **Nothing.** PowerShell's `Set-AuthenticodeSignature` is part of Windows. The Windows SDK and `signtool.exe` are not required |
 | Is there a free way? | Yes, self signed, and it is the chosen route. It does **not** remove the Windows warning, since the certificate will not be deployed |
 | What does it buy then? | Tamper evidence, a consistent publisher identity, and verifiability by anyone holding the exported certificate |
 | Cheapest publicly trusted, if the warning ever must go? | Azure Trusted Signing, about 10 USD a month |

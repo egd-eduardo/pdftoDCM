@@ -3,32 +3,33 @@
     Signs the built executables with an Authenticode signature.
 
 .DESCRIPTION
-    Signs the application and, when present, the installer, using a certificate
+    Signs the application, the command line tool and the installer using a certificate
     from the current user's certificate store.
 
+    NOTHING NEEDS TO BE INSTALLED. Signing is done with PowerShell's own
+    Set-AuthenticodeSignature, which is part of Windows. signtool.exe from the Windows
+    SDK is not required and is not used.
+
     On a first run with -CreateSelfSigned it creates a self signed code signing
-    certificate, uses it, and exports the public half so it can be given to anyone
-    who wants to verify a file.
+    certificate, uses it, and exports the public half so it can be given to anyone who
+    wants to verify a file.
 
     WHAT A SELF SIGNED CERTIFICATE DOES AND DOES NOT DO
 
-    It does NOT stop Windows warning that the publisher is unrecognised. Windows
-    trusts a certificate only if it chains to a root in its trusted store, and a
-    self signed certificate does not. SmartScreen will still ask for
-    "More info", then "Run anyway", exactly as it does for an unsigned file.
+    It does NOT stop Windows warning that the publisher is unrecognised. Windows trusts a
+    certificate only if it chains to a root in its trusted store, and a self signed
+    certificate does not. SmartScreen will still ask for "More info", then "Run anyway",
+    exactly as it does for an unsigned file.
 
     What it does buy is worth having:
 
       - a consistent publisher identity across every release,
       - tamper evidence: alter one byte of a signed file and the signature breaks,
-      - verifiability: anyone holding the exported .cer can confirm a file is
-        byte for byte what was signed, which matters if a copy of unknown
-        provenance ever turns up,
+      - verifiability: anyone holding the exported .cer can confirm a file is byte for
+        byte what was signed,
       - timestamping, so signatures stay valid after the certificate expires.
 
-    To remove the warning entirely, either the certificate must be installed into
-    Trusted Publishers on each machine, or a publicly trusted certificate must be
-    bought. See docs/CodeSigning.md.
+    See docs/CodeSigning.md for what would remove the warning.
 
 .PARAMETER Runtime
     Which architecture's output to sign. Default win-x64.
@@ -42,8 +43,9 @@
 .PARAMETER Thumbprint
     Use the certificate with this thumbprint instead of searching.
 
-.PARAMETER TimestampUrl
-    RFC 3161 timestamp server. Default DigiCert's, which is free and public.
+.PARAMETER NoTimestamp
+    Sign without a timestamp. Only for when no timestamp server can be reached; the
+    signature then stops being valid when the certificate expires.
 
 .EXAMPLE
     .\build\sign.ps1 -CreateSelfSigned
@@ -61,7 +63,7 @@ param(
 
     [string]$Thumbprint,
 
-    [string]$TimestampUrl = 'http://timestamp.digicert.com'
+    [switch]$NoTimestamp
 )
 
 $ErrorActionPreference = 'Stop'
@@ -70,47 +72,36 @@ Set-StrictMode -Version Latest
 $RepoRoot  = Split-Path -Parent $PSScriptRoot
 $Artifacts = Join-Path $RepoRoot 'artifacts'
 
+# Tried in order. All are free and public. Several are listed because a signing run
+# should not fail because one company's server is having a bad afternoon.
+$TimestampServers = @(
+    'http://timestamp.digicert.com',
+    'http://timestamp.sectigo.com',
+    'http://timestamp.globalsign.com/tsa/r6advanced1',
+    'http://tsa.starfieldtech.com'
+)
+
 function Write-Step {
     param([string]$Message)
     Write-Host ''
     Write-Host "==> $Message" -ForegroundColor Cyan
 }
 
-# ---------------------------------------------------------------- signtool
+# ---------------------------------------------------------------- preconditions
 
-function Find-SignTool {
+function Assert-Windows {
     <#
-        signtool.exe ships with the Windows SDK, which is installed alongside
-        Visual Studio and separately. The newest version found wins, since older
-        ones lack the RFC 3161 timestamp switches used below.
+        The Authenticode cmdlets live in Microsoft.PowerShell.Security and exist only on
+        Windows. Saying so plainly beats a "command not found" from inside a loop.
     #>
-    $command = Get-Command signtool.exe -ErrorAction SilentlyContinue
-    if ($command) { return $command.Source }
-
-    $roots = @(
-        "${env:ProgramFiles(x86)}\Windows Kits\10\bin",
-        "$env:ProgramFiles\Windows Kits\10\bin"
-    ) | Where-Object { Test-Path $_ }
-
-    $candidates = foreach ($root in $roots) {
-        Get-ChildItem -Path $root -Filter signtool.exe -Recurse -ErrorAction SilentlyContinue |
-            Where-Object { $_.DirectoryName -match '\\(x64|x86|arm64)$' }
-    }
-
-    $chosen = $candidates | Sort-Object -Property FullName -Descending | Select-Object -First 1
-
-    if (-not $chosen) {
+    if (-not (Get-Command Set-AuthenticodeSignature -ErrorAction SilentlyContinue)) {
         throw @'
-signtool.exe was not found.
+Set-AuthenticodeSignature is not available.
 
-It ships with the Windows SDK. Install either:
-  - Visual Studio 2022 with the ".NET desktop development" workload, or
-  - the Windows SDK on its own, from
-    https://developer.microsoft.com/windows/downloads/windows-sdk/
+Code signing is a Windows feature. This script must be run on Windows, in either
+Windows PowerShell or PowerShell 7. Nothing needs to be installed beyond that.
 '@
     }
-
-    return $chosen.FullName
 }
 
 # ---------------------------------------------------------------- certificate
@@ -122,8 +113,8 @@ function Get-SigningCertificate {
         return $certificate
     }
 
-    # Any certificate in the personal store that can actually sign code, with a
-    # private key, and that has not expired.
+    # Any certificate in the personal store that can actually sign code, has a private
+    # key, and has not expired.
     $existing = Get-ChildItem Cert:\CurrentUser\My |
         Where-Object {
             $_.HasPrivateKey -and
@@ -144,16 +135,16 @@ To create a self signed one, run:
 
     .\build\sign.ps1 -CreateSelfSigned
 
-Read docs/CodeSigning.md first: a self signed certificate does not remove the
-Windows "unrecognised publisher" warning. It provides identity and tamper
-evidence, which are useful for different reasons.
+Read docs/CodeSigning.md first: a self signed certificate does not remove the Windows
+"unrecognised publisher" warning. It provides identity and tamper evidence, which are
+useful for different reasons.
 "@
     }
 
     Write-Step "Creating a self signed code signing certificate for $SubjectName"
 
-    # Five years, because reissuing is a chore and a timestamped signature stays
-    # valid after expiry anyway.
+    # Five years, because reissuing is a chore and a timestamped signature stays valid
+    # after expiry anyway.
     $certificate = New-SelfSignedCertificate `
         -Type CodeSigningCert `
         -Subject $SubjectName `
@@ -171,55 +162,88 @@ evidence, which are useful for different reasons.
 
     Write-Host "    public half exported to $publicPath"
     Write-Host ''
-    Write-Host '    Back up the certificate. Losing it means future releases are' -ForegroundColor Yellow
-    Write-Host '    signed by a different identity, which looks like a different' -ForegroundColor Yellow
-    Write-Host '    publisher. To export it with its private key:' -ForegroundColor Yellow
+    Write-Host '    BACK THIS UP. Losing the certificate means future releases are' -ForegroundColor Yellow
+    Write-Host '    signed by a different identity, which to anyone checking looks' -ForegroundColor Yellow
+    Write-Host '    like a different publisher. To export it with its private key:' -ForegroundColor Yellow
     Write-Host ''
     Write-Host "        Export-PfxCertificate -Cert Cert:\CurrentUser\My\$($certificate.Thumbprint) ``" -ForegroundColor Yellow
     Write-Host '            -FilePath code-signing-backup.pfx -Password (Read-Host -AsSecureString)' -ForegroundColor Yellow
     Write-Host ''
-    Write-Host '    Never commit the .pfx. The repository ignores *.pfx already.' -ForegroundColor Yellow
+    Write-Host '    Never commit the .pfx. The repository ignores *.pfx and *.cer already.' -ForegroundColor Yellow
 
     return $certificate
 }
 
 # ---------------------------------------------------------------- signing
 
-function Invoke-Sign {
+function Invoke-SignFile {
     param(
-        [string]$SignTool,
-        [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
-        [string[]]$Files
+        [string]$Path,
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate
     )
 
-    foreach ($file in $Files) {
-        Write-Host "    signing $(Split-Path -Leaf $file)"
+    $name = Split-Path -Leaf $Path
 
-        # /fd and /td both SHA256: SHA-1 signatures are no longer accepted.
-        # /tr timestamps, so the signature outlives the certificate.
-        & $SignTool sign `
-            /sha1 $Certificate.Thumbprint `
-            /fd SHA256 `
-            /tr $TimestampUrl `
-            /td SHA256 `
-            /d 'PDF to DICOM' `
-            $file
+    if ($NoTimestamp) {
+        Write-Host "    signing $name (no timestamp)"
 
-        if ($LASTEXITCODE -ne 0) {
-            throw "Signing '$file' failed. If the timestamp server was unreachable, try again."
+        return Set-AuthenticodeSignature `
+            -FilePath $Path `
+            -Certificate $Certificate `
+            -HashAlgorithm SHA256
+    }
+
+    # A timestamp is what lets a signature outlive the certificate, so it is worth
+    # trying every server before giving up on it.
+    #
+    # Success is judged on TimeStamperCertificate being populated, not on the call
+    # returning without error. Set-AuthenticodeSignature can sign a file successfully and
+    # still fail to timestamp it, which would otherwise be mistaken for a good result and
+    # produce a signature that quietly dies with the certificate.
+    foreach ($server in $TimestampServers) {
+        try {
+            $result = Set-AuthenticodeSignature `
+                -FilePath $Path `
+                -Certificate $Certificate `
+                -HashAlgorithm SHA256 `
+                -TimestampServer $server `
+                -ErrorAction Stop
+
+            if ($result.TimeStamperCertificate) {
+                Write-Host "    signing $name (timestamped by $server)"
+                return $result
+            }
+
+            Write-Host "    $server signed but did not timestamp, trying the next one" -ForegroundColor DarkGray
+        }
+        catch {
+            Write-Host "    $server could not be reached, trying the next one" -ForegroundColor DarkGray
         }
     }
+
+    throw @"
+No timestamp server could be reached, so '$name' was not signed.
+
+Check the internet connection and run this again. A timestamp is what keeps a signature
+valid after the certificate expires, so it is worth getting.
+
+To sign without one anyway, understanding that the signature will stop being valid when
+the certificate expires:
+
+    .\build\sign.ps1 -Runtime $Runtime -NoTimestamp
+"@
 }
 
 # ---------------------------------------------------------------- main
 
-$signTool = Find-SignTool
-Write-Host "    using $signTool"
+Assert-Windows
 
 $certificate = Get-SigningCertificate
 Write-Host "    signing as $($certificate.Subject), expires $($certificate.NotAfter.ToString('yyyy-MM-dd'))"
 
-# The application, and the installer when one has been built.
+# The application and the command line tool for this architecture, plus any installer
+# that has been built. Everything else is embedded inside these, so there is nothing
+# further to sign.
 $targets = @(
     (Join-Path $Artifacts "$Runtime\app\PdfToDicom.exe"),
     (Join-Path $Artifacts "$Runtime\cli\pdftodicom.exe")
@@ -228,7 +252,7 @@ $targets = @(
 $installers = Get-ChildItem $Artifacts -Filter 'PdfToDicom-Setup*.exe' -ErrorAction SilentlyContinue |
     Select-Object -ExpandProperty FullName
 
-$targets += $installers
+if ($installers) { $targets += $installers }
 
 if (-not $targets) {
     throw @"
@@ -239,42 +263,58 @@ Nothing to sign. Build first:
 }
 
 Write-Step "Signing $($targets.Count) file(s)"
-Invoke-Sign -SignTool $signTool -Certificate $certificate -Files $targets
+
+foreach ($target in $targets) {
+    $result = Invoke-SignFile -Path $target -Certificate $certificate
+
+    # A self signed certificate that is not in the trusted store reports UnknownError.
+    # The signature itself is intact; Windows simply does not trust the issuer. That is
+    # the documented trade-off for this configuration, so it is not a failure.
+    if ($result.Status -notin @('Valid', 'UnknownError')) {
+        throw "Signing '$(Split-Path -Leaf $target)' failed: $($result.Status) - $($result.StatusMessage)"
+    }
+}
 
 # ---------------------------------------------------------------- verify
 
 Write-Step 'Verifying the signatures'
 
-foreach ($file in $targets) {
-    $signature = Get-AuthenticodeSignature -FilePath $file
-    $name = Split-Path -Leaf $file
+foreach ($target in $targets) {
+    $signature = Get-AuthenticodeSignature -FilePath $target
+    $name = Split-Path -Leaf $target
 
-    # "UnknownError" is the expected status for a self signed certificate that is
-    # not in the trusted store. The signature itself is intact; Windows simply
-    # does not trust the issuer. That is the documented trade-off, so it is
-    # reported as a note rather than a failure.
+    $timestamp = if ($signature.TimeStamperCertificate) { 'timestamped' } else { 'not timestamped' }
+
     switch ($signature.Status) {
         'Valid' {
-            Write-Host "    [OK]   $name  signed and trusted by this machine" -ForegroundColor Green
+            Write-Host "    [OK]   $name  signed and trusted by this machine, $timestamp" -ForegroundColor Green
         }
         'UnknownError' {
-            Write-Host "    [OK]   $name  signed; issuer not trusted by this machine" -ForegroundColor Yellow
+            Write-Host "    [OK]   $name  signed, $timestamp; issuer not trusted by this machine" -ForegroundColor Yellow
+        }
+        'NotSigned' {
+            Write-Host "    [FAIL] $name  carries no signature" -ForegroundColor Red
+            throw "'$name' was not signed."
         }
         default {
             Write-Host "    [FAIL] $name  $($signature.Status)" -ForegroundColor Red
-            throw "The signature on '$name' did not verify."
+            throw "The signature on '$name' did not verify: $($signature.StatusMessage)"
         }
     }
 }
 
 Write-Step 'Done'
 Write-Host ''
-Write-Host '  Every file is signed and timestamped.'
+Write-Host '  Every file is signed.'
 Write-Host ''
-Write-Host '  Windows will still warn that the publisher is unrecognised, because a'
-Write-Host '  self signed certificate is not trusted by default. That is expected.'
-Write-Host '  The signature proves the file is unmodified and identifies you as its'
-Write-Host '  author to anyone who checks its properties.'
+Write-Host '  Windows will still warn that the publisher is unrecognised, because a self'
+Write-Host '  signed certificate is not trusted by default. That is expected and was the'
+Write-Host '  choice made. The signature proves the file is unmodified and identifies you'
+Write-Host '  as its author to anyone who checks its properties.'
+Write-Host ''
+Write-Host '  To check a file by hand:'
+Write-Host ''
+Write-Host '      Get-AuthenticodeSignature .\PdfToDicom.exe | Format-List'
 Write-Host ''
 Write-Host '  See docs/CodeSigning.md for what would remove the warning.'
 Write-Host ''

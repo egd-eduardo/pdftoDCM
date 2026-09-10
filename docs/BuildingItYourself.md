@@ -90,14 +90,69 @@ locally.
 
 Nothing hidden, and nothing that touches your system outside this folder:
 
-1. Checks the .NET SDK is installed and reports its version.
+1. Checks that PowerShell and the .NET SDK are present, and reports the SDK version.
 2. Detects whether this computer is x64, ARM64 or 32 bit, and targets that.
-3. Downloads the libraries the project uses, once, into your user profile.
-4. **Runs all 107 tests and refuses to build if any fails.** A build that fails its tests is
-   not one you want to hand to a hospital.
-5. Publishes the self contained executable into `artifacts\<architecture>\app\`.
+3. Reports whether Python and Inno Setup are present. **Neither is required**; without
+   them the XAML checks and the installer are skipped, and it says so up front rather
+   than leaving you to notice at the end.
+4. Runs `build\build.ps1`, which restores, builds, validates, tests, publishes, assembles
+   the handover package and builds the installer.
+5. **Refuses to continue if any of the 107 tests fails.** A build that fails its tests is
+   not one to hand to a hospital.
+6. Offers to sign the files if a code signing certificate exists, and tells you how to
+   create one if not.
+7. Offers to open the finished folder.
+
+The build itself lives in `build.ps1` rather than being duplicated in the batch file, so
+the two cannot drift apart. `BUILD.bat` is the front door: prerequisites, plain language
+and guidance when something is wrong.
 
 It does not modify the source, install anything system wide, or need administrator rights.
+
+---
+
+## What you get
+
+Two things appear under `artifacts\`:
+
+```
+artifacts\
+  PdfToDicom-1.5.0-win-x64\        <- the folder to hand over
+  PdfToDicom-1.5.0-win-x64.zip     <- the same, ready to email
+```
+
+The folder contains everything a site needs and nothing it should not have:
+
+```
+  READ ME FIRST.txt          What to do, in plain language.
+  PdfToDicom.exe             The application.
+  pdftodicom.exe             Command line version.
+  LICENCE.txt                The terms.
+  THIRD-PARTY-NOTICES.txt    Licences of the components used.
+
+  Documentation\
+    User Manual (English)
+    Manual do Utilizador (Portugues)
+    DICOM Conformance Statement (for your PACS administrator)
+    Technical Documentation (for IT)
+    Changelog
+
+  Samples\
+    config.sample.json
+    example-report.pdf
+```
+
+Two points about that list are deliberate.
+
+**The third party notices are not optional.** PdfPig is MIT licensed and Serilog is Apache
+2.0, and both require their notice to accompany any redistribution. Leaving the file out
+would put you in breach of them.
+
+**Three documents are excluded on purpose**: the ones on building it yourself, code signing
+and protecting against unauthorised distribution. They are written for you, not for a
+customer, and the last one discusses the customer. The package copies a named list rather
+than the whole `docs` folder, so a new document has to be considered rather than shipped by
+accident.
 
 ---
 
