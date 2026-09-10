@@ -1,0 +1,29 @@
+# ---------------------------------------------------------------------------
+# Line endings for the files where they matter.
+#
+# Deliberately narrow. A blanket "* text=auto" would renormalise the whole
+# repository on the next checkout, producing a large and confusing diff to fix
+# a problem that affects a handful of files.
+# ---------------------------------------------------------------------------
+
+# Windows script files need CRLF. A batch file with Unix line endings can
+# misbehave on Windows in ways that are hard to diagnose: `goto` can fail to
+# find a label and multi line `if` blocks can break, with no message saying
+# why. These files are authored on Linux, so the rule is stated rather than
+# left to chance.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Compiled by Inno Setup, which is Windows only.
+*.iss  text eol=crlf
+
+# Shell scripts must keep LF even on a Windows checkout, or bash refuses to
+# run them.
+*.sh   text eol=lf
+
+# Never convert these.
+*.exe  binary
+*.dcm  binary
+*.pdf  binary
+*.ico  binary
