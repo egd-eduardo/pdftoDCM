@@ -77,8 +77,10 @@ public sealed class UidGeneratorTests
         }
     }
 
+    // An empty root is deliberately absent from this list: it no longer means "not
+    // configured", it means "use the publisher's registered root", which is covered by
+    // TheRegisteredRootIsUsedWhenNoRootIsSupplied below.
     [Theory]
-    [InlineData("")]
     [InlineData("not-a-uid")]
     [InlineData("1.2.03")]
     public void AnUnusableRegisteredRootIsRejectedAtConstruction(string root) =>
@@ -90,6 +92,100 @@ public sealed class UidGeneratorTests
         string longRoot = "1." + string.Join('.', Enumerable.Repeat("12345", 8));
 
         Assert.Throws<ArgumentException>(() => new UidGenerator(UidGenerationStrategy.RegisteredRoot, longRoot));
+    }
+
+    // ----------------------------------------------------------------- registered root
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void TheRegisteredRootIsUsedWhenNoRootIsSupplied(string? supplied)
+    {
+        var generator = new UidGenerator(UidGenerationStrategy.RegisteredRoot, supplied);
+
+        Assert.StartsWith(
+            UidGenerator.RegisteredUidRoot + ".",
+            generator.NewStudyInstanceUid(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AConfiguredRootIsIgnoredInFavourOfTheRegisteredOne()
+    {
+        // The registered root identifies the publisher, not the site, so a value left in
+        // an older configuration file must not be able to move UIDs onto someone else's
+        // arc. The settings dialog no longer offers the field; this proves the value
+        // behind it is inert rather than merely hidden.
+        var configuration = new AppConfiguration
+        {
+            UidStrategy = UidGenerationStrategy.RegisteredRoot,
+            OrganizationUidRoot = "1.2.826.0.1.3680043.10.999"
+        };
+
+        string uid = UidGenerator.FromConfiguration(configuration).NewSopInstanceUid();
+
+        Assert.StartsWith(UidGenerator.RegisteredUidRoot + ".", uid, StringComparison.Ordinal);
+        Assert.DoesNotContain("3680043.10.999", uid, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheRegisteredRootIsAValidUidThatLeavesRoomForASuffix()
+    {
+        // Guards the constant itself. It is the one input to the generator that no test
+        // can supply, so a typo in it would otherwise surface as a malformed identifier
+        // inside a hospital rather than here.
+        Assert.True(
+            DicomValueRules.IsValidUid(UidGenerator.RegisteredUidRoot, out string error),
+            $"The registered UID root is not a valid UID. {error}");
+
+        var generator = new UidGenerator(UidGenerationStrategy.RegisteredRoot);
+
+        foreach (string uid in new[]
+        {
+            generator.NewStudyInstanceUid(),
+            generator.NewSeriesInstanceUid(),
+            generator.NewSopInstanceUid()
+        })
+        {
+            Assert.True(uid.Length <= DicomValueRules.MaxUidLength,
+                $"'{uid}' is {uid.Length} characters, over the {DicomValueRules.MaxUidLength} character limit.");
+            Assert.True(DicomValueRules.IsValidUid(uid, out string uidError), uidError);
+        }
+    }
+
+    [Fact]
+    public void UidsBeneathTheRegisteredRootDoNotDuplicate()
+    {
+        // The registration carries an undertaking that UIDs beneath the prefix cannot be
+        // duplicated, so the undertaking is tested rather than asserted in prose. The loop
+        // is tight enough that a large share of these share a millisecond, which leaves
+        // the random component doing the work.
+        var generator = new UidGenerator(UidGenerationStrategy.RegisteredRoot);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        for (int i = 0; i < 20_000; i++)
+        {
+            Assert.True(seen.Add(generator.NewSopInstanceUid()),
+                "Two identical UIDs were produced beneath the registered root.");
+        }
+    }
+
+    [Fact]
+    public void TheMaskedRootRevealsNeitherAssignedArc()
+    {
+        // The mask is not a secrecy mechanism, since every object carries the real root.
+        // What it must do is not print the assigned arcs on screen, so that is what is
+        // checked: the issuer's public arc stays legible and the rest does not.
+        string[] arcs = UidGenerator.RegisteredUidRoot.Split('.');
+        string assigned = string.Join('.', arcs[^2..]);
+
+        Assert.DoesNotContain(assigned, UidGenerator.RegisteredUidRootForDisplay, StringComparison.Ordinal);
+        Assert.StartsWith(
+            string.Join('.', arcs[..^2]),
+            UidGenerator.RegisteredUidRootForDisplay,
+            StringComparison.Ordinal);
+        Assert.Contains('*', UidGenerator.RegisteredUidRootForDisplay);
     }
 }
 

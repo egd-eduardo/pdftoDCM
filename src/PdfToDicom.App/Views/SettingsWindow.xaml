@@ -191,11 +191,16 @@
                                   Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,14" />
 
                         <TextBlock Text="{loc:Localize Settings.OrganizationUidRoot}" Style="{StaticResource FieldLabelTextStyle}" />
-                        <TextBox Text="{Binding Working.OrganizationUidRoot, UpdateSourceTrigger=PropertyChanged}"
+                        <!-- Disabled rather than merely read only. It greys the field, which is
+                             what a fixed value should look like, and a disabled TextBox cannot be
+                             focused, so the text cannot be selected and copied either. -->
+                        <TextBox Text="{Binding RegisteredUidRootForDisplay, Mode=OneWay}"
                                  Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,4"
-                                 ToolTip="Only used when the registered root strategy is selected." />
+                                 IsEnabled="False"
+                                 ToolTipService.ShowOnDisabled="True"
+                                 ToolTip="{loc:Localize Settings.OrganizationUidRoot.ToolTip}" />
                         <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,14"
-                                   Text="Leave the strategy on the UUID option unless your organisation owns a registered UID root." />
+                                   Text="{loc:Localize Settings.OrganizationUidRoot.Caption}" />
 
                         <TextBlock Text="{loc:Localize Settings.Modality}" Style="{StaticResource FieldLabelTextStyle}" />
                         <ComboBox ItemsSource="{Binding ModalityOptions}"

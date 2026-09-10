@@ -2,7 +2,32 @@
 
 ## 1.5.5
 
-**Two packaging faults, both of which only appeared on Windows.**
+### A registered UID root
+
+The software now owns a UID root registered with Medical Connections Ltd,
+`1.2.826.0.1.3680043.9.6008`, and the "Registered UID root" field in Settings is filled in
+from it rather than left for a site to complete.
+
+- **The field is fixed and disabled.** A registered root identifies its registrant, so it
+  is not a site's to set: a hospital generating identifiers beneath it would be claiming an
+  arc it does not own. Anything left in `OrganizationUidRoot` by an earlier version is read
+  and discarded rather than obeyed.
+- **It is shown partly masked**, as `1.2.826.0.1.3680043.*.****`, and the field is disabled
+  rather than merely read only, so the text cannot be selected and copied either. This
+  stops the prefix being taken off a screen. It is **not** secrecy: every DICOM object the
+  software produces carries UIDs built from the root, so anyone holding one can read it,
+  and it is present in the executable.
+- **The uniqueness undertaking is tested, not asserted.** The registration requires that
+  UIDs beneath the prefix cannot be duplicated. The random component of each identifier is
+  widened from twelve digits to fifteen, a thousand million million values within any one
+  millisecond, and a new test generates 20,000 identifiers in a tight loop where most share
+  a timestamp, so uniqueness rests entirely on that component. A generated UID is 62
+  characters, two inside the 64 character limit.
+- **The choice of strategy is unchanged.** UUID derived (`2.25.`) remains the default and
+  is unique by construction. Select the registered root if your archive prefers identifiers
+  under a registered arc.
+
+### Two packaging faults, both of which only appeared on Windows
 
 - **The handover folder and the installer lost the desktop application.** The two
   executables are named `PdfToDicom.exe` and `pdftodicom.exe`, which differ only in case.
@@ -29,8 +54,18 @@
   name; the second catches it as Linux shows it, two names that cannot coexist. Both
   checks are in `build.ps1` and `build.sh`.
 
-Nothing in the application itself changed. The conversion, validation and transmission
-behaviour, and all 107 tests, are as in 1.5.0.
+### Also
+
+- **The XAML validator now checks localization keys.** A mistyped `{loc:Localize}` key does
+  not throw; the localizer returns the key, so the label renders as
+  `Settings.OrganizationUidRoot.Caption` on a clinical workstation. Nothing caught that
+  before a user was looking at it. All 114 keys in the interface are now checked against
+  the English string table on every build.
+
+### Not changed
+
+The conversion, validation and transmission behaviour is as in 1.5.0. 113 tests pass, six
+more than 1.5.0, all six covering the registered root.
 
 ## 1.5.0
 

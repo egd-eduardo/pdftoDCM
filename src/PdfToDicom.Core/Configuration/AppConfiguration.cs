@@ -90,9 +90,14 @@ public sealed class AppConfiguration
     public UidGenerationStrategy UidStrategy { get; set; } = UidGenerationStrategy.UuidDerived;
 
     /// <summary>
-    /// Organisation UID root used when <see cref="UidStrategy"/> is
-    /// <see cref="UidGenerationStrategy.RegisteredRoot"/>. Must be a valid UID prefix.
+    /// Obsolete and ignored. The registered UID root is fixed in the software.
     /// </summary>
+    /// <remarks>
+    /// Retained only so that a configuration file written by an earlier version still
+    /// deserialises without error. Whatever it holds has no effect: the registered root
+    /// identifies the publisher rather than the site, so it is not a site's to set. See
+    /// <c>UidGenerator.RegisteredUidRoot</c>.
+    /// </remarks>
     public string OrganizationUidRoot { get; set; } = string.Empty;
 
     /// <summary>

@@ -368,10 +368,24 @@ is **rejected with an explanation** rather than being silently corrupted.
 | Strategy | Form | Notes |
 |---|---|---|
 | UUID derived (default) | `2.25.<128 bit UUID as decimal>` | Per PS3.5 Annex B.2. No registration required |
-| Registered root | `<root>.<n>.<yyyyMMddHHmmssfff>.<random>` | Root limited to 31 characters so UIDs stay within 64 |
+| Registered root | `1.2.826.0.1.3680043.9.6008.<n>.<yyyyMMddHHmmssfff>.<random>` | 62 characters. `<n>` is 1 for Study, 2 for Series, 3 for SOP Instance |
+
+The registered root `1.2.826.0.1.3680043.9.6008` is issued by Medical Connections Ltd to
+the author of this software. It is fixed in the software and cannot be configured by a
+site, since a registered root identifies its registrant.
+
+**Uniqueness policy.** The registrant undertakes that UIDs beneath the prefix cannot be
+duplicated. The suffix combines UTC time to the millisecond with fifteen digits of
+cryptographically generated randomness, so identifiers created in the same millisecond on
+different workstations remain distinct. No range beneath the prefix is delegated to any
+site, and no site can be configured to issue under it.
 
 Every generated UID is verified conformant before use. Identifiers are never reused: 20,000
 consecutive identifiers per strategy are asserted distinct in the automated test suite.
+
+**Which to choose.** The UUID derived form is the default and is unique by construction.
+Select the registered root if your archive prefers, or requires, identifiers under a
+registered arc. Both are conformant; neither needs anything configured at the site.
 
 ---
 

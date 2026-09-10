@@ -5,6 +5,7 @@ using Microsoft.Win32;
 using PdfToDicom.App.Infrastructure;
 using PdfToDicom.Core.Abstractions;
 using PdfToDicom.Core.Configuration;
+using PdfToDicom.Core.Dicom;
 using PdfToDicom.Core.Models;
 using PdfToDicom.Core.Services;
 using PdfToDicom.Core.Validation;
@@ -74,6 +75,16 @@ public sealed class SettingsViewModel : ObservableObject
     };
 
     /// <summary>UID strategy options.</summary>
+    /// <summary>
+    /// The publisher's registered UID root as it is shown in the dialog: partly masked,
+    /// and read only because it is fixed in the software.
+    /// </summary>
+    /// <remarks>
+    /// The masking discourages the prefix being copied off a screen. It does not make it
+    /// secret: every DICOM object the application produces carries UIDs built from it.
+    /// </remarks>
+    public string RegisteredUidRootForDisplay => UidGenerator.RegisteredUidRootForDisplay;
+
     public IReadOnlyList<EnumOption<UidGenerationStrategy>> UidStrategies { get; } = new[]
     {
         new EnumOption<UidGenerationStrategy>(UidGenerationStrategy.UuidDerived, "Settings.UidStrategy.Uuid"),
@@ -214,18 +225,6 @@ public sealed class SettingsViewModel : ObservableObject
         {
             MessageBox.Show(
                 string.Join(Environment.NewLine, blocking.Select(e => "• " + e.Message)),
-                _services.Localizer.Get("Validation.Title"),
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-
-            return false;
-        }
-
-        if (Working.UidStrategy == UidGenerationStrategy.RegisteredRoot &&
-            !DicomValueRules.IsValidUid(Working.OrganizationUidRoot, out string rootError))
-        {
-            MessageBox.Show(
-                $"{_services.Localizer.Get("Settings.OrganizationUidRoot")}: {rootError}",
                 _services.Localizer.Get("Validation.Title"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
