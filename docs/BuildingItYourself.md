@@ -95,6 +95,10 @@ Nothing hidden, and nothing that touches your system outside this folder:
 3. Reports whether Python and Inno Setup are present. **Neither is required**; without
    them the XAML checks and the installer are skipped, and it says so up front rather
    than leaving you to notice at the end.
+
+   Python is checked by asking it for its version, not by looking for the name. Windows
+   ships stub files that answer to `python` and `python3` but only advertise the Microsoft
+   Store, and anything that merely checks the name is fooled by them.
 4. Runs `build\build.ps1`, which restores, builds, validates, tests, publishes, assembles
    the handover package and builds the installer.
 5. **Refuses to continue if any of the 107 tests fails.** A build that fails its tests is
@@ -157,6 +161,19 @@ accident.
 ---
 
 ## If something goes wrong
+
+**"Python was not found; run without arguments to install from the Microsoft Store"** —
+Windows ships stub files called `python.exe` and `python3.exe` that exist only to advertise
+the Store. They sit on the PATH and look like Python to anything that merely checks whether
+the name resolves.
+
+**This is not a problem and does not stop the build.** Python is optional: it runs the XAML
+binding check, which CI runs on every push anyway. The build skips it and carries on.
+
+If you want the check locally, install Python from
+[python.org/downloads](https://www.python.org/downloads/) and tick **"Add python.exe to
+PATH"** during setup. To silence the stubs instead, go to **Settings → Apps → Advanced app
+settings → App execution aliases** and turn off the two Python entries.
 
 **"The .NET SDK was not found"** — step 1 was skipped, or the installer needs a restart of
 the command window. Close everything and try again.

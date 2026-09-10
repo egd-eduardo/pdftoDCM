@@ -57,17 +57,22 @@ echo   Architecture  %PROCESSOR_ARCHITECTURE%  -^>  !RID!
 REM ------------------------------------------------------------ Optional bits
 REM Neither is required. Saying which are present avoids surprise at the end
 REM when the installer or the binding check is quietly absent.
+REM Asked to report its version rather than merely looked for. Windows ships App
+REM execution aliases for python.exe and python3.exe: stubs that are found on the
+REM PATH but only print a message about the Microsoft Store and exit non zero.
+REM Checking presence alone reports Python as available and then the build fails.
 set HAVEPY=no
-where python3 >nul 2>&1 && set HAVEPY=yes
-if "!HAVEPY!"=="no" (
-    where python >nul 2>&1 && set HAVEPY=yes
+for %%p in (python3.exe python.exe py.exe) do (
+    if "!HAVEPY!"=="no" (
+        %%p --version >nul 2>&1 && set HAVEPY=yes
+    )
 )
 
 set HAVEINNO=no
 if exist "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" set HAVEINNO=yes
 if exist "%ProgramFiles%\Inno Setup 6\ISCC.exe" set HAVEINNO=yes
 
-if "!HAVEPY!"=="yes"   (echo   Python        found, so the XAML checks will run) else (echo   Python        not found, so the XAML checks will be skipped)
+if "!HAVEPY!"=="yes"   (echo   Python        found, so the XAML checks will run) else (echo   Python        not available, so the XAML checks are skipped. Optional)
 if "!HAVEINNO!"=="yes" (echo   Inno Setup    found, so an installer will be built) else (echo   Inno Setup    not found, so no installer will be built)
 
 echo.
@@ -173,13 +178,16 @@ exit /b 1
 echo.
 echo   The build did not finish. The messages above say why.
 echo.
-echo   Two common causes:
+echo   Common causes:
 echo.
 echo     - No internet connection on the first run, because the libraries
 echo       have to be downloaded once.
 echo     - A test failed, which means something is wrong with the code
 echo       rather than with this computer. Nothing was produced, and it is
 echo       safe to try again.
+echo.
+echo   Python not being installed is NOT a cause. It is optional, and the
+echo   build skips the XAML checks and carries on without it.
 echo.
 pause
 exit /b 1
