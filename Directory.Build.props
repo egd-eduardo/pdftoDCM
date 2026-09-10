@@ -22,9 +22,9 @@
     <Company>Eduardo Dias</Company>
     <Authors>Eduardo Dias</Authors>
     <Copyright>Copyright (c) 2026 Eduardo Dias. All rights reserved.</Copyright>
-    <Version>2.0.0</Version>
-    <AssemblyVersion>2.0.0.0</AssemblyVersion>
-    <FileVersion>2.0.0.0</FileVersion>
+    <Version>2.0.1</Version>
+    <AssemblyVersion>2.0.1.0</AssemblyVersion>
+    <FileVersion>2.0.1.0</FileVersion>
     <NeutralLanguage>en-US</NeutralLanguage>
   </PropertyGroup>
 
