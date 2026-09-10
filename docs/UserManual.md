@@ -1,6 +1,6 @@
 # PDF to DICOM — User Manual
 
-**Version 1.0 · For hospital staff**
+**Version 1.1 · For hospital staff**
 
 This application takes a PDF document produced by another system, turns it into a DICOM
 Encapsulated PDF object, and sends it to your PACS so that the document appears in the
@@ -280,7 +280,7 @@ Click **Settings** in the header. Most of these are set once by your IT departme
 | **DICOM** | Character set, identifier generation, modality, default descriptions. Leave these alone unless your PACS administrator asks. |
 | **Folders** | Where files and logs are kept, and folder monitoring. |
 | **Appearance** | Language, dark mode, and whether to confirm before sending. |
-| **Licence** | The licence code for this site. **This tab only appears if your copy requires a licence.** If you cannot see it, nothing is licensed and there is nothing to do. |
+| **Licence** | The licence code for this site. Your IT department enters this once. If the code is missing or has expired, the application still converts and saves documents but will not send them to the PACS. |
 
 Two settings are worth knowing about as a user:
 
@@ -292,8 +292,8 @@ Two settings are worth knowing about as a user:
 
 ### If you see a licence message
 
-Some copies of this application require a licence code. If yours does and there is a
-problem with it, a coloured band appears under the title bar explaining what is wrong.
+If there is a problem with the licence for this site, a coloured band appears under the
+title bar explaining what is wrong.
 
 **You can still work.** You can still choose a document, enter the patient information,
 and generate and save the DICOM file. Only sending to the PACS is affected.

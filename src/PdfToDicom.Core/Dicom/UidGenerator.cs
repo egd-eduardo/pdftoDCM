@@ -37,7 +37,7 @@ public sealed class UidGenerator : IUidGenerator
     /// Implementation Version Name. The standard limits this to 16 characters, so the
     /// value is kept deliberately short.
     /// </summary>
-    public const string DefaultImplementationVersionName = "PDFTODICOM_1_0";
+    public const string DefaultImplementationVersionName = "PDFTODICOM_1_1";
 
     /// <summary>
     /// Exclusive upper bound of the random component of a registered root UID. Twelve

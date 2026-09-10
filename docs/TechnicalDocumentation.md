@@ -1,6 +1,6 @@
 # PDF to DICOM — Technical Documentation
 
-**Version 1.0 · For developers, PACS administrators and hospital IT**
+**Version 1.1 · For developers, PACS administrators and hospital IT**
 
 ---
 
@@ -622,7 +622,7 @@ signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
     /f certificate.pfx /p $password artifacts\win-x64\app\PdfToDicom.exe
 .\build\build.ps1 -Task package -Runtime win-x64
 signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
-    /f certificate.pfx /p $password artifacts\PdfToDicom-Setup-1.0.0-x64.exe
+    /f certificate.pfx /p $password artifacts\PdfToDicom-Setup-1.1.0-x64.exe
 ```
 
 ---
