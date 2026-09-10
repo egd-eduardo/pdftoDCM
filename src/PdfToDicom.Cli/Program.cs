@@ -404,7 +404,7 @@ static bool IsInputField(string field) =>
 
 /// <summary>The product version reported in the audit trail.</summary>
 static string ProductVersion() =>
-    typeof(CommandLineOptions).Assembly.GetName().Version?.ToString(3) ?? "1.1.0";
+    typeof(CommandLineOptions).Assembly.GetName().Version?.ToString(3) ?? "1.5.0";
 
 /// <summary>Exit codes returned to the shell.</summary>
 static class ExitCodes

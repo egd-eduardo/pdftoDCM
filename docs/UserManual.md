@@ -1,6 +1,6 @@
 # PDF to DICOM — User Manual
 
-**Version 1.1 · For hospital staff**
+**Version 1.5 · For hospital staff**
 
 This application takes a PDF document produced by another system, turns it into a DICOM
 Encapsulated PDF object, and sends it to your PACS so that the document appears in the

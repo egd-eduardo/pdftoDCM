@@ -14,6 +14,10 @@
     Target architecture: win-x86, win-x64 (default) or win-arm64. Windows on ARM can run
     the x64 build under emulation, but a native arm64 build avoids that layer entirely.
 
+.PARAMETER Sign
+    Sign the published executables and the installer after building. Requires a code
+    signing certificate; see build/sign.ps1 and docs/CodeSigning.md.
+
 .PARAMETER Task
     all      restore, build, test, publish and package (default)
     test     run the test suite only
@@ -25,6 +29,7 @@
     .\build\build.ps1
     .\build\build.ps1 -Task test
     .\build\build.ps1 -Runtime win-arm64
+    .\build\build.ps1 -Sign
 #>
 
 [CmdletBinding()]
@@ -35,7 +40,9 @@ param(
     [string]$Configuration = 'Release',
 
     [ValidateSet('win-x86', 'win-x64', 'win-arm64')]
-    [string]$Runtime = 'win-x64'
+    [string]$Runtime = 'win-x64',
+
+    [switch]$Sign
 )
 
 $ErrorActionPreference = 'Stop'
@@ -243,14 +250,23 @@ The self contained executable in artifacts\<rid>\app is fully functional without
         ForEach-Object { Write-Host "    installer: $($_.FullName)" }
 }
 
+function Invoke-Sign {
+    Write-Step 'Signing'
+
+    # Delegated rather than inlined, so signing can also be run on its own against
+    # an existing build without repeating it.
+    & (Join-Path $PSScriptRoot 'sign.ps1') -Runtime $Runtime
+    if ($LASTEXITCODE -ne 0) { throw 'Signing failed.' }
+}
+
 Assert-Sdk
 
 switch ($Task) {
     'clean'   { Invoke-Clean }
     'test'    { Invoke-Restore; Invoke-Build; Invoke-Validate; Invoke-Test }
-    'publish' { Invoke-Restore; Invoke-Publish }
-    'package' { Invoke-Package }
-    'all'     { Invoke-Restore; Invoke-Build; Invoke-Validate; Invoke-Test; Invoke-Publish; Invoke-Package }
+    'publish' { Invoke-Restore; Invoke-Publish; if ($Sign) { Invoke-Sign } }
+    'package' { Invoke-Package; if ($Sign) { Invoke-Sign } }
+    'all'     { Invoke-Restore; Invoke-Build; Invoke-Validate; Invoke-Test; Invoke-Publish; Invoke-Package; if ($Sign) { Invoke-Sign } }
 }
 
 Write-Step 'Done'

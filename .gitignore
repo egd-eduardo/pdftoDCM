@@ -26,15 +26,17 @@ scratch/
 /tmp-verify/
 
 # ---------------------------------------------------------------------------
-# Licence signing material. NEVER commit any of this.
+# Signing material. NEVER commit any of this.
 #
-# The private key is the entire basis of the licensing system: anyone holding
-# it can issue licences the application will accept, and losing it means every
-# licence ever issued has to be reissued under a new key. Keep it in a password
+# A code signing certificate's private key identifies you as the publisher.
+# Anyone holding it can sign software in your name. Keep it in a password
 # manager or an offline backup, never in source control.
 # ---------------------------------------------------------------------------
 *.key
-licence-private.key
-license-private.key
 *.pfx
 *.snk
+
+# Exported code signing certificates. The public half (.cer) is safe to share
+# but is generated per machine, so it is not tracked either.
+*.cer
+code-signing-backup.pfx

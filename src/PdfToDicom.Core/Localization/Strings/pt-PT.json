@@ -162,5 +162,7 @@
   "Error.Unexpected": "Ocorreu um erro inesperado. Os detalhes foram escritos no registo.",
 
   "About.Version": "Versão {0}",
+  "About.Copyright": "Copyright (c) 2026 Eduardo Dias",
+  "About.Licence": "Utilização gratuita, comercial e privada. Não é um dispositivo médico; fornecido sem garantia. Consulte o ficheiro LICENSE para os termos completos.",
   "About.Offline": "Esta aplicação funciona totalmente offline. A única atividade de rede é a transmissão DICOM para os destinos configurados."
 }

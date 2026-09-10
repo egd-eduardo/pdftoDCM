@@ -1,6 +1,6 @@
 # PDF para DICOM — Manual do Utilizador
 
-**Versão 1.1 · Para profissionais hospitalares**
+**Versão 1.5 · Para profissionais hospitalares**
 
 Esta aplicação recebe um documento PDF produzido por outro sistema, converte-o num objeto
 DICOM de PDF Encapsulado e envia-o para o PACS, de forma a que o documento passe a fazer

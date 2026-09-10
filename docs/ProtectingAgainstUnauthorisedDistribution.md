@@ -1,6 +1,18 @@
 # Protecting PDF to DICOM Against Unauthorised Distribution
 
-**For the copyright holder · Version 1.1**
+**For the copyright holder · Version 1.5**
+
+> **Largely superseded as of version 1.5.0.** The software is now **free to use,
+> commercially and privately**, so there is no revenue for unauthorised use to divert and
+> little left to protect against.
+>
+> What the licence still reserves is **redistribution outside your own organisation,
+> modification, rebranding and charging for it**. Those are matters for the licence
+> agreement and for knowing who has a copy, not for technical enforcement.
+>
+> The document is kept because the reasoning is still sound, and because a decision to
+> charge for a future version would bring all of it back into play. Read it in that light:
+> as a record of what was considered and what it was worth, not as a plan in progress.
 
 ---
 

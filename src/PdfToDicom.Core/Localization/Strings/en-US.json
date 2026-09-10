@@ -162,5 +162,7 @@
   "Error.Unexpected": "An unexpected error occurred. The details have been written to the log.",
 
   "About.Version": "Version {0}",
+  "About.Copyright": "Copyright (c) 2026 Eduardo Dias",
+  "About.Licence": "Free to use, commercially and privately. Not a medical device; supplied without warranty. See the LICENSE file for the full terms.",
   "About.Offline": "This application works entirely offline. The only network activity is the DICOM transmission to the configured destinations."
 }

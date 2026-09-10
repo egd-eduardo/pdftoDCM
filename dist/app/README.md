@@ -1,4 +1,4 @@
-# PDF to DICOM 1.1 — ready to run
+# PDF to DICOM 1.5 — ready to run
 
 These are the application itself, built for each Windows architecture. Nothing needs to be
 installed: no .NET, no Java, no Python, no Visual C++ runtime, and no administrator rights,
@@ -54,7 +54,7 @@ to the runner's own architecture. To confirm one by hand in PowerShell:
 (Get-Item .\PdfToDicom-win-x64.exe).VersionInfo.FileVersion
 ```
 
-That should report `1.1.0.0`.
+That should report `1.5.0.0`.
 
 ---
 
