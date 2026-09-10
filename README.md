@@ -22,6 +22,7 @@ buttons, and error messages written in plain language.
 | **SOP class produced** | Encapsulated PDF Storage `1.2.840.10008.5.1.4.1.1.104.1` |
 | **Languages** | English, Portuguese (Portugal) |
 | **Author** | Eduardo Dias |
+| **Licence** | Free to use, commercially and privately. Not open source; copyright retained |
 | **Verified against** | DCMTK, end to end, by an automated script in this repository |
 
 ---
@@ -146,7 +147,8 @@ application and the CLI provably identical in behaviour.
 | [Code Signing and Tamper Resistance](docs/CodeSigning.md) | The copyright holder |
 | [Protecting Against Unauthorised Distribution](docs/ProtectingAgainstUnauthorisedDistribution.md) | The copyright holder |
 | [`samples/config.sample.json`](samples/config.sample.json) | Annotated configuration reference |
-| [`LICENSE`](LICENSE) | Proprietary licence terms |
+| [`LICENSE`](LICENSE) | Licence terms. Free to use, commercial and private |
+| [`CHANGELOG.md`](CHANGELOG.md) | What changed in each version |
 | [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) | Third party component licences |
 
 ---
@@ -210,25 +212,40 @@ Stated openly; the full list is in the
 
 ## Distribution protection
 
-**There is no licence key mechanism.** One was built and then removed at the copyright
-holder's request; nothing in the application checks entitlement, and nothing withholds any
-feature. What protects the software today is the licence agreement, the repository being
-private, and controlling who receives a build.
+**There is no licence key mechanism.** One was built and then removed; nothing in the
+application checks entitlement, and nothing withholds any feature. From 1.5.0 the software
+is free to use commercially and privately, so there is nothing to enforce.
 
-Two measures worth taking before wider distribution are set out in
-**[Code Signing and Tamper Resistance](docs/CodeSigning.md)**: an Authenticode signature,
-which stops Windows telling every hospital that the publisher is unknown, and obfuscation,
-which raises the cost of decompiling a .NET assembly. Neither is free of trade-offs and
-both are described honestly there.
+What remains is the licence agreement, which reserves redistribution and modification, and
+the repository being private.
+
+Builds are **signed with a self signed certificate** (`build\sign.ps1`, or
+`build.ps1 -Sign`). This gives tamper evidence and a consistent publisher identity. It does
+**not** remove the Windows "unrecognised publisher" warning, because the certificate is not
+deployed to client machines; that is a deliberate trade-off. Obfuscation is not used, and
+[Code Signing and Tamper Resistance](docs/CodeSigning.md) explains why, along with what it
+would cost if that changes.
 
 ---
 
 ## Licence
 
-**Proprietary. Copyright (c) 2026 Eduardo Dias. All rights reserved.**
+**Free to use, commercially and privately. Copyright (c) 2026 Eduardo Dias.**
 
-This software is licensed, not sold. No right to use, copy or distribute it is granted
-except under a separate written agreement. See [`LICENSE`](LICENSE).
+From version 1.5.0 there is no licence key, no activation, no expiry and no seat count. No
+payment is due and no agreement need be signed to install and use it, on any number of
+workstations and at any number of sites.
+
+Copyright is retained, so **free to use is not the same as open source.** Redistributing it
+outside your own organisation, modifying it, rebranding it or charging for it still need
+permission, which is generally given on request. The purpose of that is knowing where it is
+running, not restricting who may run it.
+
+The clinical and no-warranty terms are deliberately strong: supplying software free of
+charge into a hospital increases the need for them. It is not a medical device, it has not
+been assessed under EU MDR, and no support is promised.
+
+See [`LICENSE`](LICENSE) for the terms and [`CHANGELOG.md`](CHANGELOG.md) for what changed.
 
 ---
 

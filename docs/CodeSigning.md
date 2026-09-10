@@ -4,13 +4,16 @@
 
 Two separate questions are answered here, because they are often confused:
 
-- **Code signing** proves the file came from you and has not been altered. It is what stops
-  Windows telling every hospital that the publisher is unknown. It does **not** hide how
-  the software works.
+- **Code signing** proves the file came from you and has not been altered. It does **not**
+  hide how the software works. Whether it also silences the Windows "unrecognised
+  publisher" warning depends on *which* certificate you use, which is the substance of
+  Part 1.
 - **Tamper resistance** raises the cost of decompiling and modifying the software. It does
   **not** prove who wrote it.
 
-You want the first before you distribute anything. The second is a judgement call.
+**Both decisions have been taken.** Signing is done with a self signed certificate, which
+means the Windows warning remains; the reasoning and what is gained regardless are in Part
+1. Obfuscation is not adopted; Part 2 explains why, and what it would cost if that changes.
 
 ---
 
@@ -50,19 +53,61 @@ one for years.
 
 Three routes exist, and only one of them is free:
 
-#### Option A — Self signed certificate. Free, and genuinely useful inside one hospital
+#### Option A — Self signed certificate. **This is the chosen route.** Free
 
-You create the certificate yourself. Windows will not trust it **until the certificate is
-installed into the Trusted Publishers store on each machine**, which a hospital IT
-department can do in seconds across the estate by Group Policy.
+> **Decision, recorded here so it is not relitigated:** a self signed certificate is
+> considered sufficient, and the certificate will **not** be deployed by Group Policy.
+>
+> That combination has a specific consequence worth being clear about: **the Windows
+> "unrecognised publisher" warning will remain.** Every hospital will still see
+> SmartScreen, and will still need **More info → Run anyway**. Signing was not adopted to
+> remove that warning.
+>
+> What it is adopted for is below, and those benefits are real.
 
-- **Cost:** nothing.
-- **Good for:** deployment inside an organisation whose IT department cooperates. Once the
-  certificate is trusted, SmartScreen is silent and the file is verifiably yours.
-- **No good for:** handing a file to someone who will not, or cannot, install your
-  certificate. To them it is no better than unsigned.
-- **Real advantage even so:** it proves integrity. A recipient can confirm the file is
-  byte for byte what you signed.
+Run once:
+
+```powershell
+.\build\sign.ps1 -CreateSelfSigned
+```
+
+Then on every release:
+
+```powershell
+.\build\build.ps1 -Runtime win-x64 -Sign
+```
+
+The script finds `signtool.exe` from the Windows SDK, signs the application, the command
+line tool and the installer, timestamps each signature, and verifies the result.
+
+**What this buys, with the warning still present:**
+
+- **Tamper evidence.** Alter one byte of a signed file and the signature breaks. If a copy
+  of uncertain provenance ever turns up, you can tell whether it is yours.
+- **A consistent publisher identity.** Right click, Properties, Digital Signatures shows
+  your name on every release. An IT department that looks will find something coherent
+  rather than nothing at all.
+- **Verifiability by anyone who cares.** Hand over the exported `.cer` and a recipient can
+  confirm a file is exactly what you signed.
+- **A signature that outlives the certificate**, because every signature is timestamped.
+
+**What it does not buy:**
+
+- It does not remove the SmartScreen warning, on any machine, unless that machine trusts
+  the certificate.
+- It does not make the software harder to copy, modify or decompile.
+
+#### If the warning ever needs to go
+
+Two routes, either of which can be adopted later without changing anything already signed:
+
+- Have a hospital's IT department import the `.cer` into **Trusted Publishers**. Seconds by
+  Group Policy, and the warning disappears on that estate.
+- Move to Azure Trusted Signing, below, and the warning disappears everywhere.
+
+#### The mechanics, for reference
+
+`sign.ps1` does all of this. It is written out here so the steps are not a black box.
 
 ```powershell
 # Once: create the certificate and export the public half for the customer's IT department
@@ -82,13 +127,10 @@ $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtoo
     artifacts\win-x64\app\PdfToDicom.exe
 ```
 
-The customer's IT department imports the `.cer` into **Trusted Publishers** by Group
-Policy, and the warnings stop.
-
 > **Always timestamp** (`/tr`). Without it the signature dies with the certificate. With
 > it, files signed today stay valid after the certificate expires.
 
-#### Option B — Azure Trusted Signing. Cheapest real certificate, about 10 USD a month
+#### Option B — Azure Trusted Signing. Not adopted. About 10 USD a month
 
 Microsoft's own service. It is the best value route to a **publicly trusted** signature
 and avoids the hardware token that traditional certificates now require.
@@ -99,9 +141,10 @@ and avoids the hardware token that traditional certificates now require.
 - **Result:** no SmartScreen warning anywhere, no certificate to install, no token to
   keep in a drawer.
 
-This is what I would choose in your position.
+Worth revisiting the day a hospital refuses a file because of the warning. Nothing about
+adopting it later invalidates anything signed self signed today.
 
-#### Option C — Traditional OV or EV certificate. 200 to 600 EUR a year
+#### Option C — Traditional OV or EV certificate. Not adopted. 200 to 600 EUR a year
 
 From Sectigo, DigiCert, GlobalSign and others.
 
@@ -118,15 +161,16 @@ It does not stop anyone reading your code, and it does not stop them modifying i
 modified copy simply loses your signature, or carries theirs. Signing proves provenance;
 it is not a lock.
 
-### Recommendation
+### Where this stands
 
-1. **Now, free:** self sign, and hand the `.cer` to each hospital's IT department with the
-   installer. This removes the warning wherever anyone cooperates, and proves integrity
-   everywhere.
-2. **Before selling more widely:** Azure Trusted Signing, at roughly 10 USD a month.
+**Self signed, not deployed, warning accepted.** `build/sign.ps1` implements it and
+`build.ps1 -Sign` runs it as part of a release, so signing is a flag rather than a
+remembered ritual.
 
-I can add a `build/sign.ps1` that signs both files as part of the release, and wire it into
-`build.ps1` so signing is one flag rather than a remembered ritual. Say the word.
+**Back up the certificate.** Losing it means future releases carry a different identity,
+which to anyone checking looks like a different publisher. The script prints the command to
+export it with its private key; the repository ignores `*.pfx` and `*.cer` so neither can
+be committed by accident.
 
 ---
 
@@ -206,7 +250,8 @@ gate before any obfuscated build ships.
 | Question | Answer |
 |---|---|
 | How many files need signing? | Two per architecture: the application and the installer. Everything else is embedded inside them |
-| Is there a free way? | Self signed, free, and effective wherever IT will deploy your certificate. Not publicly trusted |
-| Cheapest publicly trusted? | Azure Trusted Signing, about 10 USD a month |
+| Is there a free way? | Yes, self signed, and it is the chosen route. It does **not** remove the Windows warning, since the certificate will not be deployed |
+| What does it buy then? | Tamper evidence, a consistent publisher identity, and verifiability by anyone holding the exported certificate |
+| Cheapest publicly trusted, if the warning ever must go? | Azure Trusted Signing, about 10 USD a month |
 | Can reverse engineering be prevented? | No. .NET decompiles cleanly, and NativeAOT, which would help most, does not support WPF |
 | Should we obfuscate? | Not yet. The risk to WPF bindings is real and the benefit is unclear until there is a threat to point at |

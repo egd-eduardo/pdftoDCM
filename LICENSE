@@ -1,38 +1,52 @@
 PDF to DICOM
 Copyright (c) 2026 Eduardo Dias. All rights reserved.
 
-PROPRIETARY SOFTWARE LICENCE
+SOFTWARE LICENCE — FREE OF CHARGE FOR COMMERCIAL AND PRIVATE USE
 
-This software and its source code, documentation and accompanying materials
-(together, "the Software") are the confidential and proprietary property of
-Eduardo Dias ("the Licensor"). The Software is licensed, not sold.
+This software and its documentation and accompanying materials (together, "the
+Software") are the property of Eduardo Dias ("the Licensor"). The Software is
+licensed, not sold.
+
+From version 1.5.0 the Software is supplied FREE OF CHARGE. There is no licence
+key, no activation, no expiry, no seat count and no feature is withheld. No
+payment is due and no separate agreement need be signed to use it.
 
 1. GRANT OF LICENCE
 
-   No right to use, copy, modify, merge, publish, distribute, sublicense or
-   sell the Software is granted except under a separate written licence
-   agreement signed by the Licensor. Possession of a copy of the Software,
-   however obtained, confers no such right.
+   The Licensor grants you a worldwide, royalty free, non exclusive and
+   perpetual right to install and use the Software for any purpose, whether
+   commercial or private, on any number of workstations and at any number of
+   sites.
 
-   Where a written licence agreement exists, the rights granted are limited to
-   those it states expressly, for the number of installations, sites or
-   workstations it names, and for the period it specifies.
+   You may make copies of the Software for backup and internal deployment
+   within your own organisation.
 
-2. RESTRICTIONS
+   This grant costs nothing and requires nothing of you beyond the terms below.
 
-   Except to the extent that the following cannot lawfully be restricted, you
-   must not:
+2. WHAT IS NOT GRANTED
 
-   a) copy or install the Software on more workstations, or at more sites, than
-      your licence permits;
-   b) distribute, publish, lend, rent, lease, sell or otherwise transfer the
-      Software or any copy of it to any third party;
+   Copyright in the Software is retained by the Licensor. The Software is free
+   to use; it is not placed in the public domain and it is not open source.
+
+   Except to the extent that the following cannot lawfully be restricted, and
+   except with the prior written permission of the Licensor, you must not:
+
+   a) distribute, publish, lend, rent, lease, sell or otherwise transfer the
+      Software, or any copy of it, to any third party outside your own
+      organisation;
+   b) modify, adapt, translate or create derivative works from the Software;
    c) reverse engineer, decompile or disassemble the Software, or attempt to
-      derive its source code;
-   d) remove, obscure or alter any copyright notice, licence notice, digital
-      signature, or licence enforcement mechanism within the Software;
-   e) use the Software to provide a bureau, hosting or managed service to a
-      third party.
+      derive its source code, except to the extent such acts cannot lawfully
+      be prohibited;
+   d) remove, obscure or alter any copyright notice, licence notice or digital
+      signature within the Software, or redistribute it under another name or
+      brand;
+   e) charge any third party for the Software, or supply it as part of a
+      product or service for which a charge is made, without permission.
+
+   Permission for any of the above is generally given on request. The purpose
+   of this clause is that the Licensor knows where the Software is in use, not
+   that its use is restricted.
 
 3. OWNERSHIP
 
@@ -50,38 +64,68 @@ Eduardo Dias ("the Licensor"). The Software is licensed, not sold.
      PdfPig    - MIT Licence
      Serilog   - Apache Licence 2.0
 
-   Their licence texts are reproduced in THIRD-PARTY-NOTICES.md.
+   Their licence texts are reproduced in THIRD-PARTY-NOTICES.md. Nothing in
+   this licence restricts any right those licences grant you in respect of
+   those components.
 
 5. CLINICAL USE AND MEDICAL DEVICE STATUS
 
    THE SOFTWARE IS A DOCUMENT CONVERSION AND TRANSMISSION UTILITY. IT IS NOT
    CERTIFIED AS A MEDICAL DEVICE UNDER REGULATION (EU) 2017/745, UNDER THE
    UNITED STATES FEDERAL FOOD, DRUG, AND COSMETIC ACT, OR UNDER ANY EQUIVALENT
-   REGIME. IT IS NOT INTENDED FOR DIAGNOSIS, AND NO CLINICAL DECISION SHOULD BE
-   BASED UPON IT.
+   REGIME. IT HAS NOT BEEN ASSESSED BY ANY NOTIFIED BODY OR REGULATOR. IT IS
+   NOT INTENDED FOR DIAGNOSIS, AND NO CLINICAL DECISION SHOULD BE BASED UPON
+   IT.
+
+   THAT THE SOFTWARE IS SUPPLIED FREE OF CHARGE DOES NOT DIMINISH THIS. IT
+   INCREASES IT: NO FEE HAS BEEN PAID, NO SUPPORT IS PROMISED, NO VALIDATION
+   HAS BEEN PERFORMED ON YOUR BEHALF, AND NO ASSURANCE OF FITNESS FOR YOUR
+   ENVIRONMENT IS GIVEN OR IMPLIED.
+
+   The Software must not be relied upon as the sole record of any clinical
+   document. Retain the original wherever your record keeping obligations
+   require it.
 
    The operator is responsible for confirming that the patient information
-   entered corresponds to the document being converted. The licensee is
-   responsible for validating the Software within its own clinical environment
-   before use, and for its own information governance, data protection and
-   record keeping obligations.
+   entered corresponds to the document being converted. Filing a document
+   against the wrong patient is a clinical risk that no software can eliminate
+   and that this Software does not attempt to.
+
+   You are responsible for validating the Software within your own clinical
+   environment before use, for commissioning it with your PACS administrator,
+   and for your own information governance, data protection and record keeping
+   obligations.
 
 6. NO WARRANTY
 
-   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-   FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+   THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY
+   KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, ACCURACY AND
+   NON-INFRINGEMENT.
+
+   NO UNDERTAKING IS GIVEN THAT THE SOFTWARE WILL BE FREE FROM DEFECTS, THAT IT
+   WILL OPERATE WITHOUT INTERRUPTION, THAT ANY DEFECT WILL BE CORRECTED, OR
+   THAT IT IS COMPATIBLE WITH ANY PARTICULAR ARCHIVE, SYSTEM OR CONFIGURATION.
+
+   NO SUPPORT, MAINTENANCE, UPDATE OR CORRECTION IS PROMISED. ANY THAT IS
+   PROVIDED IS PROVIDED VOLUNTARILY AND MAY CEASE AT ANY TIME.
 
 7. LIMITATION OF LIABILITY
 
-   TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE LICENSOR SHALL NOT BE LIABLE FOR
-   ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR
-   OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR ITS
-   USE.
+   TO THE MAXIMUM EXTENT PERMITTED BY LAW, AND IN PARTICULAR BECAUSE THE
+   SOFTWARE IS SUPPLIED FREE OF CHARGE, THE LICENSOR SHALL NOT BE LIABLE FOR
+   ANY CLAIM, DAMAGES, LOSS OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT
+   (INCLUDING NEGLIGENCE) OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+   WITH THE SOFTWARE, ITS USE, ITS INABILITY TO BE USED, OR ANY DOCUMENT IT
+   PRODUCES OR TRANSMITS.
+
+   THIS INCLUDES, WITHOUT LIMITATION, LOSS OF DATA, LOSS OF OR CORRUPTION OF
+   ANY CLINICAL RECORD, DOCUMENTS FILED AGAINST AN INCORRECT PATIENT, LOSS OF
+   PROFIT, LOSS OF BUSINESS, AND ANY INDIRECT OR CONSEQUENTIAL LOSS.
 
    Nothing in this licence excludes or limits liability for death or personal
-   injury caused by negligence, for fraud, or for any other liability that
-   cannot lawfully be excluded.
+   injury caused by negligence, for fraud or fraudulent misrepresentation, or
+   for any other liability that cannot lawfully be excluded or limited.
 
 8. TERMINATION
 
@@ -89,9 +133,22 @@ Eduardo Dias ("the Licensor"). The Software is licensed, not sold.
    its terms. On termination you must cease all use of the Software and destroy
    every copy in your possession or control.
 
+   The Licensor may cease to publish or supply the Software at any time. Doing
+   so does not terminate the rights granted to you in respect of a copy you
+   already hold.
+
 9. GOVERNING LAW
 
    This licence is governed by the laws of Portugal, and the courts of Portugal
    have exclusive jurisdiction over any dispute arising from it.
 
-For licensing enquiries, contact the Licensor.
+   If any provision is held unenforceable, the remainder continues in force.
+
+10. VERSIONS BEFORE 1.5.0
+
+   Versions of the Software before 1.5.0 were issued under a proprietary
+   licence granting no right of use without a separate written agreement. The
+   grant in clause 1 applies to version 1.5.0 and later. It is offered, but not
+   required, for earlier versions; upgrading is the simpler course.
+
+For enquiries, including permission to redistribute, contact the Licensor.

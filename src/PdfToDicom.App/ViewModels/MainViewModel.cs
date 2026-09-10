@@ -967,7 +967,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         MessageBox.Show(
             $"{Localize("App.Title")}{Environment.NewLine}" +
-            $"{_services.Localizer.Format("About.Version", App.ProductVersion)}{Environment.NewLine}{Environment.NewLine}" +
+            $"{_services.Localizer.Format("About.Version", App.ProductVersion)}{Environment.NewLine}" +
+            $"{Localize("About.Copyright")}{Environment.NewLine}{Environment.NewLine}" +
+            $"{Localize("About.Licence")}{Environment.NewLine}{Environment.NewLine}" +
             $"{Localize("About.Offline")}{Environment.NewLine}{Environment.NewLine}" +
             $"{Localize("Settings.LogFolder")}: {_services.Logger.LogFolder}{Environment.NewLine}" +
             $"{Localize("Settings.OutputFolder")}: {_services.ConfigurationService.Current.OutputFolder}",
