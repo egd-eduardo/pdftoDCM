@@ -150,22 +150,168 @@ function Invoke-Publish {
     $size = [math]::Round((Get-Item $exe).Length / 1MB, 1)
     Write-Host "    produced PdfToDicom.exe ($size MB)"
 
-    Write-Step 'Assembling the portable package'
+}
 
-    $portable = Join-Path $Artifacts "portable-$Runtime"
-    if (Test-Path $portable) { Remove-Item $portable -Recurse -Force }
-    New-Item -ItemType Directory -Path $portable | Out-Null
+<#
+    Assembles the folder that is actually handed to a site: the executable together with
+    the documents that should travel with it.
 
-    Copy-Item $exe $portable
-    Copy-Item (Join-Path $Artifacts "$Runtime\cli\pdftodicom.exe") $portable -ErrorAction SilentlyContinue
-    Copy-Item (Join-Path $RepoRoot 'samples\config.sample.json') $portable
-    Copy-Item (Join-Path $RepoRoot 'samples\example-report.pdf') $portable
-    Copy-Item (Join-Path $RepoRoot 'docs') (Join-Path $portable 'docs') -Recurse
+    The document list is deliberately explicit rather than copying the docs folder
+    wholesale. Two of those documents, on protecting against unauthorised distribution and
+    on code signing, are written for the copyright holder and discuss the customer. Sending
+    them to a hospital would be at best odd. An explicit list also means a new document has
+    to be considered rather than shipped by accident.
+#>
+function Invoke-Assemble {
+    Write-Step 'Assembling the package to hand over'
 
-    Compress-Archive -Path "$portable\*" `
-        -DestinationPath (Join-Path $Artifacts "PdfToDicom-portable-$Runtime.zip") -Force
+    $ApplicationPath = Join-Path $Artifacts "$Runtime\app\PdfToDicom.exe"
 
-    Write-Host "    portable package: $(Join-Path $Artifacts "PdfToDicom-portable-$Runtime.zip")"
+    if (-not (Test-Path $ApplicationPath)) {
+        throw "Nothing to package. Publish first: .\build\build.ps1 -Task publish -Runtime $Runtime"
+    }
+
+    $version = (Select-Xml -Path (Join-Path $RepoRoot 'Directory.Build.props') `
+        -XPath '/Project/PropertyGroup/Version').Node.InnerText
+
+    $package = Join-Path $Artifacts "PdfToDicom-$version-$Runtime"
+    if (Test-Path $package) { Remove-Item $package -Recurse -Force }
+
+    $documents = Join-Path $package 'Documentation'
+    $samples   = Join-Path $package 'Samples'
+
+    New-Item -ItemType Directory -Path $package, $documents, $samples -Force | Out-Null
+
+    # ---------------------------------------------------------------- the software
+    Copy-Item $ApplicationPath $package
+
+    $cli = Join-Path $Artifacts "$Runtime\cli\pdftodicom.exe"
+    if (Test-Path $cli) { Copy-Item $cli $package }
+
+    # ---------------------------------------------------------------- legal
+    # LICENCE and the third party notices are not optional courtesies. The MIT and Apache
+    # 2.0 licences covering PdfPig and Serilog both require their notice to accompany any
+    # redistribution, so omitting them would put the recipient, and us, in breach.
+    Copy-Item (Join-Path $RepoRoot 'LICENSE')                  (Join-Path $package 'LICENCE.txt')
+    Copy-Item (Join-Path $RepoRoot 'THIRD-PARTY-NOTICES.md')   (Join-Path $package 'THIRD-PARTY-NOTICES.txt')
+    Copy-Item (Join-Path $RepoRoot 'CHANGELOG.md')             (Join-Path $documents 'Changelog.md')
+
+    # ---------------------------------------------------------------- documentation
+    $shipped = @{
+        'UserManual.md'                = 'User Manual (English).md'
+        'ManualDoUtilizador.pt-PT.md'  = 'Manual do Utilizador (Portugues).md'
+        'DicomConformanceStatement.md' = 'DICOM Conformance Statement (for your PACS administrator).md'
+        'TechnicalDocumentation.md'    = 'Technical Documentation (for IT).md'
+    }
+
+    foreach ($source in $shipped.Keys) {
+        $from = Join-Path $RepoRoot "docs\$source"
+
+        if (Test-Path $from) {
+            Copy-Item $from (Join-Path $documents $shipped[$source])
+        }
+        else {
+            Write-Warning "The document '$source' was not found and is missing from the package."
+        }
+    }
+
+    # ---------------------------------------------------------------- samples
+    Copy-Item (Join-Path $RepoRoot 'samples\config.sample.json') $samples
+    Copy-Item (Join-Path $RepoRoot 'samples\example-report.pdf') $samples
+
+    # ---------------------------------------------------------------- start here
+    New-StartHereFile -Path (Join-Path $package 'READ ME FIRST.txt') -Version $version
+
+    # ---------------------------------------------------------------- archive
+    $zip = Join-Path $Artifacts "PdfToDicom-$version-$Runtime.zip"
+    Compress-Archive -Path "$package\*" -DestinationPath $zip -Force
+
+    $fileCount = (Get-ChildItem $package -Recurse -File).Count
+
+    Write-Host "    folder : $package"
+    Write-Host "    zip    : $zip"
+    Write-Host "    $fileCount file(s): the application, the licence and third party"
+    Write-Host "    notices, four documents and two samples"
+}
+
+<#
+    Writes the note a recipient sees first. Plain text, because it must open in Notepad on
+    a machine with nothing installed.
+#>
+function New-StartHereFile {
+    param([string]$Path, [string]$Version)
+
+    $content = @"
+PDF to DICOM $Version
+Copyright (c) 2026 Eduardo Dias
+
+Converts a PDF document into a DICOM Encapsulated PDF object and sends it to a
+PACS, so a report from another system becomes part of the patient's imaging
+record.
+
+
+TO RUN IT
+---------
+
+Double click PdfToDicom.exe. There is no installer and nothing needs to be
+installed first: no .NET, no Java, no Visual C++ runtime, and no administrator
+rights.
+
+Windows will warn that the publisher is unrecognised. Choose "More info", then
+"Run anyway". The file is digitally signed, but with a certificate Windows does
+not recognise by default.
+
+
+BEFORE THE FIRST REAL DOCUMENT
+------------------------------
+
+1. Your PACS administrator must register this workstation on the PACS. The
+   details they need are in Documentation, DICOM Conformance Statement.
+
+2. Open Settings and fill in the Institution and Destinations tabs.
+
+3. Use "Test connection" on the destination and confirm it succeeds.
+
+4. Convert the sample in Samples with "Generate only" and check the result
+   before sending anything belonging to a patient.
+
+
+WHAT IS IN THIS FOLDER
+----------------------
+
+  PdfToDicom.exe           The application.
+  pdftodicom.exe           Command line version, for scripted conversion.
+  LICENCE.txt              The terms. Free to use, commercial and private.
+  THIRD-PARTY-NOTICES.txt  Licences of the components used.
+
+  Documentation    User Manual (English)                    For the people using it daily.
+    Manual do Utilizador (Portugues)         The same, in Portuguese.
+    DICOM Conformance Statement              For your PACS administrator.
+    Technical Documentation                  For IT.
+    Changelog                                What changed in each version.
+
+  Samples    config.sample.json       Annotated settings reference.
+    example-report.pdf       A document to test with.
+
+
+IMPORTANT
+---------
+
+This is NOT a medical device. It has not been assessed under Regulation
+(EU) 2017/745 or any equivalent regime, and no clinical decision should be
+based on it. It is supplied free of charge, as is, without warranty and
+without any promise of support.
+
+The operator is responsible for confirming that the patient details entered
+match the document being converted. Filing a document against the wrong
+patient is a risk no software can remove.
+
+Read LICENCE.txt before use.
+"@
+
+    # ASCII, and CRLF, so the file opens correctly in Notepad on any Windows.
+    $content = $content -replace "`r?`n", "`r`n"
+    [System.IO.File]::WriteAllText($Path, $content, [System.Text.Encoding]::ASCII)
 }
 
 function Invoke-Package {
@@ -264,9 +410,37 @@ Assert-Sdk
 switch ($Task) {
     'clean'   { Invoke-Clean }
     'test'    { Invoke-Restore; Invoke-Build; Invoke-Validate; Invoke-Test }
-    'publish' { Invoke-Restore; Invoke-Publish; if ($Sign) { Invoke-Sign } }
-    'package' { Invoke-Package; if ($Sign) { Invoke-Sign } }
-    'all'     { Invoke-Restore; Invoke-Build; Invoke-Validate; Invoke-Test; Invoke-Publish; Invoke-Package; if ($Sign) { Invoke-Sign } }
+    'publish' {
+        Invoke-Restore
+        Invoke-Publish
+        if ($Sign) { Invoke-Sign }
+        Invoke-Assemble
+    }
+    'package' {
+        if ($Sign) { Invoke-Sign }
+        Invoke-Assemble
+        Invoke-Package
+        if ($Sign) { Invoke-Sign }
+    }
+    'all' {
+        Invoke-Restore
+        Invoke-Build
+        Invoke-Validate
+        Invoke-Test
+        Invoke-Publish
+
+        # Signing has to happen here, between publishing and packaging, not at the end.
+        # The package and the installer both take copies of the executable, so signing
+        # afterwards would sign the original and leave every copy that is actually handed
+        # out unsigned.
+        if ($Sign) { Invoke-Sign }
+
+        Invoke-Assemble
+        Invoke-Package
+
+        # Again, because the installer did not exist the first time round.
+        if ($Sign) { Invoke-Sign }
+    }
 }
 
 Write-Step 'Done'
