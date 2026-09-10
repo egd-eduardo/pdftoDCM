@@ -9,25 +9,26 @@ which explains where this fits and what it is and is not worth.
 
 ---
 
-## The one thing to understand first
+## Current state: switched ON, as of version 1.1
 
-**Licensing is switched off in the repository, and stays off until you deliberately switch
-it on.**
+`LicenceService.PublisherPublicKey` carries the publisher key. **Every build from 1.1
+onward requires a valid licence code before it will transmit to a PACS.**
 
-`LicenceService.PublisherPublicKey` is an empty string. While it is empty:
+Two automated tests guard this: one asserts the constant is not empty and that the build
+reports itself as enforcing, the other that the key genuinely imports as a P-256 public
+key. That second test matters more than it looks. A corrupted key does not raise; by
+design it degrades to "not enforced" and logs, so that our own packaging mistake never
+stops a hospital transmitting. The cost of that safety property is that a broken key would
+silently ship a build enforcing nothing. The test is what notices.
 
-- the Licence tab in Settings says plainly that codes are not checked in this build;
-- a code entered there is **saved and described, but never verified**;
-- the licence notice on the main window **never appears**;
-- the workflow **withholds nothing**, ever;
-- every licence code, valid or nonsense, is ignored for the purpose of any decision.
+**Switching it off again is one edit.** Set the constant back to an empty string and
+rebuild: the whole subsystem goes inert, the Licence tab says codes are not checked, and
+the workflow withholds nothing. That path is still fully tested, so it is a safe thing to
+do in a hurry if licensing ever needs withdrawing.
 
-An automated test asserts that the constant is still empty, so it cannot be switched on by
-an accidental commit. A build produced from this repository today behaves exactly as the
-build that shipped before licensing existed.
-
-You switch it on by pasting your own public key into that constant and rebuilding. Nothing
-else changes.
+> **Anyone running a version 1.0 build is unaffected.** Codes are checked only by builds
+> that carry the key. Upgrading someone to 1.1 without giving them a code will stop them
+> transmitting, so issue the code first.
 
 ---
 
@@ -69,6 +70,8 @@ Do this once and never again.
 
 ## 2. Switch licensing on
 
+**Already done for the current key.** This section is kept for the day you rotate.
+
 Paste the printed line into `src/PdfToDicom.Core/Licensing/LicenceService.cs`:
 
 ```csharp
@@ -79,7 +82,9 @@ Rebuild. From this build onward, the application requires a licence code before 
 transmit to a PACS.
 
 **Every build you ship must carry the same public key**, or codes issued for one build will
-be rejected by another.
+be rejected by another. **Rotating the key invalidates every licence already issued**, so
+reissue them all in the same sitting, and remember that anyone still running the previous
+build keeps working on their old code.
 
 ---
 

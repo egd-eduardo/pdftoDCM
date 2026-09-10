@@ -1,7 +1,7 @@
 # DICOM Conformance Statement
 
 **Product:** PDF to DICOM
-**Version:** 1.0.0
+**Version:** 1.1.0
 **Document version:** 1.0
 **Date:** 2026
 
@@ -87,7 +87,7 @@ No SOP class is supported as an SCP.
 | Maximum PDU size (receive) | 16,384 bytes (toolkit default) |
 | Maximum PDU size (send) | Negotiated with the association acceptor |
 | Implementation Class UID | `2.25.164837465109381728394657283910473625` |
-| Implementation Version Name | `PDFTODICOM_1_0` |
+| Implementation Version Name | `PDFTODICOM_1_1` |
 | Application Context Name | `1.2.840.10008.3.1.1.1` |
 | Asynchronous operations | Not supported |
 | SOP class extended negotiation | Not supported |
@@ -248,7 +248,7 @@ not implement a Media Storage Application Profile and performs no media creation
 | File Meta Information Version | `00\01` |
 | Transfer Syntax UID | 1.2.840.10008.1.2.1 |
 | Implementation Class UID | `2.25.164837465109381728394657283910473625` |
-| Implementation Version Name | `PDFTODICOM_1_0` |
+| Implementation Version Name | `PDFTODICOM_1_1` |
 | Source Application Entity Title | The configured Calling AE Title |
 
 ---

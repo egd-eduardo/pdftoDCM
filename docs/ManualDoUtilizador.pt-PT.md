@@ -1,6 +1,6 @@
 # PDF para DICOM — Manual do Utilizador
 
-**Versão 1.0 · Para profissionais hospitalares**
+**Versão 1.1 · Para profissionais hospitalares**
 
 Esta aplicação recebe um documento PDF produzido por outro sistema, converte-o num objeto
 DICOM de PDF Encapsulado e envia-o para o PACS, de forma a que o documento passe a fazer
@@ -281,7 +281,7 @@ pelo departamento de informática.
 | **DICOM** | Conjunto de carateres, geração de identificadores, modalidade, descrições por omissão. Não altere sem indicação do administrador do PACS. |
 | **Pastas** | Onde são guardados os ficheiros e os registos, e a monitorização de pastas. |
 | **Aspeto** | Idioma, modo escuro e confirmação antes de enviar. |
-| **Licença** | O código de licença desta instalação. **Este separador só aparece se a sua cópia exigir licença.** Se não o vir, não há nada a fazer. |
+| **Licença** | O código de licença desta instalação. O departamento de informática introduz este código uma vez. Se o código faltar ou tiver expirado, a aplicação continua a converter e a guardar documentos, mas não os envia para o PACS. |
 
 Duas definições são relevantes para o utilizador:
 
@@ -293,8 +293,8 @@ Duas definições são relevantes para o utilizador:
 
 ### Se aparecer uma mensagem sobre a licença
 
-Algumas cópias desta aplicação exigem um código de licença. Se a sua exigir e houver algum
-problema, aparece uma faixa colorida por baixo do título a explicar o que se passa.
+Se houver algum problema com a licença desta instalação, aparece uma faixa colorida por
+baixo do título a explicar o que se passa.
 
 **Pode continuar a trabalhar.** Continua a poder escolher um documento, introduzir os dados
 do doente e gerar e guardar o ficheiro DICOM. Apenas o envio para o PACS é afetado.

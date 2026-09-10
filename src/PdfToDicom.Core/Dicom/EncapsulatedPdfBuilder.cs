@@ -430,7 +430,7 @@ public sealed class EncapsulatedPdfBuilder : IDicomObjectBuilder
 
     /// <summary>Product version reported in Software Versions (0018,1020).</summary>
     private static string ProductVersion =>
-        typeof(EncapsulatedPdfBuilder).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
+        typeof(EncapsulatedPdfBuilder).Assembly.GetName().Version?.ToString(3) ?? "1.1.0";
 
     /// <summary>
     /// Formats the local offset from UTC as the signed four digit value required by the

@@ -43,10 +43,11 @@ buttons, and error messages written in plain language.
 
 ### Just want to run it?
 
-A prebuilt **Windows ARM64** executable is committed at
-[`dist/PdfToDicom-win-arm64.exe`](dist/PdfToDicom-win-arm64.exe). It is self contained, so
-download it and double click. Builds for x64 and x86, and the installers for all three
-architectures, are attached to every [CI run](../../actions).
+Prebuilt executables for **all three architectures** are committed at
+[`dist/app/`](dist/app/). They are self contained, so download one and double click. If you
+want a single file that runs anywhere, take `PdfToDicom-win-x86.exe`; on an ARM machine the
+native `win-arm64` build is noticeably smoother. Installers for all three architectures are
+attached to every [CI run](../../actions).
 
 ### For a hospital user
 
@@ -113,7 +114,8 @@ src/PdfToDicom.Cli/      Command line front end for scripted conversion
 src/PdfToDicom.LicenceTool/  Licence generator. Publisher only, never distributed
 tests/                   150 xUnit tests
 build/                   Build scripts, installer, interoperability verification
-dist/                    Prebuilt ARM64 application, and the licence generator
+dist/app/                The application, prebuilt for x86, x64 and ARM64
+dist/licence-tool/       The licence generator. Publisher only, never distributed
 docs/                    User manual (EN + PT), technical docs, conformance statement
 samples/                 Annotated configuration, example PDF, example DICOM object
 ```
@@ -206,15 +208,17 @@ The application contains a **signed offline licence key** mechanism: an ECDSA P-
 optionally bound to one workstation and optionally time limited, entered by the customer in
 **Settings, Licence**.
 
-**It is switched off in this repository and in every published build.**
-`LicenceService.PublisherPublicKey` is blank, and a build with a blank key enforces
-nothing: codes entered in Settings are stored but never checked, no notice ever appears,
-and the workflow is identical to the one that shipped before the feature existed. A test
-asserts the constant is still blank, so it cannot be switched on by accident.
+**From version 1.1 it is switched on.** `LicenceService.PublisherPublicKey` carries the
+publisher key, so a 1.1 build requires a valid code before it will transmit. Version 1.0
+builds are unaffected, because only a build carrying the key checks anything.
 
-Switching it on is one `keygen` command and one pasted constant. The generator is
-prebuilt at [`dist/licence-tool/`](dist/licence-tool/) for all three architectures, so it
-needs nothing installed. See **[the licensing workflow](docs/LicensingWorkflow.md)**.
+Setting the constant back to an empty string disables the whole subsystem and restores
+the behaviour of a build with no licensing at all. That path stays fully tested, so it is
+a safe thing to do in a hurry.
+
+The generator is prebuilt at [`dist/licence-tool/`](dist/licence-tool/) for all three
+architectures and needs nothing installed. See
+**[the licensing workflow](docs/LicensingWorkflow.md)**.
 
 When it is in force, a licence problem withholds **only transmission**. The application
 still opens, still converts and still saves locally, and an expired licence keeps

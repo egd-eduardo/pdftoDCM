@@ -40,17 +40,29 @@ public sealed class LicenceService : ILicenceService
     /// The publisher's ECDSA P-256 public key, in base64 encoded SubjectPublicKeyInfo form.
     /// </summary>
     /// <remarks>
-    /// <b>Blank by default, which leaves licensing switched off.</b>
-    ///
-    /// To switch it on, run the licence generator once:
-    ///
-    ///     pdftodicom-licence keygen
-    ///
-    /// It writes the private key to a file, which must be kept secret and never committed,
-    /// and prints the public key to paste here. Rebuild, and the application will then
-    /// require a licence code before it will transmit.
+    /// <para>
+    /// <b>This build enforces licensing.</b> The key below is the public half of the
+    /// publisher's key pair, produced by the licence generator's <c>keygen</c> command.
+    /// It is not secret: a public key is meant to be embedded in software handed to
+    /// customers, and it can only verify a signature, never produce one.
+    /// </para>
+    /// <para>
+    /// The matching private key is what signs licence codes. It is held by the publisher,
+    /// is never committed, and never appears in a shipped build.
+    /// </para>
+    /// <para>
+    /// Setting this back to an empty string disables licence checking entirely and
+    /// restores the behaviour of a build with no licensing at all. Every code path
+    /// supports that, and it is tested, so it is a safe thing to do if licensing ever
+    /// needs to be withdrawn in a hurry.
+    /// </para>
+    /// <para>
+    /// <b>Every build that ships must carry the same key</b>, or codes issued for one
+    /// build will be rejected by another.
+    /// </para>
     /// </remarks>
-    public const string PublisherPublicKey = "";
+    public const string PublisherPublicKey =
+        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEnTv55VLwOiisLd4yEZLm4b7LqfFezILgZHfFTrTTW8KbjLMrbrrdLF7IU5DRG03yH8yBCqBMgrSFny4y3tFhDQ==";
 
     private readonly IAppLogger? _logger;
     private readonly string _publicKey;

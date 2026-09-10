@@ -50,7 +50,10 @@ public sealed class LicensingTests
     [Fact]
     public void WithNoPublisherKeyNothingIsEnforced()
     {
-        var service = new LicenceService();
+        // The blank key is passed explicitly. This used to rely on the shipped constant
+        // being blank, which stopped being true when licensing was switched on, and the
+        // dormant path still has to work: it is the fallback the whole design leans on.
+        var service = new LicenceService(publicKeyOverride: string.Empty);
 
         Assert.False(service.IsEnforced);
 
@@ -66,12 +69,41 @@ public sealed class LicensingTests
     }
 
     [Fact]
-    public void TheShippedBuildIsDormant()
+    public void TheShippedBuildEnforcesLicensingWithAUsableKey()
     {
-        // The constant is what decides whether an existing installation changes behaviour
-        // when this feature is merged. It must stay blank until the publisher chooses
-        // otherwise, so the guarantee is asserted rather than merely documented.
-        Assert.Equal(LicenceService.PublisherPublicKey, string.Empty);
+        // This assertion was previously the reverse: it required the key to stay blank, as
+        // a guard against switching licensing on by accident. Activation is now deliberate,
+        // so the guard is inverted, and it now protects against the failure that would
+        // actually hurt.
+        //
+        // A malformed key does not raise. By design it degrades to "not enforced" and logs,
+        // because refusing to transmit on the basis of our own packaging mistake would
+        // punish the customer. That safety property has a cost: a corrupted key would
+        // silently ship a build that enforces nothing, and nobody would notice. This test
+        // is what notices.
+        Assert.NotEqual(LicenceService.PublisherPublicKey, string.Empty);
+
+        var service = new LicenceService();
+        Assert.True(service.IsEnforced, "The build must enforce licensing.");
+
+        // The key must genuinely import, not merely be present.
+        LicenceStatus status = service.Check(null);
+        Assert.Equal(LicenceState.Missing, status.State);
+        Assert.False(status.MayTransmit);
+
+        // A key that cannot be read reports NotEnforced instead, which is exactly the
+        // silent failure being guarded against here.
+        Assert.NotEqual(LicenceState.NotEnforced, status.State);
+    }
+
+    [Fact]
+    public void TheEmbeddedKeyIsAValidP256PublicKey()
+    {
+        using ECDsa key = ECDsa.Create();
+        key.ImportSubjectPublicKeyInfo(
+            Convert.FromBase64String(LicenceService.PublisherPublicKey), out _);
+
+        Assert.Equal(256, key.KeySize);
     }
 
     [Fact]
@@ -537,9 +569,10 @@ public sealed class LicensedWorkflowTests : IDisposable
     [Fact]
     public async Task WithLicensingDormantTheWorkflowIsUnchanged()
     {
-        // This is the case that every existing installation is in. It must behave exactly
-        // as it did before licensing existed.
-        ConversionResult result = await CreateWorkflow(new LicenceService())
+        // A build with no publisher key must behave exactly as it did before licensing
+        // existed. The key is blanked explicitly, since the shipped one is no longer empty.
+        ConversionResult result = await CreateWorkflow(
+                new LicenceService(publicKeyOverride: string.Empty))
             .RunAsync(TestSupport.SamplePdfPath, TestSupport.CreateDemographics());
 
         Assert.True(result.IsCompleteSuccess);

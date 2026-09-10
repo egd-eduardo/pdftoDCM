@@ -1,6 +1,6 @@
 # Protecting PDF to DICOM Against Unauthorised Distribution
 
-**For the copyright holder · Version 1.0**
+**For the copyright holder · Version 1.1**
 
 ---
 
@@ -136,11 +136,10 @@ folder.
 | The generator, **publisher only** | `src/PdfToDicom.LicenceTool/` |
 | Prebuilt generators, **publisher only** | `dist/licence-tool/` |
 
-**It is switched off.** `LicenceService.PublisherPublicKey` is blank in the repository, and
-a build with a blank key enforces nothing whatsoever: the Licence tab states plainly that
-codes are not checked, the notice band never appears, and the workflow is byte for byte
-the workflow that shipped before licensing existed. A test asserts that the constant is still blank, so the feature
-cannot be switched on by accident.
+**It is switched on from version 1.1.** The publisher key is embedded, so a 1.1 build
+requires a valid code before it will transmit. Blanking the constant disables the whole
+subsystem and restores the pre-licensing behaviour byte for byte, and that path stays
+tested, so withdrawing licensing in a hurry is a one line change rather than a revert.
 
 See **[the licensing workflow](LicensingWorkflow.md)** for how to switch it on and issue
 codes.
@@ -211,12 +210,11 @@ Cheap, and surprisingly effective at answering *"who leaked it?"*.
 | 2 | Lawyer reviews the licence | 300 to 800 EUR | One meeting |
 | 3 | Code signing certificate | 200 to 600 EUR per year | Half a day to set up |
 | 4 | Make the repository private | Free | **Done** |
-| 5 | Signed offline licence keys | Free | **Done, switched off** |
+| 5 | Signed offline licence keys | Free | **Done, live from 1.1** |
 | 6 | Per customer build watermarking | Free | Half a day |
 | 7 | Obfuscation | Free to 400 EUR | One day, plus ongoing care |
 
-Items 1 to 4 give you most of the protection available. Item 5 is built and waiting for
-you to run `keygen`. Item 6 is what you add when you have real customers, and item 7 is
+Items 1 to 4 give you most of the protection available. Item 5 is built and live. Item 6 is what you add when you have real customers, and item 7 is
 for when you have a competitor.
 
 **Item 4 is the one that would undercut everything else, and it is done.** The repository
