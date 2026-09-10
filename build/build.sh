@@ -83,6 +83,54 @@ do_test() {
         -c "$CONFIGURATION" --nologo --verbosity minimal
 }
 
+# Checks the assembled folder before anything is zipped or sent.
+#
+# Two assertions, because neither catches the failure on both kinds of filesystem.
+#
+# The first compares what the operating system actually lists against what was meant to
+# be there, matching case exactly. On Windows a file lost to a case insensitive
+# overwrite vanishes from the listing, so its absence is detected. A plain existence
+# test would not do: on Windows it answers "yes" for a name that is really the other
+# file.
+#
+# The second looks for two entries differing only in case. That pair cannot coexist on
+# Windows but assembles quite happily here, so this is the check that catches the fault
+# on a developer machine rather than after a hospital has the folder.
+assert_package_is_sound() {
+    local package="$1"
+    local have_cli="$2"
+
+    local present
+    present="$(cd "$package" && find . -type f | sed 's|^\./||' | sort)"
+
+    local required=("PdfToDicom.exe" "LICENCE.txt" "THIRD-PARTY-NOTICES.txt" "READ ME FIRST.txt")
+    [[ "$have_cli" == "yes" ]] && required+=("Command line/pdftodicom.exe")
+
+    local missing=()
+    local name
+    for name in "${required[@]}"; do
+        grep -Fqx -- "$name" <<<"$present" || missing+=("$name")
+    done
+
+    if (( ${#missing[@]} > 0 )); then
+        printf '\n' >&2
+        printf 'The package is incomplete. These files were meant to be in it and are not:\n\n' >&2
+        printf '    %s\n' "${missing[@]}" >&2
+        printf '\nIf a file was copied but is missing under its own name, another file whose\n' >&2
+        printf 'name differs only in case has overwritten it. Windows cannot hold both.\n' >&2
+        exit 1
+    fi
+
+    local collisions
+    collisions="$(tr 'A-Z' 'a-z' <<<"$present" | sort | uniq -d)"
+
+    if [[ -n "$collisions" ]]; then
+        printf '\nThe package holds names that differ only in case and so cannot both exist\n' >&2
+        printf 'on Windows:\n\n%s\n' "$collisions" >&2
+        exit 1
+    fi
+}
+
 # Writes the note a recipient sees first. CRLF and ASCII, because it has to open
 # correctly in Notepad on a Windows machine with nothing installed.
 write_start_here() {
@@ -105,8 +153,9 @@ Double click PdfToDicom.exe. There is no installer and nothing needs to be
 installed first: no .NET, no Java, no Visual C++ runtime, and no administrator
 rights.
 
-Windows may warn that the publisher is unrecognised. Choose "More info", then
-"Run anyway".
+Windows will warn that the publisher is unrecognised. Choose "More info", then
+"Run anyway". The file is digitally signed, but with a certificate Windows does
+not recognise by default.
 
 
 BEFORE THE FIRST REAL DOCUMENT
@@ -126,19 +175,22 @@ BEFORE THE FIRST REAL DOCUMENT
 WHAT IS IN THIS FOLDER
 ----------------------
 
-  PdfToDicom.exe           The application.
-  pdftodicom.exe           Command line version, for scripted conversion.
+  PdfToDicom.exe           The application. This is the one to double click.
   LICENCE.txt              The terms. Free to use, commercial and private.
   THIRD-PARTY-NOTICES.txt  Licences of the components used.
 
-  Documentation/
+  Command line\\
+    pdftodicom.exe           For scripted or bulk conversion. Not needed
+                             for ordinary use.
+
+  Documentation\\
     User Manual (English)                    For the people using it daily.
     Manual do Utilizador (Portugues)         The same, in Portuguese.
     DICOM Conformance Statement              For your PACS administrator.
     Technical Documentation                  For IT.
     Changelog                                What changed in each version.
 
-  Samples/
+  Samples\\
     config.sample.json       Annotated settings reference.
     example-report.pdf       A document to test with.
 
@@ -157,6 +209,10 @@ patient is a risk no software can remove.
 
 Read LICENCE.txt before use.
 EOF
+
+    # build.ps1 writes this file with no trailing newline. Removing the one the here
+    # document adds keeps the two byte identical, which is what assemble() promises.
+    printf '%s' "$(cat "$path")" > "$path.tmp" && mv "$path.tmp" "$path"
 
     # Convert to CRLF in place, without depending on unix2dos being installed.
     perl -pi -e 's/\n/\r\n/' "$path" 2>/dev/null || \
@@ -202,7 +258,19 @@ do_publish() {
     mkdir -p "$package/Documentation" "$package/Samples"
 
     cp "$ARTIFACTS/$RUNTIME/app/PdfToDicom.exe" "$package/"
-    cp "$ARTIFACTS/$RUNTIME/cli/pdftodicom.exe" "$package/" 2>/dev/null || true
+
+    # The command line tool goes into a subfolder rather than beside the application. The
+    # two assembly names, PdfToDicom and pdftodicom, differ only in case, and a Windows
+    # filesystem cannot hold both in one folder: the second copy overwrites the first and
+    # keeps the first one's spelling, leaving a PdfToDicom.exe that is really the command
+    # line tool. It is invisible here, where the names are distinct, which is exactly why
+    # it was missed.
+    local have_cli=no
+    if [[ -f "$ARTIFACTS/$RUNTIME/cli/pdftodicom.exe" ]]; then
+        mkdir -p "$package/Command line"
+        cp "$ARTIFACTS/$RUNTIME/cli/pdftodicom.exe" "$package/Command line/"
+        have_cli=yes
+    fi
 
     # Not optional: PdfPig is MIT and Serilog is Apache 2.0, and both require their notice
     # to accompany redistribution.
@@ -225,6 +293,8 @@ do_publish() {
     cp "$REPO_ROOT/samples/example-report.pdf" "$package/Samples/"
 
     write_start_here "$package/READ ME FIRST.txt" "$version"
+
+    assert_package_is_sound "$package" "$have_cli"
 
     (cd "$ARTIFACTS" && zip -qr "PdfToDicom-$version-$RUNTIME.zip" "PdfToDicom-$version-$RUNTIME")
 

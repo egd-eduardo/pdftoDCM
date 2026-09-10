@@ -469,10 +469,19 @@ Output is written per architecture, so all three can coexist.
 
 | Path | Contents |
 |---|---|
-| `artifacts/<rid>/app/PdfToDicom.exe` | Self contained desktop application (~65 to 69 MB) |
+| `artifacts/<rid>/app/PdfToDicom.exe` | Self contained desktop application (~62 to 69 MB) |
 | `artifacts/<rid>/cli/pdftodicom.exe` | Self contained command line tool |
-| `artifacts/PdfToDicom-portable-<rid>.zip` | Portable package with docs and samples |
-| `artifacts/PdfToDicom-Setup-1.0.0-<arch>.exe` | Per user installer (Windows build only) |
+| `artifacts/PdfToDicom-<version>-<rid>/` | The folder handed to a site |
+| `artifacts/PdfToDicom-<version>-<rid>.zip` | The same, zipped |
+| `artifacts/PdfToDicom-Setup-<version>-<arch>.exe` | Per user installer (Windows build only) |
+
+Inside the handover folder and under the installer's application directory, the command
+line tool sits in a `Command line` subfolder rather than beside `PdfToDicom.exe`. The two
+assembly names differ only in case, and a case insensitive filesystem cannot hold both in
+one directory: the second write overwrites the first and keeps the first one's spelling.
+`Invoke-Assemble` and its shell counterpart both assert, before the zip is made, that the
+required files are present under their exact names and that no two entries in the package
+differ only in case.
 
 ---
 

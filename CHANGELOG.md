@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.5.5
+
+**Two packaging faults, both of which only appeared on Windows.**
+
+- **The handover folder and the installer lost the desktop application.** The two
+  executables are named `PdfToDicom.exe` and `pdftodicom.exe`, which differ only in case.
+  Windows filesystems are case insensitive, so copying both into one folder did not
+  produce two files: the second overwrote the first and kept the first one's spelling.
+  What was handed over was a `PdfToDicom.exe` that was really the command line tool, and
+  double clicking it opened a console rather than the application. The installer put both
+  into its application directory too, so the Start Menu shortcut had the same problem.
+
+  The command line tool now goes into a `Command line` subfolder in both.
+
+  This was invisible on Linux and macOS, where the two names are distinct, which is why an
+  assembly verified there looked correct. The Windows build reported 11 files in the
+  package where the same code on Linux reported 12.
+
+- **The installer shipped three documents written for the copyright holder**, on building
+  the software, code signing and protecting against unauthorised distribution, the last of
+  which discusses the customer. It copied `docs\*` with a wildcard. It now copies the same
+  named list the handover package uses.
+
+- **The build refuses to produce either fault again.** Before the package is zipped it
+  asserts that the required files are present under their exact names, and that no two
+  entries differ only in case. The first catches the loss as Windows shows it, a missing
+  name; the second catches it as Linux shows it, two names that cannot coexist. Both
+  checks are in `build.ps1` and `build.sh`.
+
+Nothing in the application itself changed. The conversion, validation and transmission
+behaviour, and all 107 tests, are as in 1.5.0.
+
 ## 1.5.0
 
 **Licensing dropped. The software is free to use, commercially and privately.**

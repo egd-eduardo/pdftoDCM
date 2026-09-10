@@ -23,7 +23,7 @@
 
 #define AppName        "PDF to DICOM"
 #define AppShortName   "PdfToDicom"
-#define AppVersion     "1.5.0"
+#define AppVersion     "1.5.5"
 #define AppPublisher   "Eduardo Dias"
 #define AppExeName     "PdfToDicom.exe"
 #define CliExeName     "pdftodicom.exe"
@@ -110,13 +110,28 @@ Name: "associatepdf"; Description: "Add PDF to DICOM to the ""Open with"" list f
 Source: "..\..\artifacts\{#TargetRid}\app\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 ; The command line tool is optional and is used for scripted or bulk conversion.
-Source: "..\..\artifacts\{#TargetRid}\cli\{#CliExeName}"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+;
+; It is installed into a subfolder rather than beside the application, because the two
+; assembly names, PdfToDicom and pdftodicom, differ only in case. A Windows filesystem
+; cannot hold both in one directory: the second overwrites the first and keeps the first
+; one's spelling, so {app}\PdfToDicom.exe would really be the command line tool and the
+; Start Menu shortcut would open a console.
+Source: "..\..\artifacts\{#TargetRid}\cli\{#CliExeName}"; DestDir: "{app}\Command line"; Flags: ignoreversion skipifsourcedoesntexist
 
 ; Documentation and samples, installed alongside the application so a user can
 ; reach the manual without a network connection.
 Source: "..\..\LICENSE";                       DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "..\..\THIRD-PARTY-NOTICES.md";        DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "..\..\docs\*";                          DestDir: "{app}\docs";    Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
+
+; A named list, not docs\*. Three documents in that folder are written for the copyright
+; holder rather than for a site, and one of them discusses the customer; a wildcard sent
+; all three to every hospital. Naming them also means a new document has to be considered
+; rather than shipped by accident. This list matches the one in build.ps1 and build.sh.
+Source: "..\..\docs\UserManual.md";                 DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\..\docs\ManualDoUtilizador.pt-PT.md";   DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\..\docs\DicomConformanceStatement.md";  DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\..\docs\TechnicalDocumentation.md";     DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\..\CHANGELOG.md";                       DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\samples\config.sample.json";      DestDir: "{app}\samples"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\samples\example-report.pdf";      DestDir: "{app}\samples"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\samples\example-encapsulated.dcm"; DestDir: "{app}\samples"; Flags: ignoreversion skipifsourcedoesntexist
