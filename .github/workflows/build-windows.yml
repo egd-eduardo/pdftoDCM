@@ -191,11 +191,14 @@ jobs:
           path: artifacts/PdfToDicom-Setup-*.exe
           if-no-files-found: error
 
-      - name: Upload the portable package
+      - name: Upload the handover package
+        # A wildcard on the version, so a version bump does not break this step. The
+        # installer upload above already works that way; this one did not, and a rename
+        # of the package output broke the build until it was matched.
         uses: actions/upload-artifact@v4
         with:
-          name: PdfToDicom-portable-${{ matrix.rid }}
-          path: artifacts/PdfToDicom-portable-${{ matrix.rid }}.zip
+          name: PdfToDicom-package-${{ matrix.rid }}
+          path: artifacts/PdfToDicom-*-${{ matrix.rid }}.zip
           if-no-files-found: error
 
       - name: Upload the standalone executable

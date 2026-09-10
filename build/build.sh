@@ -83,6 +83,86 @@ do_test() {
         -c "$CONFIGURATION" --nologo --verbosity minimal
 }
 
+# Writes the note a recipient sees first. CRLF and ASCII, because it has to open
+# correctly in Notepad on a Windows machine with nothing installed.
+write_start_here() {
+    local path="$1"
+    local version="$2"
+
+    cat > "$path" <<EOF
+PDF to DICOM $version
+Copyright (c) 2026 Eduardo Dias
+
+Converts a PDF document into a DICOM Encapsulated PDF object and sends it to a
+PACS, so a report from another system becomes part of the patient's imaging
+record.
+
+
+TO RUN IT
+---------
+
+Double click PdfToDicom.exe. There is no installer and nothing needs to be
+installed first: no .NET, no Java, no Visual C++ runtime, and no administrator
+rights.
+
+Windows may warn that the publisher is unrecognised. Choose "More info", then
+"Run anyway".
+
+
+BEFORE THE FIRST REAL DOCUMENT
+------------------------------
+
+1. Your PACS administrator must register this workstation on the PACS. The
+   details they need are in Documentation, DICOM Conformance Statement.
+
+2. Open Settings and fill in the Institution and Destinations tabs.
+
+3. Use "Test connection" on the destination and confirm it succeeds.
+
+4. Convert the sample in Samples with "Generate only" and check the result
+   before sending anything belonging to a patient.
+
+
+WHAT IS IN THIS FOLDER
+----------------------
+
+  PdfToDicom.exe           The application.
+  pdftodicom.exe           Command line version, for scripted conversion.
+  LICENCE.txt              The terms. Free to use, commercial and private.
+  THIRD-PARTY-NOTICES.txt  Licences of the components used.
+
+  Documentation/
+    User Manual (English)                    For the people using it daily.
+    Manual do Utilizador (Portugues)         The same, in Portuguese.
+    DICOM Conformance Statement              For your PACS administrator.
+    Technical Documentation                  For IT.
+    Changelog                                What changed in each version.
+
+  Samples/
+    config.sample.json       Annotated settings reference.
+    example-report.pdf       A document to test with.
+
+
+IMPORTANT
+---------
+
+This is NOT a medical device. It has not been assessed under Regulation
+(EU) 2017/745 or any equivalent regime, and no clinical decision should be
+based on it. It is supplied free of charge, as is, without warranty and
+without any promise of support.
+
+The operator is responsible for confirming that the patient details entered
+match the document being converted. Filing a document against the wrong
+patient is a risk no software can remove.
+
+Read LICENCE.txt before use.
+EOF
+
+    # Convert to CRLF in place, without depending on unix2dos being installed.
+    perl -pi -e 's/\n/\r\n/' "$path" 2>/dev/null || \
+        { sed -i 's/$/\r/' "$path" 2>/dev/null || sed -i '' -e 's/$/\r/' "$path"; }
+}
+
 do_publish() {
     step "Publishing the desktop application for $RUNTIME"
 
@@ -110,21 +190,47 @@ do_publish() {
         -o "$ARTIFACTS/$RUNTIME/cli" \
         --nologo -v quiet
 
-    step "Assembling the portable package"
+    step "Assembling the package to hand over"
 
-    local package="$ARTIFACTS/portable-$RUNTIME"
+    # Mirrors Invoke-Assemble in build.ps1. The two must agree: a package assembled on a
+    # Mac and one assembled on Windows should be the same thing.
+    local version
+    version="$(sed -n 's|.*<Version>\(.*\)</Version>.*|\1|p' "$REPO_ROOT/Directory.Build.props" | head -1)"
+
+    local package="$ARTIFACTS/PdfToDicom-$version-$RUNTIME"
     rm -rf "$package"
-    mkdir -p "$package"
+    mkdir -p "$package/Documentation" "$package/Samples"
 
     cp "$ARTIFACTS/$RUNTIME/app/PdfToDicom.exe" "$package/"
     cp "$ARTIFACTS/$RUNTIME/cli/pdftodicom.exe" "$package/" 2>/dev/null || true
-    cp "$REPO_ROOT/samples/config.sample.json" "$package/"
-    cp "$REPO_ROOT/samples/example-report.pdf" "$package/"
-    cp -r "$REPO_ROOT/docs" "$package/docs"
 
-    (cd "$ARTIFACTS" && zip -qr "PdfToDicom-portable-$RUNTIME.zip" "portable-$RUNTIME")
+    # Not optional: PdfPig is MIT and Serilog is Apache 2.0, and both require their notice
+    # to accompany redistribution.
+    cp "$REPO_ROOT/LICENSE"                "$package/LICENCE.txt"
+    cp "$REPO_ROOT/THIRD-PARTY-NOTICES.md" "$package/THIRD-PARTY-NOTICES.txt"
+    cp "$REPO_ROOT/CHANGELOG.md"           "$package/Documentation/Changelog.md"
 
-    info "portable package: $ARTIFACTS/PdfToDicom-portable-$RUNTIME.zip"
+    # A named list, not the whole docs folder. Three of those documents are written for
+    # the copyright holder, and one of them discusses the customer.
+    cp "$REPO_ROOT/docs/UserManual.md" \
+       "$package/Documentation/User Manual (English).md"
+    cp "$REPO_ROOT/docs/ManualDoUtilizador.pt-PT.md" \
+       "$package/Documentation/Manual do Utilizador (Portugues).md"
+    cp "$REPO_ROOT/docs/DicomConformanceStatement.md" \
+       "$package/Documentation/DICOM Conformance Statement (for your PACS administrator).md"
+    cp "$REPO_ROOT/docs/TechnicalDocumentation.md" \
+       "$package/Documentation/Technical Documentation (for IT).md"
+
+    cp "$REPO_ROOT/samples/config.sample.json" "$package/Samples/"
+    cp "$REPO_ROOT/samples/example-report.pdf" "$package/Samples/"
+
+    write_start_here "$package/READ ME FIRST.txt" "$version"
+
+    (cd "$ARTIFACTS" && zip -qr "PdfToDicom-$version-$RUNTIME.zip" "PdfToDicom-$version-$RUNTIME")
+
+    info "package: $package"
+    info "zip:     $ARTIFACTS/PdfToDicom-$version-$RUNTIME.zip"
+    info "$(find "$package" -type f | wc -l | tr -d ' ') file(s)"
 
     step "Result"
     ls -lh "$ARTIFACTS/$RUNTIME/app/PdfToDicom.exe" | awk '{print "    desktop application: " $9 " (" $5 ")"}'
