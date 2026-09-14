@@ -111,6 +111,7 @@ jobs:
           name: test-results
           path: '**/test-results.trx'
           if-no-files-found: ignore
+          retention-days: 7
 
   # ---------------------------------------------------------------------------
   # Produces the shippable artefacts, one set per Windows architecture.
@@ -184,24 +185,37 @@ jobs:
           Write-Host ("The executable is self contained and targets {0} (machine 0x{1:X4})." -f $rid, $machine)
         shell: pwsh
 
+      # One run of this matrix produces roughly 700 MB across the three architectures.
+      # Artifact storage is charged against the whole account rather than this repository,
+      # so keeping that for every push exhausted the allowance and blocked uploads
+      # everywhere else. The shippable files are therefore stored when someone actually
+      # needs them, which is a tagged release or a build asked for by hand, and they are
+      # given a bounded life rather than the ninety day default. Ordinary pushes and pull
+      # requests still build and verify all three architectures; they simply do not keep
+      # the output.
       - name: Upload the installer
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@v4
         with:
           name: PdfToDicom-installer-${{ matrix.rid }}
           path: artifacts/PdfToDicom-Setup-*.exe
           if-no-files-found: error
+          retention-days: 14
 
       - name: Upload the handover package
         # A wildcard on the version, so a version bump does not break this step. The
         # installer upload above already works that way; this one did not, and a rename
         # of the package output broke the build until it was matched.
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@v4
         with:
           name: PdfToDicom-package-${{ matrix.rid }}
           path: artifacts/PdfToDicom-*-${{ matrix.rid }}.zip
           if-no-files-found: error
+          retention-days: 7
 
       - name: Upload the standalone executable
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@v4
         with:
           name: PdfToDicom-exe-${{ matrix.rid }}
@@ -209,3 +223,4 @@ jobs:
           # anyone having to open its properties.
           path: artifacts/PdfToDicom-*-${{ matrix.rid }}.exe
           if-no-files-found: error
+          retention-days: 7
