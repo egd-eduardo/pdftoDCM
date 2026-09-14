@@ -106,6 +106,12 @@ jobs:
 
       - name: Upload test results
         if: always()
+        # Keeping a copy of the results is a convenience; the test step above is what
+        # decides whether the build is sound. Failing the whole pipeline because the
+        # artifact could not be stored, which is what happens when the account's artifact
+        # allowance is spent, hides a green test run behind a red tick and blocks
+        # packaging. The step is still reported as failed when it fails.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: test-results
