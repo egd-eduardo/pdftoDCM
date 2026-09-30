@@ -151,6 +151,27 @@ fi
 
 # ------------------------------------------------------------------ Convert and send
 
+# Returns the whole dump of a stored object as a string.
+#
+# Deliberately not "dcmdump file | grep -q pattern". grep -q stops reading the moment it
+# matches, which closes the pipe and kills dcmdump with SIGPIPE; under "set -o pipefail"
+# the pipeline then reports failure even though the pattern WAS found. Whether that
+# happens depends on scheduling, so the check passes most of the time and fails
+# occasionally for no visible reason. Measured at roughly fifteen failures in two hundred
+# on this very script.
+#
+# Reading the dump into a variable removes the pipeline, and with it the race.
+dump_of() {
+    dcmdump "$1" 2>/dev/null || true
+}
+
+# True when a stored object declares the given SOP Class.
+declares_sop_class() {
+    local dump
+    dump="$(dump_of "$1")"
+    [[ "$dump" == *"$2"* ]]
+}
+
 # Reads one attribute from a stored object.
 #
 # Keyed on the tag number, not the keyword. dcmdump prints the keyword AFTER the value, as
@@ -158,11 +179,45 @@ fi
 # keyword matches nothing and silently yields an empty string. Two empty strings then
 # compare equal, which turns a broken read into a passing test.
 attribute_of() {
-    local file="$1" tag="$2"
-    dcmdump "$file" 2>/dev/null \
-        | grep -F "($tag)" \
-        | head -1 \
-        | sed -n 's/.*\[\([^]]*\)\].*/\1/p'
+    local file="$1" tag="$2" dump line
+
+    dump="$(dump_of "$file")"
+    line="$(grep -F "($tag)" <<<"$dump" | head -1 || true)"
+
+    sed -n 's/.*\[\([^]]*\)\].*/\1/p' <<<"$line"
+}
+
+# Waits until the archive has finished storing the objects it has acknowledged.
+#
+# storescp forks a child per association and answers the C-STORE before that child has
+# necessarily finished writing and closing the file. Reading the directory once, straight
+# after the sender reports success, therefore sees anything from a complete set to a
+# half written file, and the result changes from run to run. A conversion now sends
+# several objects per document, which widens the window and made this reproducible.
+#
+# Polling until the expected number of files is present AND every one of them parses is
+# the honest fix: a file still being written does not parse.
+wait_for_stored_objects() {
+    local expected="$1"
+    local deadline=$((SECONDS + 30))
+
+    while (( SECONDS < deadline )); do
+        if (( $(find "$RECEIVED_DIR" -type f | wc -l) >= expected )); then
+            local complete=yes
+
+            while read -r stored; do
+                dcmdump "$stored" > /dev/null 2>&1 || complete=no
+            done < <(find "$RECEIVED_DIR" -type f)
+
+            if [[ "$complete" == "yes" ]]; then
+                return 0
+            fi
+        fi
+
+        sleep 0.2
+    done
+
+    return 1
 }
 
 step "Converting and transmitting the sample document"
@@ -190,12 +245,18 @@ fi
 
 step "Inspecting the object the archive received"
 
+if wait_for_stored_objects 3; then
+    pass "the archive finished storing all three objects"
+else
+    fail "the archive did not finish storing three objects within 30 seconds"
+fi
+
 # A conversion now sends the encapsulated document AND one rendered image per page, so the
 # document has to be picked out by its SOP Class. Taking the first file on disk would
 # sometimes pick a page image and every check below would then be testing the wrong object.
 RECEIVED=""
 while read -r candidate; do
-    if dcmdump "$candidate" 2>/dev/null | grep -q "EncapsulatedPDFStorage"; then
+    if declares_sop_class "$candidate" "EncapsulatedPDFStorage"; then
         RECEIVED="$candidate"
         break
     fi
@@ -381,10 +442,14 @@ fi
 # Restricted to this send's own study. The document conversion earlier in this run also
 # produces Secondary Capture objects, one per rendered page, and counting those here would
 # make this check fail for a reason that has nothing to do with the image being tested.
+if ! wait_for_stored_objects 6; then
+    fail "the archive did not finish storing the image's three pages within 30 seconds"
+fi
+
 IMAGE_STUDY=""
 mapfile -t SC_CANDIDATES < <(
     find "$RECEIVED_DIR" -type f | sort | while read -r f; do
-        if dcmdump "$f" 2>/dev/null | grep -q "SecondaryCaptureImageStorage"; then
+        if declares_sop_class "$f" "SecondaryCaptureImageStorage"; then
             echo "$f"
         fi
     done
@@ -534,7 +599,7 @@ fi
 # this run put its own Secondary Capture objects in the same receiving folder.
 PAGE_IMAGES=()
 while read -r candidate; do
-    dcmdump "$candidate" 2>/dev/null | grep -q "SecondaryCaptureImageStorage" || continue
+    declares_sop_class "$candidate" "SecondaryCaptureImageStorage" || continue
     [[ "$(attribute_of "$candidate" "0020,000d")" == "$DOC_STUDY" ]] || continue
     PAGE_IMAGES+=("$candidate")
 done < <(find "$RECEIVED_DIR" -type f | sort)
