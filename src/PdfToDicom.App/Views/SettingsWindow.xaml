@@ -238,6 +238,12 @@
                                   SelectedValue="{Binding Working.ConversionType}"
                                   Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,14" />
 
+                        <CheckBox Content="{loc:Localize Settings.RenderPdfPagesAsImages}"
+                                  IsChecked="{Binding Working.RenderPdfPagesAsImages}"
+                                  Style="{StaticResource SettingCheckBoxStyle}" Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,14"
+                                   Text="{loc:Localize Settings.RenderPdfPagesAsImages.Caption}" />
+
                         <TextBlock Text="{loc:Localize Settings.Manufacturer}" Style="{StaticResource FieldLabelTextStyle}" />
                         <TextBox Text="{Binding Working.Manufacturer, UpdateSourceTrigger=PropertyChanged}"
                                  Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14" />

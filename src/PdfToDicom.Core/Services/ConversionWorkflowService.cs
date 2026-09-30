@@ -38,6 +38,7 @@ public sealed class ConversionWorkflowService
     private readonly IImageInspector _imageInspector;
     private readonly IDicomObjectBuilder _builder;
     private readonly IImageDicomObjectBuilder _imageBuilder;
+    private readonly IPdfPageRenderer _pdfRenderer;
     private readonly StudyGroupingService _studyGrouping;
     private readonly IDicomValidator _dicomValidator;
     private readonly IDicomNetworkService _networkService;
@@ -54,6 +55,7 @@ public sealed class ConversionWorkflowService
         IImageInspector imageInspector,
         IDicomObjectBuilder builder,
         IImageDicomObjectBuilder imageBuilder,
+        IPdfPageRenderer pdfRenderer,
         IDicomValidator dicomValidator,
         IDicomNetworkService networkService,
         DicomFileWriter fileWriter,
@@ -66,6 +68,7 @@ public sealed class ConversionWorkflowService
         _imageInspector = imageInspector ?? throw new ArgumentNullException(nameof(imageInspector));
         _builder = builder ?? throw new ArgumentNullException(nameof(builder));
         _imageBuilder = imageBuilder ?? throw new ArgumentNullException(nameof(imageBuilder));
+        _pdfRenderer = pdfRenderer ?? throw new ArgumentNullException(nameof(pdfRenderer));
         _studyGrouping = studyGrouping ?? new StudyGroupingService();
         _dicomValidator = dicomValidator ?? throw new ArgumentNullException(nameof(dicomValidator));
         _networkService = networkService ?? throw new ArgumentNullException(nameof(networkService));
@@ -418,7 +421,81 @@ public sealed class ConversionWorkflowService
             forBuild.ExistingStudyInstanceUid = groupedStudyUid;
         }
 
-        return new[] { _builder.Build(pdfPath, forBuild, pdfInfo) };
+        BuiltDicomObject document = _builder.Build(pdfPath, forBuild, pdfInfo);
+
+        IReadOnlyList<BuiltDicomObject> pageImages =
+            BuildRenderedPageImages(pdfPath, pdfInfo, forBuild, document.StudyInstanceUid);
+
+        if (pageImages.Count == 0)
+        {
+            return new[] { document };
+        }
+
+        // The document first, so that the object carrying the authoritative content is the
+        // one a caller reporting a single identifier reports.
+        var all = new List<BuiltDicomObject>(pageImages.Count + 1) { document };
+        all.AddRange(pageImages);
+
+        return all;
+    }
+
+    /// <summary>
+    /// Renders the pages of the PDF into Secondary Capture images in their own series
+    /// within the same study, when the site has that switched on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Many PACS viewers will only open a study that contains an image. An Encapsulated
+    /// PDF is not an image SOP Class, so at such a site the viewer refuses to launch and
+    /// the report cannot be read, however correct the object is. Sending the rendered
+    /// pages alongside it makes the report readable on screen while the document itself
+    /// stays for fidelity, text selection and printing.
+    /// </para>
+    /// <para>
+    /// Every failure is non fatal and returns an empty list. Losing the page images leaves
+    /// a correct encapsulated document; failing the conversion would lose the report.
+    /// </para>
+    /// </remarks>
+    private IReadOnlyList<BuiltDicomObject> BuildRenderedPageImages(
+        string pdfPath,
+        PdfDocumentInfo pdfInfo,
+        PatientDemographics demographics,
+        string studyInstanceUid)
+    {
+        AppConfiguration configuration = _configurationService.Current;
+
+        if (!configuration.RenderPdfPagesAsImages)
+        {
+            return Array.Empty<BuiltDicomObject>();
+        }
+
+        try
+        {
+            IReadOnlyList<RenderedPdfPage> pages =
+                _pdfRenderer.Render(pdfPath, configuration.PdfRenderDotsPerInch);
+
+            if (pages.Count == 0)
+            {
+                return Array.Empty<BuiltDicomObject>();
+            }
+
+            long bytes = pages.Sum(p => p.Pixels.LongLength);
+
+            _logger.Information(
+                $"Rendered {pages.Count} page(s) of '{pdfInfo.FileName}' at " +
+                $"{configuration.PdfRenderDotsPerInch} DPI, {bytes / (1024 * 1024)} MB of pixel data.");
+
+            return _imageBuilder.BuildFromRenderedPages(
+                pages, demographics, studyInstanceUid, pdfInfo.FileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(
+                $"The pages of '{pdfInfo.FileName}' could not be turned into images: {ex.Message}. " +
+                "The encapsulated PDF is unaffected and will still be sent.");
+
+            return Array.Empty<BuiltDicomObject>();
+        }
     }
 
     /// <summary>Builds one object per page of an image.</summary>

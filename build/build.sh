@@ -251,6 +251,7 @@ do_publish() {
         -r "$RUNTIME" \
         --self-contained true \
         -p:PublishSingleFile=true \
+        -p:IncludeNativeLibrariesForSelfExtract=true \
         -p:EnableCompressionInSingleFile=true \
         -o "$ARTIFACTS/$RUNTIME/cli" \
         --nologo -v quiet

@@ -21,6 +21,15 @@
       The tool also runs on the developer's own platform straight from "dotnet run".
     -->
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+
+    <!--
+      The PDF renderer brings native binaries with it. Without this, a single file publish
+      leaves them beside the executable, so the tool stops being the one self contained
+      file it claims to be and fails on a machine where only the executable was copied.
+      The desktop application has always set this; the command line tool had no native
+      dependency until now and so did not need it.
+    -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>

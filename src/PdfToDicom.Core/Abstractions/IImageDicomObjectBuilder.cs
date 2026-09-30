@@ -30,4 +30,27 @@ public interface IImageDicomObjectBuilder
         PatientDemographics demographics,
         string? studyInstanceUid = null,
         ImageDocumentInfo? imageInfo = null);
+
+    /// <summary>
+    /// Creates one Secondary Capture object per rendered PDF page, all in a single new
+    /// series within an existing study.
+    /// </summary>
+    /// <remarks>
+    /// This is what makes a report visible in a PACS viewer that will only open a study
+    /// containing an image. The encapsulated PDF stays in its own series in the same
+    /// study, so nothing is lost: the images are for reading on screen, the document for
+    /// fidelity, text selection and printing.
+    /// </remarks>
+    /// <param name="pages">Rendered pages, in page order.</param>
+    /// <param name="demographics">Validated patient and order information.</param>
+    /// <param name="studyInstanceUid">
+    /// The study the encapsulated PDF was filed under. Required, because the point is for
+    /// the images and the document to arrive together.
+    /// </param>
+    /// <param name="sourceFileName">Name of the PDF, recorded in the derivation description.</param>
+    IReadOnlyList<BuiltDicomObject> BuildFromRenderedPages(
+        IReadOnlyList<RenderedPdfPage> pages,
+        PatientDemographics demographics,
+        string studyInstanceUid,
+        string sourceFileName);
 }

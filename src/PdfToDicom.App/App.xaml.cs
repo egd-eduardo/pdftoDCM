@@ -243,7 +243,7 @@ public partial class App : Application
 
     /// <summary>Version reported in the audit trail and the About box.</summary>
     public static string ProductVersion =>
-        typeof(App).Assembly.GetName().Version?.ToString(3) ?? "2.0.1";
+        typeof(App).Assembly.GetName().Version?.ToString(3) ?? "2.1.0";
 }
 
 /// <summary>

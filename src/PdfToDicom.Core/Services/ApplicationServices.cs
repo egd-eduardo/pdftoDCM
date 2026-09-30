@@ -53,6 +53,7 @@ public sealed class ApplicationServices : IDisposable
 
         PdfInspector = new PdfInspector(Logger);
         ImageInspector = new ImageInspector(Logger);
+        PdfRenderer = new PdfPageRenderer(Logger);
         FileWriter = new DicomFileWriter(Logger);
         // Dispatches on the SOP Class the object declares, so one validator serves both
         // the encapsulated documents and the images.
@@ -91,6 +92,9 @@ public sealed class ApplicationServices : IDisposable
 
     /// <summary>Reads image files and decides what kind of file the operator selected.</summary>
     public IImageInspector ImageInspector { get; }
+
+    /// <summary>Renders PDF pages to images, so a viewer that needs one can open the study.</summary>
+    public IPdfPageRenderer PdfRenderer { get; }
 
     /// <summary>Writer for generated objects.</summary>
     public DicomFileWriter FileWriter { get; }
@@ -156,6 +160,7 @@ public sealed class ApplicationServices : IDisposable
             ImageInspector,
             Builder,
             ImageBuilder,
+            PdfRenderer,
             DicomValidator,
             NetworkService,
             FileWriter,
