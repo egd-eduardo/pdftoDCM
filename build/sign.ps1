@@ -153,7 +153,7 @@ useful for different reasons.
         -KeyAlgorithm RSA `
         -KeyLength 3072 `
         -HashAlgorithm SHA256 `
-        -NotAfter (Get-Date).AddYears(5)
+        -NotAfter (Get-Date).AddYears(15)
 
     Write-Host "    created, thumbprint $($certificate.Thumbprint)"
 
