@@ -155,6 +155,94 @@ public sealed class SecondaryCaptureImageBuilder : IImageDicomObjectBuilder
         return built;
     }
 
+    /// <inheritdoc />
+    public IReadOnlyList<BuiltDicomObject> BuildFromRenderedPages(
+        IReadOnlyList<RenderedPdfPage> pages,
+        PatientDemographics demographics,
+        string studyInstanceUid,
+        string sourceFileName)
+    {
+        ArgumentNullException.ThrowIfNull(pages);
+        ArgumentNullException.ThrowIfNull(demographics);
+        ArgumentException.ThrowIfNullOrWhiteSpace(studyInstanceUid);
+
+        if (pages.Count == 0)
+        {
+            return Array.Empty<BuiltDicomObject>();
+        }
+
+        DateTime now = _nowProvider();
+
+        // A new series inside the study the document was filed under. Its own series is
+        // what keeps the images distinguishable from the document while a viewer still
+        // presents them together.
+        string seriesUid = _uidGenerator.NewSeriesInstanceUid();
+
+        // One above the document's series, so a viewer that orders by series number shows
+        // the readable pages rather than opening on an object it may not render.
+        int seriesNumber = _configuration.SeriesNumber + 1;
+
+        _logger.Information(
+            $"Generating {pages.Count} rendered page image(s) from '{sourceFileName}'. " +
+            $"Study {studyInstanceUid}, series {seriesUid}.");
+
+        var built = new List<BuiltDicomObject>(pages.Count);
+
+        foreach (RenderedPdfPage page in pages)
+        {
+            string sopUid = _uidGenerator.NewSopInstanceUid();
+
+            var dataset = new DicomDataset(DicomTransferSyntax.ExplicitVRLittleEndian);
+
+            _modules.AddSpecificCharacterSet(dataset);
+
+            DicomModuleWriter.AddPatientModule(dataset, demographics);
+            _modules.AddGeneralStudyModule(dataset, demographics, studyInstanceUid, now);
+            _modules.AddSeriesModule(dataset, seriesUid, _configuration.ImageModality, seriesNumber);
+            _modules.AddGeneralEquipmentModule(dataset);
+            _modules.AddScEquipmentModule(dataset);
+            AddGeneralImageModule(dataset, demographics, page.PageNumber, now);
+            AddImagePixelModule(dataset, page.Width, page.Height, page.IsColour, page.Pixels);
+            AddRenderedPageDerivation(dataset, sourceFileName, page.PageNumber, pages.Count);
+            _modules.AddSopCommonModule(
+                dataset, DicomConstants.SecondaryCaptureImageStorageSopClassUid, sopUid, now);
+
+            DicomFile file = _modules.CreateFileWithMetaInformation(
+                dataset, DicomConstants.SecondaryCaptureImageStorageSopClassUid, sopUid);
+
+            string pageSuffix = $"_page{page.PageNumber.ToString("000", CultureInfo.InvariantCulture)}";
+
+            built.Add(new BuiltDicomObject(
+                file,
+                studyInstanceUid,
+                seriesUid,
+                sopUid,
+                DicomModuleWriter.BuildFileName(demographics, sopUid, pageSuffix)));
+        }
+
+        return built;
+    }
+
+    /// <summary>
+    /// Records that these pixels were rendered from the document in the same study, rather
+    /// than acquired.
+    /// </summary>
+    /// <remarks>
+    /// Worth stating in the object itself. Anyone auditing the archive later, or wondering
+    /// why one study holds a report twice, can read the answer from the instance instead of
+    /// inferring it.
+    /// </remarks>
+    private static void AddRenderedPageDerivation(
+        DicomDataset dataset, string sourceFileName, int pageNumber, int pageCount)
+    {
+        dataset.AddOrUpdate(
+            DicomTag.DerivationDescription,
+            DicomValueRules.Sanitise(
+                $"Page {pageNumber} of {pageCount} rendered from the encapsulated PDF document " +
+                $"'{sourceFileName}' in this study.",
+                DicomValueRules.MaxShortTextLength));
+    }
+
     // ------------------------------------------------------------------ Modules
 
     /// <summary>Writes the General Image module, PS3.3 C.7.6.1.</summary>

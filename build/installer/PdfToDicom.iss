@@ -23,7 +23,7 @@
 
 #define AppName        "PDF to DICOM"
 #define AppShortName   "PdfToDicom"
-#define AppVersion     "2.0.1"
+#define AppVersion     "2.1.0"
 #define AppPublisher   "Eduardo Dias"
 #define AppExeName     "PdfToDicom.exe"
 #define CliExeName     "pdftodicom.exe"

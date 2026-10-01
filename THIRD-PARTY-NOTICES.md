@@ -98,11 +98,36 @@ Licence 2.0, which imposes no such condition and matches every other component h
 keeps the licence position of this software simple to state and simple for a hospital's
 procurement to accept.
 
-It is also pure managed code, with no native libraries, which is what allows the
-application to remain a single self contained executable that behaves identically on x86,
-x64 and ARM64.
+It is also pure managed code, with no native libraries.
 
 Full text: https://www.apache.org/licenses/LICENSE-2.0
+
+---
+
+## PDFtoImage 4.1.1, PDFium and SkiaSharp
+
+Renders the pages of a PDF to images, so that the report can also be sent as Secondary
+Capture objects. Many PACS viewers will only open a study that contains an image, and an
+Encapsulated PDF is not an image SOP Class; without this such a viewer refuses to launch
+and the report cannot be read at all.
+
+| Component | Project | Licence |
+|---|---|---|
+| PDFtoImage | https://github.com/sungaila/PDFtoImage | **MIT Licence** |
+| PDFium (via bblanchon.PDFium) | https://pdfium.googlesource.com/pdfium/ | **Apache Licence 2.0** |
+| SkiaSharp | https://github.com/mono/SkiaSharp | **MIT Licence** |
+
+PDFium is the PDF engine used by Google Chrome, so the rendering path is the same one
+billions of documents pass through daily.
+
+**These are the only native binaries in the product.** Everything else is managed code.
+They were accepted after the alternatives were considered: Ghostscript and MuPDF are both
+AGPL, which would place conditions on every hospital receiving this software, and there is
+no pure managed PDF rasterizer of production quality under a permissive licence. All three
+components ship prebuilt for win-x86, win-x64 and win-arm64, so every architecture this
+software targets is covered.
+
+Full texts: https://www.apache.org/licenses/LICENSE-2.0 and https://opensource.org/licenses/MIT
 
 ---
 

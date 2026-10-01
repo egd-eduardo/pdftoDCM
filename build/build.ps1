@@ -187,6 +187,7 @@ function Invoke-Publish {
         -r $Runtime `
         --self-contained true `
         -p:PublishSingleFile=true `
+        -p:IncludeNativeLibrariesForSelfExtract=true `
         -p:EnableCompressionInSingleFile=true `
         -o (Join-Path $Artifacts "$Runtime\cli") `
         --nologo -v quiet

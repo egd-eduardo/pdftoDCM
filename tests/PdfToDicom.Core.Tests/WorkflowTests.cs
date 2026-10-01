@@ -161,6 +161,7 @@ public sealed class ConversionWorkflowServiceTests : IDisposable
             _services.ImageInspector,
             _services.Builder,
             _services.ImageBuilder,
+            _services.PdfRenderer,
             _services.DicomValidator,
             _network,
             _services.FileWriter,
@@ -181,8 +182,89 @@ public sealed class ConversionWorkflowServiceTests : IDisposable
         Assert.True(result.IsCompleteSuccess);
         Assert.NotNull(result.GeneratedFilePath);
         Assert.True(File.Exists(result.GeneratedFilePath));
+
+        // The encapsulated document plus one rendered image per page of the sample, which
+        // is two. Page images are on by default because many viewers will not open a study
+        // that holds no image at all.
+        Assert.Equal(3, result.Transmissions.Count);
+        Assert.All(result.Transmissions, t => Assert.True(t.IsSuccess));
+    }
+
+    [Fact]
+    public async Task ThePageImagesShareTheStudyWithTheDocumentButNotItsSeries()
+    {
+        // This is the whole point of the feature. Same study, so a viewer opens one thing
+        // and finds both. Different series, so the readable pages and the authoritative
+        // document stay distinguishable rather than being jumbled together.
+        ConversionResult result = await Workflow.RunAsync(
+            TestSupport.SamplePdfPath, TestSupport.CreateDemographics());
+
+        Assert.Equal(3, result.SopInstanceUids.Count);
+        Assert.Equal(3, result.SopInstanceUids.Distinct().Count());
+
+        IReadOnlyList<DicomFile> written = TestSupport.ReadGeneratedObjects(result);
+
+        string[] studies = written
+            .Select(f => f.Dataset.GetSingleValue<string>(DicomTag.StudyInstanceUID))
+            .Distinct()
+            .ToArray();
+
+        Assert.Single(studies);
+
+        var bySopClass = written.ToLookup(
+            f => f.Dataset.GetSingleValue<string>(DicomTag.SOPClassUID));
+
+        DicomFile document = Assert.Single(
+            bySopClass[DicomConstants.EncapsulatedPdfStorageSopClassUid]);
+
+        IReadOnlyList<DicomFile> images =
+            bySopClass[DicomConstants.SecondaryCaptureImageStorageSopClassUid].ToArray();
+
+        Assert.Equal(2, images.Count);
+
+        string documentSeries = document.Dataset.GetSingleValue<string>(DicomTag.SeriesInstanceUID);
+        string[] imageSeries = images
+            .Select(f => f.Dataset.GetSingleValue<string>(DicomTag.SeriesInstanceUID))
+            .Distinct()
+            .ToArray();
+
+        // All the pages in one series of their own, distinct from the document's.
+        Assert.Single(imageSeries);
+        Assert.NotEqual(documentSeries, imageSeries[0]);
+
+        // Numbered in page order, so a viewer pages through the report correctly.
+        Assert.Equal(
+            new[] { "1", "2" },
+            images
+                .Select(f => f.Dataset.GetSingleValue<string>(DicomTag.InstanceNumber))
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToArray());
+
+        // Greyscale, because the sample is black text on white, and it says where it came
+        // from rather than leaving an auditor to guess why the study holds the report twice.
+        foreach (DicomFile image in images)
+        {
+            Assert.Equal("MONOCHROME2", image.Dataset.GetSingleValue<string>(DicomTag.PhotometricInterpretation));
+            Assert.Contains(
+                "rendered from the encapsulated PDF",
+                image.Dataset.GetSingleValue<string>(DicomTag.DerivationDescription),
+                StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task TurningPageImagesOffRestoresTheSingleObjectBehaviour()
+    {
+        // A site whose viewer displays encapsulated documents properly should not pay for
+        // the images, and every version before this one produced exactly one object.
+        _services.ConfigurationService.Current.RenderPdfPagesAsImages = false;
+
+        ConversionResult result = await Workflow.RunAsync(
+            TestSupport.SamplePdfPath, TestSupport.CreateDemographics());
+
+        Assert.True(result.IsCompleteSuccess);
         Assert.Single(result.Transmissions);
-        Assert.True(result.Transmissions[0].IsSuccess);
+        Assert.Single(result.SopInstanceUids);
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using FellowOakDicom;
 using PdfToDicom.Core.Abstractions;
 using PdfToDicom.Core.Configuration;
 using PdfToDicom.Core.Dicom;
@@ -43,6 +44,20 @@ internal static class TestSupport
     /// <summary>Path of the sample PDF copied into the test output folder.</summary>
     public static string SamplePdfPath =>
         Path.Combine(AppContext.BaseDirectory, "example-report.pdf");
+
+    /// <summary>
+    /// Reads back every object a run actually wrote, so assertions are made against the
+    /// files that would reach an archive rather than against the builder's return value.
+    /// </summary>
+    public static IReadOnlyList<DicomFile> ReadGeneratedObjects(ConversionResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result.GeneratedFilePaths
+            .Where(File.Exists)
+            .Select(path => DicomFile.Open(path))
+            .ToArray();
+    }
 
     /// <summary>A configuration with predictable values for assertions.</summary>
     public static AppConfiguration CreateConfiguration()

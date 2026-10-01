@@ -130,6 +130,8 @@
   "Settings.ImageModality": "Modalidade para imagens",
   "Settings.ImageModality.Caption": "Escrita em Modality (0008,0060) nas imagens convertidas. OT (Other) é aceite em todo o lado. XC é o termo definido para fotografia com câmara externa. É mantida separada da modalidade dos documentos porque DOC estaria errado numa fotografia.",
   "Settings.Modality": "Modalidade",
+  "Settings.RenderPdfPagesAsImages": "Enviar também cada página do PDF como imagem",
+  "Settings.RenderPdfPagesAsImages.Caption": "Muitos visualizadores de PACS só abrem um estudo que contenha uma imagem, e um PDF encapsulado não o é. Com esta opção ativa, cada página é também enviada como imagem Secondary Capture numa série própria, pelo que o visualizador abre e o relatório fica legível. Desative-a se o seu visualizador já apresentar documentos encapsulados; esta opção duplica aproximadamente o que é armazenado e enviado.",
   "Settings.ConversionType": "Tipo de conversão",
   "ConversionType.WSD": "Estação de trabalho (criado numa estação de trabalho ou consola)",
   "ConversionType.SD": "Documento digitalizado (documento em papel digitalizado para DICOM)",

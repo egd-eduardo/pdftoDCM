@@ -1,7 +1,7 @@
 # DICOM Conformance Statement
 
 **Product:** PDF to DICOM
-**Version:** 2.0.1
+**Version:** 2.1.0
 **Document version:** 1.0
 **Date:** 2026
 
@@ -88,7 +88,7 @@ No SOP class is supported as an SCP.
 | Maximum PDU size (receive) | 16,384 bytes (toolkit default) |
 | Maximum PDU size (send) | Negotiated with the association acceptor |
 | Implementation Class UID | `2.25.164837465109381728394657283910473625` |
-| Implementation Version Name | `PDFTODICOM_2_0` |
+| Implementation Version Name | `PDFTODICOM_2_1` |
 | Application Context Name | `1.2.840.10008.3.1.1.1` |
 | Asynchronous operations | Not supported |
 | SOP class extended negotiation | Not supported |
@@ -251,7 +251,7 @@ not implement a Media Storage Application Profile and performs no media creation
 | File Meta Information Version | `00\01` |
 | Transfer Syntax UID | 1.2.840.10008.1.2.1 |
 | Implementation Class UID | `2.25.164837465109381728394657283910473625` |
-| Implementation Version Name | `PDFTODICOM_2_0` |
+| Implementation Version Name | `PDFTODICOM_2_1` |
 | Source Application Entity Title | The configured Calling AE Title |
 
 ---
@@ -416,6 +416,32 @@ the truth cannot be known.
 ---
 
 ### 7.4 Study and series construction
+
+#### A converted PDF produces two series
+
+Unless page rendering is switched off at the site, converting one PDF produces **two series
+inside a single study**:
+
+| Series | SOP Class | Contents |
+|---|---|---|
+| 1 | Encapsulated PDF Storage `1.2.840.10008.5.1.4.1.1.104.1` | The document, byte for byte |
+| 2 | Secondary Capture Image Storage `1.2.840.10008.5.1.4.1.1.7` | One instance per page, Instance Number 1..n |
+
+**Why both.** Many viewers will only open a study that contains an image, and an
+Encapsulated PDF is not an image SOP Class. At such a site the viewer refuses to launch and
+the report cannot be read at all, however conformant the object is. The rendered pages make
+the report readable on screen; the encapsulated document remains authoritative and carries
+selectable text.
+
+Page images are rendered at 150 DPI by default, carry `ImageType` `DERIVED\SECONDARY`, and
+record their origin in Derivation Description (0008,2111). A page whose colour channels are
+equal everywhere is written as `MONOCHROME2`, which is the usual case for a report and a
+third of the size.
+
+Setting `RenderPdfPagesAsImages` to false restores the single object behaviour of every
+version before 2.1.0.
+
+#### How studies are formed
 
 Each converted file always receives **its own Series Instance UID**. What varies is how
 studies are formed, which the site chooses:

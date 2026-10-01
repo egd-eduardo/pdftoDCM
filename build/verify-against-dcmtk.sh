@@ -151,6 +151,75 @@ fi
 
 # ------------------------------------------------------------------ Convert and send
 
+# Returns the whole dump of a stored object as a string.
+#
+# Deliberately not "dcmdump file | grep -q pattern". grep -q stops reading the moment it
+# matches, which closes the pipe and kills dcmdump with SIGPIPE; under "set -o pipefail"
+# the pipeline then reports failure even though the pattern WAS found. Whether that
+# happens depends on scheduling, so the check passes most of the time and fails
+# occasionally for no visible reason. Measured at roughly fifteen failures in two hundred
+# on this very script.
+#
+# Reading the dump into a variable removes the pipeline, and with it the race.
+dump_of() {
+    dcmdump "$1" 2>/dev/null || true
+}
+
+# True when a stored object declares the given SOP Class.
+declares_sop_class() {
+    local dump
+    dump="$(dump_of "$1")"
+    [[ "$dump" == *"$2"* ]]
+}
+
+# Reads one attribute from a stored object.
+#
+# Keyed on the tag number, not the keyword. dcmdump prints the keyword AFTER the value, as
+# in "(0020,000d) UI [1.2.3] #  6, 1 StudyInstanceUID", so a pattern anchored on the
+# keyword matches nothing and silently yields an empty string. Two empty strings then
+# compare equal, which turns a broken read into a passing test.
+attribute_of() {
+    local file="$1" tag="$2" dump line
+
+    dump="$(dump_of "$file")"
+    line="$(grep -F "($tag)" <<<"$dump" | head -1 || true)"
+
+    sed -n 's/.*\[\([^]]*\)\].*/\1/p' <<<"$line"
+}
+
+# Waits until the archive has finished storing the objects it has acknowledged.
+#
+# storescp forks a child per association and answers the C-STORE before that child has
+# necessarily finished writing and closing the file. Reading the directory once, straight
+# after the sender reports success, therefore sees anything from a complete set to a
+# half written file, and the result changes from run to run. A conversion now sends
+# several objects per document, which widens the window and made this reproducible.
+#
+# Polling until the expected number of files is present AND every one of them parses is
+# the honest fix: a file still being written does not parse.
+wait_for_stored_objects() {
+    local expected="$1"
+    local deadline=$((SECONDS + 30))
+
+    while (( SECONDS < deadline )); do
+        if (( $(find "$RECEIVED_DIR" -type f | wc -l) >= expected )); then
+            local complete=yes
+
+            while read -r stored; do
+                dcmdump "$stored" > /dev/null 2>&1 || complete=no
+            done < <(find "$RECEIVED_DIR" -type f)
+
+            if [[ "$complete" == "yes" ]]; then
+                return 0
+            fi
+        fi
+
+        sleep 0.2
+    done
+
+    return 1
+}
+
 step "Converting and transmitting the sample document"
 
 # An accented Portuguese name is used deliberately: it exercises the UTF-8 encoding path
@@ -176,12 +245,27 @@ fi
 
 step "Inspecting the object the archive received"
 
-RECEIVED="$(find "$RECEIVED_DIR" -type f | head -1)"
+if wait_for_stored_objects 3; then
+    pass "the archive finished storing all three objects"
+else
+    fail "the archive did not finish storing three objects within 30 seconds"
+fi
+
+# A conversion now sends the encapsulated document AND one rendered image per page, so the
+# document has to be picked out by its SOP Class. Taking the first file on disk would
+# sometimes pick a page image and every check below would then be testing the wrong object.
+RECEIVED=""
+while read -r candidate; do
+    if declares_sop_class "$candidate" "EncapsulatedPDFStorage"; then
+        RECEIVED="$candidate"
+        break
+    fi
+done < <(find "$RECEIVED_DIR" -type f | sort)
 
 if [[ -n "$RECEIVED" ]]; then
-    pass "the archive stored an object: $(basename "$RECEIVED")"
+    pass "the archive stored the encapsulated document: $(basename "$RECEIVED")"
 else
-    fail "the archive did not store anything"
+    fail "the archive did not store an encapsulated PDF object"
     exit 1
 fi
 
@@ -354,13 +438,37 @@ fi
 
 # storescp names each stored file after the SOP Class it received, so the names cannot be
 # predicted from here. Every file is asked what it is instead.
-mapfile -t SC_OBJECTS < <(
+#
+# Restricted to this send's own study. The document conversion earlier in this run also
+# produces Secondary Capture objects, one per rendered page, and counting those here would
+# make this check fail for a reason that has nothing to do with the image being tested.
+if ! wait_for_stored_objects 6; then
+    fail "the archive did not finish storing the image's three pages within 30 seconds"
+fi
+
+IMAGE_STUDY=""
+mapfile -t SC_CANDIDATES < <(
     find "$RECEIVED_DIR" -type f | sort | while read -r f; do
-        if dcmdump "$f" 2>/dev/null | grep -q "SecondaryCaptureImageStorage"; then
+        if declares_sop_class "$f" "SecondaryCaptureImageStorage"; then
             echo "$f"
         fi
     done
 )
+
+# The image's study is the one holding objects whose accession is this send's.
+for f in "${SC_CANDIDATES[@]}"; do
+    if [[ "$(attribute_of "$f" "0008,0050")" == "ACCTEST0002" ]]; then
+        IMAGE_STUDY="$(attribute_of "$f" "0020,000d")"
+        break
+    fi
+done
+
+SC_OBJECTS=()
+for f in "${SC_CANDIDATES[@]}"; do
+    if [[ -n "$IMAGE_STUDY" && "$(attribute_of "$f" "0020,000d")" == "$IMAGE_STUDY" ]]; then
+        SC_OBJECTS+=("$f")
+    fi
+done
 
 if (( ${#SC_OBJECTS[@]} == 3 )); then
     pass "the archive stored three instances, one per page"
@@ -371,7 +479,7 @@ fi
 if (( ${#SC_OBJECTS[@]} > 0 )); then
     SERIES_COUNT=$(
         for f in "${SC_OBJECTS[@]}"; do
-            dcmdump "$f" 2>/dev/null | grep "SeriesInstanceUID" | head -1
+            attribute_of "$f" "0020,000e"
         done | sort -u | wc -l
     )
 
@@ -383,7 +491,7 @@ if (( ${#SC_OBJECTS[@]} > 0 )); then
 
     STUDY_COUNT=$(
         for f in "${SC_OBJECTS[@]}"; do
-            dcmdump "$f" 2>/dev/null | grep "StudyInstanceUID" | head -1
+            attribute_of "$f" "0020,000d"
         done | sort -u | wc -l
     )
 
@@ -468,6 +576,138 @@ PYTHON
     if (( $? != 0 )); then
         FAILURES=$((FAILURES + 1))
     fi
+fi
+
+# ------------------------------------- The page images that accompany the document
+
+# Why this matters: many PACS viewers will only open a study that contains an image. An
+# Encapsulated PDF is not an image SOP Class, so at such a site the viewer refuses to
+# launch and the report cannot be read at all. The converter therefore also sends every
+# page rendered as a Secondary Capture image, in its own series inside the same study.
+step "Checking the rendered page images that accompany the document"
+
+DOC_STUDY="$(attribute_of "$RECEIVED" "0020,000d")"
+DOC_SERIES="$(attribute_of "$RECEIVED" "0020,000e")"
+
+if [[ -n "$DOC_STUDY" && -n "$DOC_SERIES" ]]; then
+    pass "the document's study and series identifiers were read"
+else
+    fail "the document's identifiers could not be read, so nothing below can be trusted"
+fi
+
+# Only the images belonging to the document's study. The image conversion tested earlier in
+# this run put its own Secondary Capture objects in the same receiving folder.
+PAGE_IMAGES=()
+while read -r candidate; do
+    declares_sop_class "$candidate" "SecondaryCaptureImageStorage" || continue
+    [[ "$(attribute_of "$candidate" "0020,000d")" == "$DOC_STUDY" ]] || continue
+    PAGE_IMAGES+=("$candidate")
+done < <(find "$RECEIVED_DIR" -type f | sort)
+
+# The sample report is two pages, so two images should have arrived with it.
+if [[ ${#PAGE_IMAGES[@]} -eq 2 ]]; then
+    pass "both pages of the document arrived as Secondary Capture images"
+else
+    fail "expected 2 page images, found ${#PAGE_IMAGES[@]}"
+fi
+
+IMAGE_SERIES=""
+IMAGE_SERIES_COUNT=0
+PAGE_NUMBERS=""
+
+for image in "${PAGE_IMAGES[@]}"; do
+    IMG_DUMP="$WORK_DIR/$(basename "$image").txt"
+    dcmdump "$image" > "$IMG_DUMP" 2>&1
+
+    study="$(attribute_of "$image" "0020,000d")"
+    series="$(attribute_of "$image" "0020,000e")"
+    instance="$(attribute_of "$image" "0020,0013")"
+
+    # Same study as the document: this is what makes one viewer launch show both.
+    if [[ "$study" == "$DOC_STUDY" ]]; then
+        pass "page $instance is in the same study as the document"
+    else
+        fail "page $instance is in study '$study', not the document's '$DOC_STUDY'"
+    fi
+
+    # A different series from the document: this is what keeps them distinguishable.
+    if [[ "$series" != "$DOC_SERIES" ]]; then
+        pass "page $instance is in its own series, separate from the document"
+    else
+        fail "page $instance shares the document's series"
+    fi
+
+    if [[ -z "$IMAGE_SERIES" ]]; then
+        IMAGE_SERIES="$series"
+        IMAGE_SERIES_COUNT=1
+    elif [[ "$series" != "$IMAGE_SERIES" ]]; then
+        IMAGE_SERIES_COUNT=$((IMAGE_SERIES_COUNT + 1))
+    fi
+
+    PAGE_NUMBERS="$PAGE_NUMBERS $instance"
+done
+
+# All the pages belong together, in one series, so a viewer pages through the report.
+if [[ $IMAGE_SERIES_COUNT -eq 1 ]]; then
+    pass "all the page images share a single series"
+else
+    fail "the page images are spread across $IMAGE_SERIES_COUNT series"
+fi
+
+if [[ "$(echo $PAGE_NUMBERS | tr ' ' '\n' | sort -n | tr '\n' ' ')" == "1 2 " ]]; then
+    pass "the pages are numbered 1 and 2, so a viewer shows them in order"
+else
+    fail "unexpected page numbering:$PAGE_NUMBERS"
+fi
+
+# The decisive check. A renderer that produced blank pages would satisfy everything above
+# and be worse than useless: the viewer would launch and show nothing at all.
+step "Confirming the rendered pages actually carry the report"
+
+BLANK=0
+INKED=0
+
+for image in "${PAGE_IMAGES[@]}"; do
+    png="$WORK_DIR/$(basename "$image").pnm"
+
+    if ! dcm2pnm "$image" "$png" > /dev/null 2>&1; then
+        fail "$(basename "$image") could not be rendered back to an image"
+        continue
+    fi
+
+    # Count samples that are not near white. A rendered page of a report is mostly white
+    # with dark text, so a page with no dark samples at all is blank.
+    dark="$(python3 - "$png" <<'PY'
+import sys
+data = open(sys.argv[1], 'rb').read()
+# Skip the PNM header: magic, dimensions, maxval, each whitespace separated.
+fields, index = 0, 0
+while fields < 4 and index < len(data):
+    while index < len(data) and data[index:index + 1].isspace():
+        index += 1
+    if data[index:index + 1] == b'#':
+        while index < len(data) and data[index] != 0x0A:
+            index += 1
+        continue
+    while index < len(data) and not data[index:index + 1].isspace():
+        index += 1
+    fields += 1
+index += 1
+print(sum(1 for b in data[index:] if b < 128))
+PY
+)"
+
+    if [[ "$dark" -gt 1000 ]]; then
+        pass "$(basename "$image") carries the report: $dark dark samples"
+        INKED=$((INKED + 1))
+    else
+        fail "$(basename "$image") appears blank: only $dark dark samples"
+        BLANK=$((BLANK + 1))
+    fi
+done
+
+if [[ $INKED -eq 2 && $BLANK -eq 0 ]]; then
+    pass "every page a clinician would open is legible, not a placeholder"
 fi
 
 # ------------------------------------------------------------------ Result

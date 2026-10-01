@@ -181,6 +181,35 @@ public sealed class AppConfiguration
     /// <summary>Default Series Description for a converted image.</summary>
     public string DefaultImageSeriesDescription { get; set; } = "Imported Image";
 
+    /// <summary>
+    /// Whether every page of a converted PDF is also sent as a Secondary Capture image,
+    /// in its own series within the same study.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On by default, because many PACS viewers will only open a study that contains an
+    /// image. An Encapsulated PDF is not an image SOP Class, so without this such a viewer
+    /// refuses to launch and the report cannot be read at all, however correct the object
+    /// is. With it, the viewer opens and the report is legible on screen.
+    /// </para>
+    /// <para>
+    /// Turn it off at a site whose viewer displays encapsulated documents properly. The
+    /// images roughly double what is stored and transmitted, and there is no reason to pay
+    /// that where the document alone already works.
+    /// </para>
+    /// </remarks>
+    public bool RenderPdfPagesAsImages { get; set; } = true;
+
+    /// <summary>
+    /// Resolution used when rendering PDF pages to images.
+    /// </summary>
+    /// <remarks>
+    /// 150 is the usual floor for body text that stays comfortably readable on screen, and
+    /// is what this was verified at. Raising it improves fine print and grows every object
+    /// by the square of the change: 300 is four times the pixels of 150.
+    /// </remarks>
+    public int PdfRenderDotsPerInch { get; set; } = 150;
+
     /// <summary>Default Study Description for a converted image.</summary>
     public string DefaultImageStudyDescription { get; set; } = "Imported Image";
 

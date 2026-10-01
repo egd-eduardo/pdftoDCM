@@ -130,6 +130,8 @@
   "Settings.ImageModality": "Modality for images",
   "Settings.ImageModality.Caption": "Written to Modality (0008,0060) on converted images. OT (Other) is accepted everywhere. XC is the defined term for external camera photography. This is kept separate from the document modality because DOC would be wrong on a photograph.",
   "Settings.Modality": "Modality",
+  "Settings.RenderPdfPagesAsImages": "Also send each page of a PDF as an image",
+  "Settings.RenderPdfPagesAsImages.Caption": "Many PACS viewers will only open a study that contains an image, and an encapsulated PDF is not one. With this on, every page is also sent as a Secondary Capture image in its own series, so the viewer opens and the report is readable. Turn it off if your viewer already displays encapsulated documents; it roughly doubles what is stored and sent.",
   "Settings.ConversionType": "Conversion type",
   "ConversionType.WSD": "Workstation (created on a workstation or console)",
   "ConversionType.SD": "Scanned Document (a paper document scanned into DICOM)",

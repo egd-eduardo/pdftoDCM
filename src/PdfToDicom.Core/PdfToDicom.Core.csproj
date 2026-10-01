@@ -24,6 +24,16 @@
          keeps redistribution simple. It is pure managed code, so it adds no native
          binaries to the single file executable and behaves identically on ARM64. -->
     <PackageReference Include="SixLabors.ImageSharp" Version="2.1.11" />
+    <!-- Renders PDF pages to bitmaps so a viewer that will only open a study containing an
+         image can still show the report. PDFtoImage is MIT and wraps PDFium, which is
+         Apache-2.0 and is the PDF engine in Chrome. Both ship win-x86, win-x64 and
+         win-arm64 binaries, so every architecture this software targets is covered.
+
+         These are the first native dependencies in the product. They are the reason the
+         command line tool now also publishes with IncludeNativeLibrariesForSelfExtract:
+         without it the natives would sit beside the executable instead of inside it, and
+         the single file promise would quietly stop being true. -->
+    <PackageReference Include="PDFtoImage" Version="4.1.1" />
     <!-- Serilog: structured logging with rolling file sinks. -->
     <PackageReference Include="Serilog" Version="4.2.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />

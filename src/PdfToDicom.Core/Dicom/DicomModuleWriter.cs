@@ -38,7 +38,7 @@ internal sealed class DicomModuleWriter
 
     /// <summary>Product version reported in Software Versions (0018,1020).</summary>
     internal static string ProductVersion =>
-        typeof(DicomModuleWriter).Assembly.GetName().Version?.ToString(3) ?? "2.0.1";
+        typeof(DicomModuleWriter).Assembly.GetName().Version?.ToString(3) ?? "2.1.0";
 
     /// <summary>
     /// Writes Specific Character Set (0008,0005). The attribute is Type 1C and is
@@ -123,7 +123,12 @@ internal sealed class DicomModuleWriter
     /// Value for Modality (0008,0060), which is Type 1 in both modules. It differs by
     /// object: a document series may be OT or DOC, while an image series is OT or XC.
     /// </param>
-    internal void AddSeriesModule(DicomDataset dataset, string seriesUid, string modality)
+    /// <param name="seriesNumber">
+    /// Overrides the configured series number. Used when one conversion produces more than
+    /// one series, so that a viewer orders them predictably rather than arbitrarily.
+    /// </param>
+    internal void AddSeriesModule(
+        DicomDataset dataset, string seriesUid, string modality, int? seriesNumber = null)
     {
         dataset.AddOrUpdate(
             DicomTag.Modality,
@@ -132,7 +137,7 @@ internal sealed class DicomModuleWriter
         dataset.AddOrUpdate(DicomTag.SeriesInstanceUID, seriesUid);
         dataset.AddOrUpdate(
             DicomTag.SeriesNumber,
-            _configuration.SeriesNumber.ToString(CultureInfo.InvariantCulture));
+            (seriesNumber ?? _configuration.SeriesNumber).ToString(CultureInfo.InvariantCulture));
     }
 
     /// <summary>Writes the General Equipment module, PS3.3 C.7.5.1.</summary>

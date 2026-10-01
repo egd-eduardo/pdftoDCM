@@ -121,8 +121,8 @@ Two things appear under `artifacts\`:
 
 ```
 artifacts\
-  PdfToDicom-2.0.1-win-x64\        <- the folder to hand over
-  PdfToDicom-2.0.1-win-x64.zip     <- the same, ready to email
+  PdfToDicom-2.1.0-win-x64\        <- the folder to hand over
+  PdfToDicom-2.1.0-win-x64.zip     <- the same, ready to email
 ```
 
 The folder contains everything a site needs and nothing it should not have:

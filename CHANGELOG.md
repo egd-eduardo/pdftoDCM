@@ -1,5 +1,65 @@
 # Changelog
 
+## 2.1.0
+
+**A converted PDF now also arrives as page images, so a viewer that needs an image will
+open it.**
+
+Many PACS viewers will only launch on a study that contains an image. An Encapsulated PDF
+is not an image SOP Class, so at such a site the viewer refused to open and the report
+could not be read at all, however conformant the object was.
+
+Converting one PDF now produces two series in a single study: the encapsulated document,
+and one Secondary Capture image per page. The viewer opens, the report is legible on
+screen, and the document remains authoritative with selectable text.
+
+### Why the pages are rendered rather than a blank image sent
+
+A blank placeholder would have satisfied the viewer with far less work. It was rejected:
+a blank image in a patient's record is actively misleading. A clinician scanning a worklist
+sees an empty thumbnail and reasonably concludes the study is empty or the acquisition
+failed, so the study holding the actual report gets skipped. It would satisfy the viewer
+while defeating the purpose of sending the report.
+
+### Details
+
+- **150 DPI by default**, which keeps body text comfortably readable and is what this was
+  verified at. Configurable through `PdfRenderDotsPerInch`.
+- **Greyscale when the page has no colour**, decided from the pixels rather than assumed.
+  A report is usually black text on white, and storing that as RGB would triple every
+  object for nothing.
+- **Every page, never a subset.** Rendering only the first page would let a reader believe
+  they had seen a report whose findings continue on page three.
+- **Own series, same study.** The pages are numbered so a viewer pages through them in
+  order, and stay distinguishable from the document.
+- **Derivation Description** records that the pixels were rendered from the document in
+  the same study, so an auditor need not guess why one study holds the report twice.
+- **Switchable.** `RenderPdfPagesAsImages`, on the DICOM tab in Settings, restores the
+  single object behaviour for a site whose viewer already displays encapsulated documents.
+- **Rendering never blocks the report.** If the renderer cannot load or a document will not
+  render, the failure is logged and the encapsulated PDF is produced and sent regardless.
+
+### The first native dependency
+
+Rendering needs PDFium, the PDF engine in Chrome, reached through PDFtoImage. PDFium is
+Apache-2.0 and PDFtoImage is MIT, matching the existing licence set, and all the pieces
+ship for win-x86, win-x64 and win-arm64. The alternatives were Ghostscript and MuPDF, both
+AGPL, which would place conditions on every hospital receiving this software.
+
+This is the first native code in the product and costs roughly 11 to 13 MB per executable
+before compression. The command line tool now publishes with
+`IncludeNativeLibrariesForSelfExtract`, which it never needed before; without that change
+its single file promise would have quietly stopped being true.
+
+### Fixed along the way
+
+- **The interoperability check could test the wrong object.** It took the first file the
+  archive stored, which with several objects arriving was no longer reliably the document.
+- **Two of its checks could pass without reading anything.** They matched on the DICOM
+  keyword, which `dcmdump` prints *after* the value, so the reads returned empty strings
+  and comparing two empty strings succeeded. Attributes are now read by tag number.
+
+
 ## 2.0.1
 
 - **Dragging an image onto the window did nothing.** The drop handler still required a
