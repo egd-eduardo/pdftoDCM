@@ -99,9 +99,11 @@ jobs:
       - name: Install DCMTK for the interoperability check
         run: sudo apt-get update && sudo apt-get install -y dcmtk
 
-      - name: Verify interoperability against a reference DICOM archive
+      - name: Verify interoperability against a reference DICOM archive and worklist
         # Proves that an independent, standards conformant implementation accepts the
-        # generated object, which the unit tests cannot establish on their own.
+        # generated object, which the unit tests cannot establish on their own. The same
+        # script then drives the worklist client against DCMTK's own wlmscpfs, on the
+        # next port up, for the same reason.
         run: bash build/verify-against-dcmtk.sh 11112
 
       - name: Upload test results

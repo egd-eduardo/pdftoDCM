@@ -107,6 +107,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OpenOutputFolderCommand = new RelayCommand(OpenOutputFolder);
         ShowAboutCommand = new RelayCommand(ShowAbout);
         ApplyTemplateCommand = new RelayCommand(ApplyTemplate);
+        OpenWorklistCommand = new RelayCommand(OpenWorklist, () => !IsBusy);
         SaveTemplateCommand = new RelayCommand(SaveTemplate, () => !IsBusy);
 
         StatusMessage = Localize("Status.Ready");
@@ -483,6 +484,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>Applies the selected template to the form.</summary>
     public RelayCommand ApplyTemplateCommand { get; }
+
+    /// <summary>Opens the worklist so a scheduled procedure can be chosen.</summary>
+    public RelayCommand OpenWorklistCommand { get; }
 
     /// <summary>Saves the current non identifying values as a template.</summary>
     public RelayCommand SaveTemplateCommand { get; }
@@ -1027,6 +1031,62 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         window.ShowDialog();
     }
 
+    /// <summary>
+    /// True when a worklist has been configured, which decides whether the button is
+    /// offered at all. A button that always fails is worse than no button.
+    /// </summary>
+    public bool IsWorklistAvailable =>
+        _services.ConfigurationService.Current.Worklist.IsEnabled;
+
+    /// <summary>
+    /// Opens the worklist and, when an entry is chosen, fills the patient fields from it.
+    /// </summary>
+    /// <remarks>
+    /// Everything the worklist supplies replaces what is on the form. Merging the two would
+    /// leave a half typed name beside an identifier from somewhere else, which is exactly
+    /// the state that puts a document on the wrong patient.
+    /// </remarks>
+    private void OpenWorklist()
+    {
+        var viewModel = new WorklistViewModel(_services);
+        var window = new WorklistWindow
+        {
+            Owner = Application.Current.MainWindow,
+            DataContext = viewModel
+        };
+
+        if (window.ShowDialog() != true)
+        {
+            return;
+        }
+
+        PatientDemographics? chosen = viewModel.BuildDemographics();
+
+        if (chosen is null)
+        {
+            return;
+        }
+
+        PatientId = chosen.PatientId;
+        FamilyName = chosen.FamilyName;
+        GivenName = chosen.GivenName;
+        MiddleName = string.Empty;
+        DateOfBirth = chosen.DateOfBirth;
+        Sex = chosen.Sex;
+        AccessionNumber = chosen.AccessionNumber;
+        ReferringPhysician = chosen.ReferringPhysicianName;
+        StudyInstanceUid = chosen.ExistingStudyInstanceUid;
+
+        if (!string.IsNullOrWhiteSpace(chosen.StudyDescription))
+        {
+            StudyDescription = chosen.StudyDescription;
+        }
+
+        _services.Logger.Information(
+            $"Patient details were taken from the worklist for '{chosen.PatientId}', " +
+            $"accession '{chosen.AccessionNumber}'.");
+    }
+
     private void OpenSettings()
     {
         var viewModel = new SettingsViewModel(_services);
@@ -1044,6 +1104,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             OnPropertyChanged(nameof(InstitutionHeader));
             OnPropertyChanged(nameof(ShowAdvancedFields));
+
+            // Switching the worklist on has to show the button now, not after a restart.
+            // Whoever has just configured it will try it immediately, and a button that
+            // is not there reads as the setting having failed.
+            OnPropertyChanged(nameof(IsWorklistAvailable));
         }
     }
 

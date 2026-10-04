@@ -201,6 +201,16 @@ public sealed class AppConfiguration
     public bool RenderPdfPagesAsImages { get; set; } = true;
 
     /// <summary>
+    /// Connection and query settings for the Modality Worklist.
+    /// </summary>
+    /// <remarks>
+    /// Typing a patient identifier by hand is the likeliest way to file a document against
+    /// the wrong patient. Taking it from the worklist that scheduled the examination
+    /// removes the step entirely, which is why this is here.
+    /// </remarks>
+    public WorklistConfiguration Worklist { get; set; } = new();
+
+    /// <summary>
     /// Resolution used when rendering PDF pages to images.
     /// </summary>
     /// <remarks>

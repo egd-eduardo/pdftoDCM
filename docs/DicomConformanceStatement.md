@@ -1,8 +1,8 @@
 # DICOM Conformance Statement
 
 **Product:** PDF to DICOM
-**Version:** 2.1.0
-**Document version:** 1.0
+**Version:** 3.0.0
+**Document version:** 1.1
 **Date:** 2026
 
 ---
@@ -27,13 +27,18 @@ archive concerned.
         ┌──────────────────────────────────────────────────────┐
         │              PDF to DICOM workstation                │
         │                                                      │
+        │      Worklist SCU  ◄───────────────────────────────  ┼───  Modality
+        │            │                                         │     Worklist SCP
+        │            ▼   (Patient ID, name, accession,         │
+        │       Demographics  Study Instance UID)              │
+        │            │                                         │
    PDF ─┼──►  Encapsulate  ──►  Validate  ──►  Storage SCU ────┼──►  Remote
         │     (local)           (local)         Verification   │     Storage SCP
         │                                       SCU            │     (PACS)
         └──────────────────────────────────────────────────────┘
                                                     ▲
                                                     │
-                              Association initiated by this product only.
+                              Every association is initiated by this product.
                               No listening port. No inbound associations.
 ```
 
@@ -42,8 +47,15 @@ association.
 
 ### 1.2 Functional definition of the Application Entity
 
-A single AE performs all DICOM activity. It is invoked when the operator sends a document,
-tests a destination, or the command line tool is run.
+A single AE performs all DICOM activity. It is invoked when the operator opens the
+worklist, sends a document, tests a destination, or the command line tool is run.
+
+When the operator opens the worklist:
+
+1. Establish an association with the configured Modality Worklist SCP and issue
+   **C-FIND** against the Modality Worklist Information Model.
+2. Release the association. **No patient data is written anywhere by this activity**; the
+   response populates the form on screen and nothing else.
 
 For each configured and enabled destination, in sequence:
 
@@ -57,11 +69,12 @@ destination does not prevent the others from being attempted.
 
 ### 1.3 Sequencing of real world activities
 
-- Demographics are supplied by the operator, or by a barcode scan. **No Modality Worklist
-  query is performed** (see section 8).
+- Demographics are taken from a **Modality Worklist** entry the operator selects, or are
+  supplied by the operator or by a barcode scan where no worklist is configured.
 - Identifiers are generated locally at the moment of conversion.
-- A new Study Instance UID is generated per document, unless the operator supplies an
-  existing one to file the document into an existing study.
+- A new Study Instance UID is generated per document, **unless the demographics came from
+  a worklist entry that carried one**, in which case the document is filed into the study
+  the order already created, or unless the operator supplies one explicitly.
 
 ---
 
@@ -76,6 +89,7 @@ Provides standard conformance to the following SOP classes as an **SCU**:
 | Verification | 1.2.840.10008.1.1 | SCU |
 | Encapsulated PDF Storage | 1.2.840.10008.5.1.4.1.1.104.1 | SCU |
 | Secondary Capture Image Storage | 1.2.840.10008.5.1.4.1.1.7 | SCU |
+| Modality Worklist Information Model — FIND | 1.2.840.10008.5.1.4.31 | SCU |
 
 No SOP class is supported as an SCP.
 
@@ -88,7 +102,7 @@ No SOP class is supported as an SCP.
 | Maximum PDU size (receive) | 16,384 bytes (toolkit default) |
 | Maximum PDU size (send) | Negotiated with the association acceptor |
 | Implementation Class UID | `2.25.164837465109381728394657283910473625` |
-| Implementation Version Name | `PDFTODICOM_2_1` |
+| Implementation Version Name | `PDFTODICOM_3_0` |
 | Application Context Name | `1.2.840.10008.3.1.1.1` |
 | Asynchronous operations | Not supported |
 | SOP class extended negotiation | Not supported |
@@ -115,6 +129,26 @@ separate associations.
 
 A per destination Calling AE Title override is available for sites that require a
 different identity per archive.
+
+The worklist is configured separately, because a worklist server is usually a different
+system from the archive:
+
+| Parameter | Default | Range |
+|---|---|---|
+| Worklist enabled | Disabled | Boolean |
+| Worklist Called AE Title | `WORKLIST` | 1–16 characters, AE VR |
+| Worklist host | — | Host name or IP address |
+| Worklist port | 104 | 1–65535 |
+| Worklist Calling AE Title override | Empty, meaning use the application's own | 1–16 characters, AE VR |
+| `Modality` match key | Empty, meaning match every modality | CS VR, or empty |
+| `ScheduledStationAETitle` match key | Empty, meaning match every station | AE VR, or empty |
+| Scheduled date range | Today | Today, yesterday and today, last seven days, any date, or an explicit range |
+| Query timeout | 30 s | 1–600 s |
+| Maximum entries shown | 500 | 1–10,000 |
+| TLS | Disabled | Boolean |
+
+An empty match key is **universal matching** as defined by PS3.4 C.2.2.2.4, not a missing
+value: it asks the server to match every value and to report what it found.
 
 ### 2.3 Association initiation policy
 
@@ -168,6 +202,74 @@ Objects are encoded in Explicit VR Little Endian.
 
 **Association rejection and abort** are reported with the reason, mapped to operator
 facing guidance.
+
+#### 2.3.3 Activity: Query the Modality Worklist
+
+**Description.** Retrieves the scheduled procedure steps the operator chooses from, so
+the patient identifiers are taken from the order rather than typed. Issued when the
+worklist window is opened or a search is run within it. **No patient data is transmitted
+by this activity**; it only receives.
+
+**Proposed presentation contexts:**
+
+| Abstract Syntax | Transfer Syntax | Role | Extended Negotiation |
+|---|---|---|---|
+| Modality Worklist Information Model — FIND (1.2.840.10008.5.1.4.31) | Implicit VR Little Endian (1.2.840.10008.1.2) | SCU | None |
+
+Implicit VR Little Endian is the DICOM default transfer syntax, which PS3.5 requires every
+SCP to support, so a single proposed context is sufficient here. The query carries no
+private data elements, which is the case where implicit encoding would be a limitation.
+
+**Match keys sent.** `PatientID` and `PatientName` carry whatever the operator typed into
+the search boxes, with `*` and `?` wildcards passed through unchanged. Inside the
+Scheduled Procedure Step Sequence, `Modality` and `ScheduledStationAETitle` carry the
+configured values, and `ScheduledProcedureStepStartDate` carries a single date or a
+`YYYYMMDD-YYYYMMDD` range. Each is sent empty when nothing is configured, which is
+universal matching.
+
+**Return keys sent.** `PatientBirthDate`, `PatientSex`, `AccessionNumber`,
+`ReferringPhysicianName`, `StudyInstanceUID`, `RequestedProcedureDescription`,
+`RequestedProcedureID`, and, within the sequence, `ScheduledProcedureStepStartTime`,
+`ScheduledProcedureStepDescription`, `ScheduledProcedureStepID` and
+`ScheduledPerformingPhysicianName`. All are sent with an empty value. An attribute that is
+not sent is not returned, which is the usual cause of a worklist query that appears to
+work but comes back without a Study Instance UID.
+
+`SpecificCharacterSet` is sent as `ISO_IR 192`, so the server knows the client can accept
+accented and non Latin names rather than being entitled to transliterate them.
+
+**Response handling:**
+
+| Status | Behaviour |
+|---|---|
+| `FF00`, `FF01` (Pending) | The data set carries one scheduled step and is added to the list. |
+| `0000` (Success) | The query is complete. Zero results is reported as an empty worklist, not as a failure. |
+| Any other status | Reported to the operator verbatim with its code. No entries are shown. |
+| No response, timeout, refusal | Reported as a transport failure, with guidance naming the AE Title, host and port that were tried. |
+
+**Handling of what comes back.**
+
+- Only the **first (alphabetic) component group** of `PatientName` is read. A group
+  following `=` is the same name in another script, not further name text.
+- Only the **family and given name components** are used. The middle name, prefix and
+  suffix are read and discarded, because the department does not use them and because
+  they would otherwise consume part of the sixty four characters the VR allows.
+- A Person Name component group is limited to **64 characters** by PS3.5. Where a
+  worklist entry exceeds that, the family name is kept whole and the given name is
+  shortened at a word boundary; where the family name alone exceeds it, the family name
+  itself is cut at a word boundary and the given name dropped. The operator is shown what
+  will be sent, and the shortening is recorded in the audit log with the original length.
+- An entry carrying neither a Patient ID nor a family name is skipped; it cannot be acted
+  on.
+- A missing optional attribute never discards an otherwise usable entry. Worklist servers
+  differ in what they populate, and rejecting an entry over one absent field would send
+  the operator back to typing, which is the thing this activity exists to prevent.
+
+**Effect on the stored object.** When a worklist entry is used, its `StudyInstanceUID` is
+carried into the generated objects, so the document is filed into the study the order
+created rather than into one of its own. `PatientID`, `PatientName`, `PatientBirthDate`,
+`PatientSex`, `AccessionNumber` and `ReferringPhysicianName` are taken from the entry as
+received, subject only to the shortening described above.
 
 ### 2.4 Association acceptance policy
 
@@ -232,6 +334,8 @@ None.
 | Calling AE Title | Yes | Must be registered on each receiving archive |
 | Called AE Title | Yes, per destination | Must match the archive's own AE Title |
 | Remote host and port | Yes, per destination | |
+| Worklist Called AE Title, host and port | Yes | Configured separately from the destinations |
+| Worklist Calling AE Title | Yes | Defaults to the application's own Calling AE Title |
 | Local listening port | Not applicable | The product does not listen |
 
 ### 5.2 Configuration parameters
@@ -251,7 +355,7 @@ not implement a Media Storage Application Profile and performs no media creation
 | File Meta Information Version | `00\01` |
 | Transfer Syntax UID | 1.2.840.10008.1.2.1 |
 | Implementation Class UID | `2.25.164837465109381728394657283910473625` |
-| Implementation Version Name | `PDFTODICOM_2_1` |
+| Implementation Version Name | `PDFTODICOM_3_0` |
 | Source Application Entity Title | The configured Calling AE Title |
 
 ---
@@ -462,6 +566,12 @@ by another system, and treating `ab1` and `AB1` as the same patient would be a g
 A Study Instance UID supplied by the operator overrides grouping entirely, which is how a
 document is filed into a study that already exists in the archive.
 
+**A Study Instance UID that came from a worklist entry overrides it in the same way.** It
+is the most useful thing a worklist response carries: the order has already created the
+study the images will land in, so taking its identifier is what puts the report beside
+them in the archive rather than in a study of its own. Where the worklist server does not
+populate `StudyInstanceUID`, the configured grouping applies as normal.
+
 ---
 
 ### 7.5 Character set support
@@ -503,10 +613,17 @@ registered arc. Both are conformant; neither needs anything configured at the si
 
 ## 8. Support of extended character sets and worklists
 
-- Extended character sets: as section 7.3.
-- **Modality Worklist: not supported.** Demographics are entered or scanned by the
-  operator. This is the most significant functional limitation of the product and is
-  recorded here so that a site can weigh the transcription risk.
+- Extended character sets: as section 7.5.
+- **Modality Worklist: supported as an SCU**, as set out in section 2.3.3. The operator
+  selects a scheduled procedure step and the identifiers are taken from the order rather
+  than typed, which removes the transcription step where a document is most likely to be
+  filed against the wrong patient.
+- Where no worklist is available, demographics are entered or scanned by the operator
+  exactly as in earlier versions. The worklist is additive and disabled by default.
+- **No other worklist service is supported.** The product is not a Modality Performed
+  Procedure Step SCU: it does not send MPPS N-CREATE or N-SET, so an order is never
+  marked started or completed by this product. A site that relies on MPPS to close orders
+  must continue to do so from the acquiring modality.
 
 ---
 
@@ -514,16 +631,29 @@ registered arc. Both are conformant; neither needs anything configured at the si
 
 ### 9.1 Verified interoperability
 
-The product has been verified end to end against **DCMTK** (`storescp`), the widely used
-reference implementation, by an automated script included in the repository
-(`build/verify-against-dcmtk.sh`). The verification confirms:
+The product has been verified end to end against **DCMTK** (`storescp` and `wlmscpfs`),
+the widely used reference implementation, by an automated script included in the
+repository (`build/verify-against-dcmtk.sh`). The verification confirms:
 
 - C-ECHO is accepted;
 - C-STORE is accepted with status `0000`;
 - `dcmdump` parses the received object without error;
 - every mandatory attribute is present and carries the expected value;
 - an accented Portuguese patient name survives the round trip intact;
-- the extracted PDF is **byte identical** to the source document.
+- the extracted PDF is **byte identical** to the source document;
+- the rendered page images carry the report rather than being blank placeholders.
+
+For the worklist, against `wlmscpfs`:
+
+- C-FIND against the Modality Worklist Information Model is accepted and answered;
+- the Patient ID, Accession Number and **Study Instance UID** come back intact, so the
+  document can be filed into the study the order created;
+- an accented Portuguese name returned under `ISO_IR 192` survives the round trip;
+- a name of 73 characters is reported as over length and shortened with the family name
+  kept whole;
+- `PatientID` and `PatientName`, including wildcards, genuinely narrow the result, and a
+  scheduled date range in the past returns nothing, which together establish that the
+  filters are sent as match keys rather than echoed as return keys.
 
 ### 9.2 Expected interoperability
 
@@ -549,6 +679,13 @@ For the PACS administrator:
 - [ ] Confirm the archive accepts **ISO_IR 192**; if not, switch to `ISO_IR 100`.
 - [ ] Confirm the archive tolerates **private data elements**; if not, disable the page
       count attribute.
+- [ ] If the worklist is to be used: register this workstation's Calling AE Title on the
+      **worklist server** as well, enable **Modality Worklist Information Model — FIND**
+      (`1.2.840.10008.5.1.4.31`), and confirm the server accepts **Implicit VR Little
+      Endian** and returns `ISO_IR 192`.
+- [ ] If the worklist is to be used: confirm whether the worklist populates
+      `StudyInstanceUID` in its responses. Without it the document cannot join the study
+      the order created, and will be filed in a study of its own.
 - [ ] Test with *Test connection*, then with a non clinical document.
 - [ ] Confirm the document appears under the correct Patient ID and Accession Number.
 - [ ] Confirm a clinician can open the PDF from the archive's viewer.
@@ -560,3 +697,4 @@ For the PACS administrator:
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | 2026 | Initial release |
+| 1.1 | 2026 | Modality Worklist Information Model — FIND added as an SCU (sections 1.1, 1.2, 1.3, 2.1, 2.2.3, 2.3.3, 5.1, 8, 9.1, 9.3). Implementation Version Name changed to `PDFTODICOM_3_0`. |

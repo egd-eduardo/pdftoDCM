@@ -12,9 +12,12 @@
 #   2. drives the application's own command line front end to convert and send a PDF,
 #   3. confirms the archive received the object,
 #   4. dumps the received object with dcmdump and checks the mandatory attributes,
-#   5. extracts the embedded PDF and confirms it is byte identical to the input.
+#   5. extracts the embedded PDF and confirms it is byte identical to the input,
+#   6. starts a DCMTK wlmscpfs acting as a Modality Worklist SCP and confirms the
+#      application's worklist client queries it correctly, accents and all.
 #
-# Requirements: the .NET SDK and DCMTK (dcmdump, storescp) on the PATH.
+# Requirements: the .NET SDK and DCMTK (dcmdump, storescp, dcm2pnm, wlmscpfs, dump2dcm)
+# on the PATH.
 #   Debian/Ubuntu : sudo apt-get install dcmtk
 #   macOS         : brew install dcmtk
 #
@@ -26,6 +29,10 @@ PORT="${1:-11112}"
 AE_TITLE="TESTPACS"
 CALLING_AE="PDF2DCM"
 
+# The worklist SCP needs a port of its own, since both listeners run at once.
+WORKLIST_PORT="${2:-$((PORT + 1))}"
+WORKLIST_AE="TESTWL"
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK_DIR="$(mktemp -d)"
 RECEIVED_DIR="$WORK_DIR/received"
@@ -33,13 +40,17 @@ CONFIG_FILE="$WORK_DIR/config.json"
 SAMPLE_PDF="$REPO_ROOT/samples/example-report.pdf"
 
 SCP_PID=""
+WORKLIST_PID=""
 FAILURES=0
 
 cleanup() {
-    if [[ -n "$SCP_PID" ]] && kill -0 "$SCP_PID" 2>/dev/null; then
-        kill "$SCP_PID" 2>/dev/null || true
-        wait "$SCP_PID" 2>/dev/null || true
-    fi
+    local pid
+    for pid in "$SCP_PID" "$WORKLIST_PID"; do
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+        fi
+    done
 
     rm -rf "$WORK_DIR"
 }
@@ -53,7 +64,7 @@ step() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 
 step "Checking prerequisites"
 
-for tool in dotnet dcmdump storescp dcm2pnm; do
+for tool in dotnet dcmdump storescp dcm2pnm wlmscpfs dump2dcm; do
     if command -v "$tool" >/dev/null 2>&1; then
         pass "$tool is available"
     else
@@ -708,6 +719,229 @@ done
 
 if [[ $INKED -eq 2 && $BLANK -eq 0 ]]; then
     pass "every page a clinician would open is legible, not a placeholder"
+fi
+
+# ------------------------------------------------------------------ Modality Worklist
+
+# The point of this section is the same as the rest of the script: an independent
+# implementation, not our own test server. The application ships a test worklist server
+# under tools/, and verifying the client against it would only prove the two agree with
+# each other. DCMTK's wlmscpfs was written by someone else, from the standard, and is
+# what makes a passing result mean something.
+
+step "Starting a DCMTK Modality Worklist SCP on port $WORKLIST_PORT"
+
+WORKLIST_DB="$WORK_DIR/worklist"
+mkdir -p "$WORKLIST_DB/$WORKLIST_AE"
+
+# wlmscpfs takes a read lock on this file before each query and will not answer without
+# it. An empty file is all it wants; its absence produces a bare "Out of Resources" that
+# says nothing about the cause.
+touch "$WORKLIST_DB/$WORKLIST_AE/lockfile"
+
+# Scheduled today, so the application's default date range (Today) finds it without the
+# script having to reconfigure anything.
+WORKLIST_TODAY="$(date -u +%Y%m%d)"
+
+# A name with accents, and long enough that a Person Name cannot hold it: 73 characters
+# against the 64 a single component group allows. Both properties are deliberate. The
+# accents prove UTF-8 survives the round trip through an implementation that is not ours,
+# and the length exercises the shortening rule on a real response rather than in a unit
+# test.
+WORKLIST_FAMILY="ALBUQUERQUE MONTENEGRO DOS SANTOS RODRIGUES"
+WORKLIST_GIVEN="JOSÉ ANTÓNIO FRANCISCO XAVIER"
+WORKLIST_STUDY_UID="1.2.826.0.1.3680043.9.6008.99.4242"
+
+cat > "$WORK_DIR/worklist.dump" <<DUMP
+(0008,0005) CS [ISO_IR 192]
+(0008,0050) SH [ACC20260042]
+(0008,0080) LO [Interoperability Test]
+(0008,0090) PN [SOUSA^MANUEL]
+(0010,0010) PN [$WORKLIST_FAMILY^$WORKLIST_GIVEN]
+(0010,0020) LO [P0000042]
+(0010,0030) DA [19621130]
+(0010,0040) CS [F]
+(0020,000d) UI [$WORKLIST_STUDY_UID]
+(0032,1060) LO [Relatório de Ecografia]
+(0040,1001) SH [RP0000042]
+(0040,0100) SQ
+  (fffe,e000) na
+    (0008,0060) CS [OT]
+    (0040,0001) AE [ANYSTATION]
+    (0040,0002) DA [$WORKLIST_TODAY]
+    (0040,0003) TM [100000]
+    (0040,0006) PN [COSTA^RITA]
+    (0040,0007) LO [Ecografia Abdominal]
+    (0040,0009) SH [SPS0000042]
+    (0040,0020) CS [SCHEDULED]
+  (fffe,e00d) na
+(fffe,e0dd) na
+DUMP
+
+if dump2dcm +te "$WORK_DIR/worklist.dump" "$WORKLIST_DB/$WORKLIST_AE/entry.wl" \
+        > "$WORK_DIR/dump2dcm.log" 2>&1; then
+    pass "the worklist entry was built with dump2dcm"
+else
+    fail "dump2dcm could not build the worklist entry; see $WORK_DIR/dump2dcm.log"
+    cat "$WORK_DIR/dump2dcm.log"
+fi
+
+# -dfr because the entry above carries what this application queries rather than the
+# complete set wlmscpfs would otherwise insist on, and -csk so the file's own ISO_IR 192
+# is returned instead of being stripped, which is the whole point of the accent test.
+wlmscpfs -dfp "$WORKLIST_DB" -dfr -csk --fork "$WORKLIST_PORT" \
+    > "$WORK_DIR/wlmscpfs.log" 2>&1 &
+WORKLIST_PID=$!
+
+sleep 2
+
+if kill -0 "$WORKLIST_PID" 2>/dev/null; then
+    pass "the Worklist SCP is listening as $WORKLIST_AE on port $WORKLIST_PORT"
+else
+    fail "the Worklist SCP did not start; see $WORK_DIR/wlmscpfs.log"
+    cat "$WORK_DIR/wlmscpfs.log"
+fi
+
+# Written out per query so each case can set its own date range and nothing has to be
+# edited in place.
+worklist_config() {
+    local path="$1"
+    local range="$2"
+    local from="${3:-null}"
+    local to="${4:-null}"
+
+    cat > "$path" <<JSON
+{
+  "ConfigurationVersion": 1,
+  "CallingAeTitle": "$CALLING_AE",
+  "Destinations": [],
+  "LogFolder": "$WORK_DIR/logs",
+  "OutputFolder": "$WORK_DIR/out",
+  "Worklist": {
+    "IsEnabled": true,
+    "CalledAeTitle": "$WORKLIST_AE",
+    "Host": "127.0.0.1",
+    "Port": $WORKLIST_PORT,
+    "DateRange": "$range",
+    "ExplicitFrom": $from,
+    "ExplicitTo": $to,
+    "TimeoutSeconds": 20,
+    "MaximumResults": 500
+  }
+}
+JSON
+}
+
+WORKLIST_CONFIG="$WORK_DIR/worklist-config.json"
+worklist_config "$WORKLIST_CONFIG" "Today"
+
+step "Querying the reference Worklist SCP"
+
+WORKLIST_OUT="$WORK_DIR/worklist.out"
+
+if dotnet "$CLI" worklist --config "$WORKLIST_CONFIG" > "$WORKLIST_OUT" 2>&1; then
+    pass "the worklist query was answered"
+else
+    fail "the worklist query failed; see $WORKLIST_OUT"
+    cat "$WORKLIST_OUT"
+fi
+
+WORKLIST_TEXT="$(cat "$WORKLIST_OUT")"
+
+if [[ "$WORKLIST_TEXT" == *"1 scheduled procedure(s) found."* ]]; then
+    pass "today's scheduled procedure was returned by the default date range"
+else
+    fail "the default date range did not return the entry scheduled for today"
+fi
+
+if [[ "$WORKLIST_TEXT" == *"P0000042"* ]]; then
+    pass "the Patient ID came back intact"
+else
+    fail "the Patient ID is missing from the response"
+fi
+
+if [[ "$WORKLIST_TEXT" == *"ACC20260042"* ]]; then
+    pass "the Accession Number came back intact"
+else
+    fail "the Accession Number is missing from the response"
+fi
+
+# The field that makes the document land beside the images rather than in a study of its
+# own, so it is worth asserting rather than assuming.
+if [[ "$WORKLIST_TEXT" == *"$WORKLIST_STUDY_UID"* ]]; then
+    pass "the Study Instance UID from the order came back, so the document can join it"
+else
+    fail "the Study Instance UID is missing from the response"
+fi
+
+# The accent test. A client that negotiated the character set wrongly would return
+# "JOSE ANTONIO" or a run of replacement characters, and both would pass a length check.
+if [[ "$WORKLIST_TEXT" == *"JOSÉ ANTÓNIO"* && "$WORKLIST_TEXT" == *"$WORKLIST_FAMILY"* ]]; then
+    pass "the accented name survived the round trip through an independent server"
+else
+    fail "the accented name did not come back intact"
+fi
+
+if [[ "$WORKLIST_TEXT" == *"SHORTENED  the name is 73 characters"* ]]; then
+    pass "the over-length name was recognised and reported at its true length"
+else
+    fail "the over-length name was not reported as shortened"
+fi
+
+# The rule the department chose: the surname is what an archive indexes, so it survives
+# whole and the given name is what gives way.
+if [[ "$WORKLIST_TEXT" == *"would be sent as '$WORKLIST_FAMILY^JOSÉ ANTÓNIO'"* ]]; then
+    pass "the surname was kept whole and the given name shortened at a word boundary"
+else
+    fail "the name was not shortened as the rule requires"
+fi
+
+step "Checking that the worklist match keys actually narrow the query"
+
+# Runs one query and returns its whole output. Read into a variable rather than piped
+# into "grep -q" for the reason set out above dump_of: grep -q stops at the first match,
+# the producer dies of SIGPIPE, and under "set -o pipefail" the check then fails having
+# found exactly what it was looking for.
+worklist_query() {
+    dotnet "$CLI" worklist "$@" 2>&1 || true
+}
+
+# A client that sent its filters as return keys rather than match keys would return the
+# entry for every query below, and the four cases together catch that.
+MATCHED="$(worklist_query --config "$WORKLIST_CONFIG" --patient-id P0000042)"
+
+if [[ "$MATCHED" == *"1 scheduled procedure(s) found."* ]]; then
+    pass "a matching Patient ID returns the entry"
+else
+    fail "a matching Patient ID did not return the entry"
+fi
+
+UNMATCHED="$(worklist_query --config "$WORKLIST_CONFIG" --patient-id NOSUCHPATIENT)"
+
+if [[ "$UNMATCHED" == *"no scheduled procedures"* ]]; then
+    pass "a Patient ID that matches nothing returns nothing"
+else
+    fail "a Patient ID that matches nothing still returned something"
+fi
+
+WILDCARD="$(worklist_query --config "$WORKLIST_CONFIG" --surname 'ALBUQUERQUE*')"
+
+if [[ "$WILDCARD" == *"1 scheduled procedure(s) found."* ]]; then
+    pass "a wildcard on the family name matches"
+else
+    fail "a wildcard on the family name did not match"
+fi
+
+# A range the entry cannot fall in. This is what proves the date is sent as a range match
+# key and not merely echoed back.
+worklist_config "$WORK_DIR/worklist-past.json" "Explicit" '"2020-01-01"' '"2020-01-31"'
+
+PAST="$(worklist_query --config "$WORK_DIR/worklist-past.json")"
+
+if [[ "$PAST" == *"no scheduled procedures"* ]]; then
+    pass "a date range in the past returns nothing, so the range is really being matched"
+else
+    fail "a date range in the past still returned the entry scheduled for today"
 fi
 
 # ------------------------------------------------------------------ Result

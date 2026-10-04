@@ -220,10 +220,18 @@ public sealed class CommandLineOptions
           send        Convert a file and transmit it to the configured destination(s).
           generate    Convert a file and save it locally, without transmitting.
           echo        Send a C-ECHO verification to the configured destination(s).
+          worklist    Query the configured Modality Worklist and print the result.
           inspect     Print the DICOM tags of an existing .dcm file.
           extract     Recover the original PDF from a .dcm file, byte for byte.
           config      Show the effective configuration and where it is stored.
           help        Show this text.
+
+        WORKLIST OPTIONS
+          --patient-id <value>         Narrow the query to this Patient ID. Wildcards are
+                                       allowed: * matches any run of characters and ?
+                                       matches one. Omit it to match every patient.
+          --surname <value>            Narrow the query to this family name, with the
+                                       same wildcards.
 
         PATIENT OPTIONS (mandatory for send and generate)
           --file <path>                The file to convert. May be repeated to convert
@@ -260,6 +268,9 @@ public sealed class CommandLineOptions
 
         EXAMPLES
           pdftodicom echo
+          pdftodicom worklist
+          pdftodicom worklist --patient-id P0000004
+          pdftodicom worklist --surname 'SILVA*'
           pdftodicom generate --pdf report.pdf --patient-id 12345 --surname Silva \
                               --given-name Maria --dob 1970-05-21 --accession ACC001
           pdftodicom send --pdf report.pdf --patient-id 12345 --surname Silva \

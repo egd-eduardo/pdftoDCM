@@ -23,7 +23,7 @@
 
 #define AppName        "PDF to DICOM"
 #define AppShortName   "PdfToDicom"
-#define AppVersion     "2.1.0"
+#define AppVersion     "3.0.0"
 #define AppPublisher   "Eduardo Dias"
 #define AppExeName     "PdfToDicom.exe"
 #define CliExeName     "pdftodicom.exe"
@@ -131,6 +131,7 @@ Source: "..\..\docs\UserManual.md";                 DestDir: "{app}\docs"; Flags
 Source: "..\..\docs\ManualDoUtilizador.pt-PT.md";   DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\docs\DicomConformanceStatement.md";  DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\docs\TechnicalDocumentation.md";     DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\..\docs\WorklistSetup.md";            DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\CHANGELOG.md";                       DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\samples\config.sample.json";      DestDir: "{app}\samples"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\samples\example-report.pdf";      DestDir: "{app}\samples"; Flags: ignoreversion skipifsourcedoesntexist

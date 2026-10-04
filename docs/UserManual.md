@@ -1,6 +1,6 @@
 # PDF to DICOM — User Manual
 
-**Version 1.5 · For hospital staff**
+**Version 3.0 · For hospital staff**
 
 This application takes a PDF document produced by another system, turns it into a DICOM
 Encapsulated PDF object, and sends it to your PACS so that the document appears in the
@@ -17,6 +17,7 @@ this application.
 2. [The main window at a glance](#2-the-main-window-at-a-glance)
 3. [Step 1 — Choose the PDF](#3-step-1--choose-the-pdf)
 4. [Step 2 — Enter the patient information](#4-step-2--enter-the-patient-information)
+   - [Taking the patient from the worklist](#taking-the-patient-from-the-worklist)
 5. [Step 3 — Check the destination](#5-step-3--check-the-destination)
 6. [Sending the document](#6-sending-the-document)
 7. [What to do when something goes wrong](#7-what-to-do-when-something-goes-wrong)
@@ -62,6 +63,7 @@ Everything happens in one window, and it reads from top to bottom.
 │  └─────────────────────────────────┘  │  │ PACS@192.168.10.20:104 │  │
 │                                       │  └────────────────────────┘  │
 │  2. Patient information               │   [Test connection]          │
+│  [Template ▾] [From worklist...]      │                              │
 │  Patient ID *      Accession no. *    │                              │
 │  [_____________]   [_____________]    │  Results appear here after   │
 │  Surname *         Given name         │  you send.                   │
@@ -157,7 +159,76 @@ file, convert it, then drop the next.
 **This is the most important step in the whole process.** Everything else is mechanical;
 this is the part where a mistake reaches the patient's record.
 
+### Taking the patient from the worklist
+
+**If your department has a modality worklist, use it.** Typing a patient number by hand
+is the single likeliest way a document ends up in the wrong patient's record, and the
+worklist removes that step completely.
+
+Press **From worklist...** above the patient fields. The button only appears when your IT
+department has configured a worklist; if you cannot see it, there is nothing to connect
+to and you should fill the form in as usual.
+
+A window opens showing the procedures scheduled for today:
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│  Modality Worklist                                                         │
+│  Choose the scheduled procedure this document belongs to.                  │
+│                                                                            │
+│  Patient ID contains      Surname contains                                 │
+│  [________________]       [________________]   [Search]   [Show all]       │
+│                                                                            │
+│  Patient ID │ Name                  │ Date of birth │ Accession │ Procedure│
+│  P0000002   │ GONÇALVES, JOÃO MIGUEL│ 1970-09-03    │ ACC...002 │ Relat... │
+│  P0000006   │ MARTINS, BEATRIZ      │ 2001-04-18    │ ACC...006 │ Radio... │
+│                                                                            │
+│  Will be used                                                              │
+│  GONÇALVES, JOÃO MIGUEL                                                    │
+│                                       [Cancel]    [Use this patient]       │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Leave both boxes empty** to see the whole list. Type part of a surname or a patient
+  number and press **Search** to narrow it.
+- Double click a row, or select it and press **Use this patient**.
+- The patient fields are then filled in for you, and the accession number comes from the
+  order rather than from the paperwork on the desk.
+
+**Check the "Will be used" line before pressing the button.** It shows exactly what will
+go into the patient's record. Usually it matches the row above it. Occasionally it is
+shorter, which is explained below.
+
+**Why a very long name is sometimes shortened.** DICOM allows 64 characters for a name.
+A small number of Portuguese names are longer than that, and the standard gives no way to
+send them whole. The surname is kept complete, because that is what an archive files and
+searches by, and the given name is shortened at a word boundary so it still reads as a
+name. *ALBUQUERQUE MONTENEGRO DOS SANTOS RODRIGUES, JOSÉ ANTÓNIO FRANCISCO XAVIER* is
+sent as *ALBUQUERQUE MONTENEGRO DOS SANTOS RODRIGUES, JOSÉ ANTÓNIO*. The full name stays
+in the worklist, the shortening is recorded in the log, and nothing interrupts you.
+
+**Middle names are not carried across.** The department does not use them, and leaving
+them out means they cannot eat into the characters the first and last name need.
+
+**The worklist is read only.** Nothing is ever sent back to it and no patient data leaves
+your workstation when you open it. If you pick the wrong row, simply open the window
+again and pick another: the whole form is replaced, never mixed.
+
+### If nothing comes back
+
+| What you see | What it usually means |
+|---|---|
+| *The worklist returned no scheduled procedures for this query* | The patient is not scheduled today. Ask your IT department to widen the date range, or fill the form in by hand. |
+| *could not be reached* | The worklist server is down, or the address is wrong. Fill the form in by hand and tell your IT department. |
+| *rejected the connection* | This workstation is not registered on the worklist server. Your IT department has to do that once. |
+| *More results were available than can be shown* | Narrow the search with a surname or a patient number. |
+
+You can always type the details yourself. The worklist is a convenience, never a
+requirement.
+
 ### Mandatory fields
+
+Fill these in yourself when you are not using the worklist.
 
 | Field | Notes |
 |---|---|
@@ -308,6 +379,7 @@ Click **Settings** in the header. Most of these are set once by your IT departme
 | **Institution** | Hospital and department name, and this workstation's AE Title. |
 | **Destinations** | The PACS systems to send to, with a per destination **Test connection**. |
 | **DICOM** | Character set, identifier generation, modality, default descriptions. Leave these alone unless your PACS administrator asks. |
+| **Worklist** | The modality worklist server. Usually locked with a password held by whoever installed the application; pointing it at the wrong server would put the wrong patients in front of you. |
 | **Folders** | Where files and logs are kept, and folder monitoring. |
 | **Appearance** | Language, dark mode, and whether to confirm before sending. |
 
@@ -360,6 +432,10 @@ For transmission to work at all, the PACS administrator must have registered:
 Point 3 is the one most often missed. A PACS can be perfectly reachable and still refuse
 PDF documents because that SOP class was never enabled.
 
+If you are using the worklist, the same registration has to exist on the **worklist
+server** as well. It is a separate system from the PACS, and being registered on one does
+not register you on the other.
+
 ### Useful details to quote
 
 - The exact message from the results panel.
@@ -399,6 +475,19 @@ no other component to install first.
 
 **Do I need administrator rights?**
 No. Neither to install it nor to run it.
+
+**The "From worklist..." button is not there.**
+No worklist has been configured on this workstation. Ask your IT department whether your
+department has one. Until then, fill the patient fields in by hand as before.
+
+**The name in the worklist is longer than the name that was sent.**
+DICOM allows 64 characters for a name and a few names are longer. The surname is kept
+whole and the given name shortened, so the record still identifies the right person. This
+is expected and is recorded in the log.
+
+**Can the worklist be changed back by the order being updated?**
+No. The details are copied into the form at the moment you press *Use this patient*.
+Nothing is re-read afterwards, and nothing is ever written back to the worklist.
 
 ---
 

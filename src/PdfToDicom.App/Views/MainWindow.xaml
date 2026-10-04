@@ -232,6 +232,13 @@
                                             Style="{StaticResource SecondaryButtonStyle}"
                                             Command="{Binding ApplyTemplateCommand}"
                                             MinWidth="88" MinHeight="30" Margin="0,0,8,0" />
+                                    <!-- Only offered when a worklist is configured. A button
+                                         that always fails is worse than no button. -->
+                                    <Button Content="{loc:Localize Step2.FromWorklist}"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Command="{Binding OpenWorklistCommand}"
+                                            Visibility="{Binding IsWorklistAvailable, Converter={StaticResource BoolToVisibility}}"
+                                            MinWidth="128" MinHeight="30" Margin="0,0,8,0" />
                                     <Button Content="{loc:Localize Step2.ClearForm}"
                                             Style="{StaticResource SecondaryButtonStyle}"
                                             Command="{Binding ClearFormCommand}"

@@ -1,6 +1,6 @@
 # PDF to DICOM — Technical Documentation
 
-**Version 1.5 · For developers, PACS administrators and hospital IT**
+**Version 3.0 · For developers, PACS administrators and hospital IT**
 
 ---
 
@@ -14,6 +14,7 @@
 6. [DICOM object construction](#6-dicom-object-construction)
 7. [UID generation](#7-uid-generation)
 8. [DICOM networking](#8-dicom-networking)
+8a. [Modality Worklist](#8a-modality-worklist)
 9. [Validation](#9-validation)
 10. [Configuration](#10-configuration)
 11. [Logging and audit](#11-logging-and-audit)
@@ -30,10 +31,14 @@
 ## 1. What this application does
 
 It converts a PDF into a **DICOM Encapsulated PDF Storage SOP Instance**
-(`1.2.840.10008.5.1.4.1.1.104.1`) carrying operator supplied patient demographics, and
-transmits it to one or more DICOM Storage SCPs.
+(`1.2.840.10008.5.1.4.1.1.104.1`) carrying patient demographics, and transmits it to one
+or more DICOM Storage SCPs. Images are converted to **Secondary Capture Image Storage**
+(`1.2.840.10008.5.1.4.1.1.7`) the same way.
 
-Everything except that transmission happens offline.
+The demographics are taken from a **Modality Worklist** entry where one is configured, or
+supplied by the operator where one is not.
+
+Everything except the worklist query and the transmission happens offline.
 
 ---
 
@@ -107,15 +112,17 @@ pdftoDCM/
 │   │   ├── Configuration/           AppConfiguration, PacsDestination, JSON store
 │   │   ├── Validation/              Input rules, VR rules, IOD checks
 │   │   ├── Dicom/                   Builder, validator, UIDs, tag inspector, writer
-│   │   ├── Networking/              Verification and Storage SCU
+│   │   ├── Networking/              Verification, Storage and Worklist SCU
 │   │   ├── Pdf/                     PdfPig based inspection
+│   │   ├── Security/                Worklist settings password verifier
+│   │   ├── Imaging/                 Image decoding and PDF page rendering
 │   │   ├── Logging/                 Serilog logger, audit trail, log export
 │   │   ├── Monitoring/              FileSystemWatcher based folder monitor
 │   │   ├── Localization/            Localizer + embedded en-US.json, pt-PT.json
 │   │   └── Services/                ConversionWorkflowService, ApplicationServices
 │   │
 │   ├── PdfToDicom.App/              WPF desktop application. net8.0-windows
-│   │   ├── Views/                   MainWindow, Settings, TagViewer, LogViewer
+│   │   ├── Views/                   MainWindow, Settings, Worklist, TagViewer, LogViewer
 │   │   ├── ViewModels/              MVVM view models
 │   │   ├── Infrastructure/          ObservableObject, commands, theming, localization
 │   │   ├── Converters/              Value converters
@@ -124,7 +131,11 @@ pdftoDCM/
 │   │
 │   └── PdfToDicom.Cli/              Headless front end for scripted conversion
 │
-├── tests/PdfToDicom.Core.Tests/     136 xUnit tests
+├── tests/PdfToDicom.Core.Tests/     173 xUnit tests
+│
+├── tools/
+│   └── PdfToDicom.TestWorklistServer/   A Modality Worklist SCP for testing only.
+│                                        Never packaged; see section 8a.
 │
 ├── build/
 │   ├── build.sh                     Cross compiles the Windows binaries from Unix
@@ -466,6 +477,158 @@ own message is "One or more errors occurred", which tells the operator nothing.
 
 ---
 
+## 8a. Modality Worklist
+
+`WorklistService` implements the Modality Worklist Information Model — FIND
+(`1.2.840.10008.5.1.4.31`) as an SCU. It is the only place in the product that reads
+patient data from another system rather than writing it.
+
+Worklist settings live in `WorklistConfiguration`, deliberately separate from
+`PacsDestination`. A worklist server is usually a different system from the archive,
+often on a different host, and conflating the two would mean a site could not point at
+both.
+
+### The query is assembled by hand
+
+fo-dicom offers `DicomCFindRequest.CreateWorklistQuery`, and it is not used. That helper
+sets `ScheduledProcedureStepStartTime` to `000000-000000`, which asks for steps scheduled
+at exactly midnight and returns nothing from a real department's worklist. The query here
+is built attribute by attribute instead.
+
+### Empty is not missing
+
+Every attribute the application wants back is sent with an **empty value**. In DICOM that
+is universal matching: match anything, and report what it was. An attribute that is not
+sent at all is not returned at all, which is the usual reason a worklist query appears to
+work and comes back without a `StudyInstanceUID`.
+
+The same mechanism carries the configured filters. `Modality` and
+`ScheduledStationAETitle` are match keys when set and universal matches when blank, so
+"any modality" needs no special case anywhere in the code.
+
+### Dates
+
+`WorklistConfiguration.ResolveDates` turns the configured range into two dates, or into
+`null` for "any date", in which case no date key is sent. `ResolveDates` takes today as a
+parameter rather than reading the clock, which is what makes the five ranges testable.
+
+A single day is sent as a plain `YYYYMMDD` rather than as a range of one. Some servers
+handle the degenerate `YYYYMMDD-YYYYMMDD` form poorly and the plain form is unambiguous.
+
+### Person Name, and the sixty four character limit
+
+PS3.5 allows **64 characters per component group** of a Person Name. That is the whole
+`Family^Given^Middle^Prefix^Suffix` group, not 64 per component. fo-dicom enforces it and
+throws rather than truncating, so an over-length worklist name would otherwise stop the
+conversion dead at the point of building the object.
+
+A few Portuguese names are longer than 64 characters, so this is a real case and not a
+theoretical one. `PersonNameShortener` applies the rule the department chose:
+
+| Case | Result |
+|---|---|
+| The composed name fits | Returned untouched |
+| The name is too long but the surname fits | Surname kept whole, given name cut at a word boundary |
+| The surname alone exceeds the limit | Surname cut at a word boundary, given name dropped |
+| A single word too long to break | Cut mid-word, because returning nothing loses the name entirely |
+
+The surname survives because that is what an archive indexes and what a clinician
+searches by. Cutting at a word boundary matters more than it looks: *JOSÉ ANTÓNIO* reads
+as a name, *JOSÉ ANTÓNIO FRAN* reads as a defect and invites a clinician to doubt the
+rest of the record.
+
+Shortening is **silent to the operator**, as specified, and never silent to the record:
+the audit log records the original length and what was sent. The worklist window also
+shows the name that will actually be used underneath the selected row, so the difference
+is visible before anything is sent rather than discovered afterwards.
+
+The middle name, prefix and suffix are read and discarded. The department does not use
+them, and dropping them means they cannot consume characters the first and last name
+need.
+
+### Only the alphabetic component group
+
+`PatientName` may carry up to three component groups separated by `=`: alphabetic,
+ideographic and phonetic. They hold the **same name in different scripts**, not
+additional name text. Only the first is read.
+
+### What a worklist entry becomes
+
+`WorklistEntry` holds the values exactly as they arrived, before any limit is applied, so
+the operator can always be shown what the worklist actually said. Shortening happens when
+the entry is turned into `PatientDemographics`, at the moment the operator presses *Use
+this patient*.
+
+The most valuable field in the response is `StudyInstanceUID`. The order has already
+created the study the images will land in, so carrying its identifier is what puts the
+report beside them rather than in a study of its own. It is carried as
+`ExistingStudyInstanceUid`, the same path a Study Instance UID typed by the operator
+takes, so it overrides the configured study grouping exactly as that does.
+
+Selecting an entry **replaces every patient field**. Merging would risk a form holding one
+patient's identifier beside another's name, and no merge rule is worth that.
+
+### Password protection
+
+`WorklistSettingsLock` guards the Worklist tab in Settings behind a password compiled
+into the binary.
+
+It stores a **PBKDF2-HMAC-SHA256 verifier**, 210,000 iterations (the OWASP figure for
+that combination), with a 16 byte random salt, in the form
+`PBKDF2-SHA256$iterations$salt$hash`. Verification uses the iteration count recorded in
+the verifier rather than today's constant, so raising the constant later cannot
+invalidate a password already set, and the comparison is constant time.
+
+The request was for the password to be stored *encrypted*. A hash is used instead and is
+strictly stronger: anything encrypted inside the binary must carry its key inside the
+binary too, so it can be decrypted back to the password. What is stored here cannot be
+turned back into the password at all.
+
+**What it protects against, stated honestly.** It stops a curious member of staff
+wandering into the worklist configuration and changing an address or an AE Title, which
+is the realistic risk on a shared clinical workstation. It does not stop someone
+determined: the check runs on the user's own machine, and anyone able to decompile or
+patch the executable can remove it. That is true of every password a desktop application
+checks by itself.
+
+The password is set by the author and by nobody else:
+
+```
+pdftodicom worklist-password
+```
+
+reads it without echoing, derives the verifier locally, and prints the single line to
+paste into `WorklistSettingsLock.Verifier` before rebuilding. The password itself is
+never written to a file, a log, a commit or a message.
+
+An empty `Verifier` constant means no password has been set, and the Worklist tab is then
+open. That is deliberate: shipping with a placeholder nobody knows would lock the author
+out of their own software, which is a worse failure than an unset lock. The interface
+reports the setting as unprotected rather than implying a protection that is not there.
+
+### The test worklist server
+
+`tools/PdfToDicom.TestWorklistServer` is a Modality Worklist SCP that serves seven
+invented scheduled procedure steps. It exists because a site adopting this feature
+usually has no worklist server it can point a test workstation at: the real one holds
+live patient data and is not somewhere to try new software against.
+
+```bash
+dotnet run --project tools/PdfToDicom.TestWorklistServer -- --port 1070 --aet TESTWL
+```
+
+Its fixtures are chosen to be awkward rather than convenient: accented names, a patient
+with no given name, a 73 character name whose surname fits, and a 75 character name whose
+surname alone is over the limit. It builds its data sets with `NotValidated()` precisely
+so it can serve names fo-dicom would otherwise refuse to construct, which is the only way
+to exercise the shortening rule against a real association.
+
+**It is never packaged.** The build scripts copy a named list of files into the customer
+package and it is not on that list; `assert_package_is_sound` checks the list rather than
+the folder, so it cannot be added by accident.
+
+---
+
 ## 9. Validation
 
 Three independent layers.
@@ -610,10 +773,11 @@ differ only in case.
 dotnet test tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj
 ```
 
-136 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
-strategy), person name construction, every mandatory attribute, payload integrity and odd
-length padding, UTF-8 round trips, configuration persistence and corruption recovery, and
-the full workflow with a stubbed network.
+173 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
+strategy), person name construction and shortening, the worklist date ranges, the
+settings password verifier, every mandatory attribute, payload integrity and odd length
+padding, UTF-8 round trips, configuration persistence and corruption recovery, and the
+full workflow with a stubbed network.
 
 ### XAML binding verification
 
@@ -637,7 +801,7 @@ launching it. It reports:
 > This check exists because exactly that defect shipped. `ProgressBar.Value` was bound to
 > a property with a private setter, and because `RangeBase.Value` binds two way by
 > default, the main window failed to load on a Windows ARM64 machine. The build was clean
-> and all 136 tests passed. Only running the application would have revealed it.
+> and every test of the day passed. Only running the application would have revealed it.
 
 ### Interoperability verification
 
@@ -655,7 +819,24 @@ the file.
 The script starts a real `storescp`, drives the application's own CLI to convert and send
 a PDF with an accented Portuguese name, then confirms the archive received it, that
 `dcmdump` parses it, that every mandatory attribute survived, that the accented name is
-intact, and that the extracted PDF is **byte identical** to the input.
+intact, and that the extracted PDF is **byte identical** to the input. It also renders the
+received page images back with `dcm2pnm` and counts dark samples, because a renderer that
+produced blank pages would satisfy every other check and be worse than useless.
+
+It then starts a real **`wlmscpfs`**, DCMTK's worklist SCP, serving one entry built with
+`dump2dcm`, and drives `pdftodicom worklist` against it. Verifying the client against the
+project's own test server would only prove the two agree with each other; `wlmscpfs` was
+written by somebody else from the standard, which is what makes a pass mean something.
+That section confirms the Patient ID, Accession Number and Study Instance UID come back
+intact, that an accented name survives under `ISO_IR 192`, that a 73 character name is
+shortened with the surname kept whole, and that the filters genuinely narrow the result:
+a wildcard matches, an unknown Patient ID returns nothing, and a scheduled date range in
+the past returns nothing, which together establish the filters are sent as match keys
+rather than echoed as return keys.
+
+`wlmscpfs` needs an empty file named `lockfile` in the AE directory before it will answer
+anything; without it the response is a bare `a700 Out of Resources` that says nothing
+about the cause. The script creates it.
 
 All checks pass as of this release.
 
@@ -670,12 +851,27 @@ which is why it is kept free of any Windows only dependency.
 
 ```bash
 pdftodicom echo
+pdftodicom worklist
+pdftodicom worklist --patient-id P0000004
+pdftodicom worklist --surname 'SILVA*'
 pdftodicom send --pdf report.pdf --patient-id 12345 --surname Silva \
                 --given-name Maria --dob 1970-05-21 --accession ACC001
 pdftodicom generate --pdf report.pdf ... --no-send
 pdftodicom inspect --pdf out/12345_ACC001_1234.dcm
 pdftodicom config
+pdftodicom worklist-password
 ```
+
+`worklist` queries the configured worklist and prints what came back, including the name
+as it would be written to the object whenever that differs from what the worklist sent.
+It is written for commissioning a site rather than for daily use: the operator picks a
+patient in the window, not here. Its value is answering "is the worklist reachable, and
+does it return what we expect?" over a real association, from a machine with nothing on
+it but this one file, without touching the clinical interface. It is also what the
+interoperability script drives.
+
+`worklist-password` is handled before any configuration, log folder or DICOM stack is set
+up, so it works on a machine where none of those exist yet. See section 8a.
 
 **Exit codes:** `0` success · `1` invalid arguments or patient information ·
 `2` generation or validation failure · `3` generated but transmission failed.
@@ -729,7 +925,9 @@ signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
 | **Data in transit** | Plain DICOM by default. TLS is available per destination; enable it where the archive supports it. |
 | **Credentials** | None are stored. DICOM associations authenticate by AE Title and IP, configured on the archive. |
 | **Elevation** | Never required. `asInvoker` in the manifest. |
-| **Third party code** | fo-dicom (MS-PL), PdfPig (MIT), Serilog (Apache 2.0). All permissive and suitable for hospital deployment. |
+| **Worklist settings** | Guarded by a PBKDF2 verifier compiled into the binary, not by an encrypted password. It deters a colleague on a shared workstation; it does not resist a decompiler, and section 8a says so rather than overclaiming. |
+| **Worklist traffic** | Outbound C-FIND only. Nothing is ever written back to the worklist server, and no patient data leaves the workstation when the window is opened. |
+| **Third party code** | fo-dicom (MS-PL), PdfPig (MIT), Serilog (Apache 2.0), ImageSharp 2.x (Apache 2.0), PDFtoImage (MIT) over PDFium (Apache 2.0) and SkiaSharp (MIT). All permissive and suitable for hospital deployment. |
 | **PDF handling** | The payload is embedded verbatim and never executed or re-encoded. PdfPig only parses structure. |
 | **Audit** | Every clinically significant action is recorded with user, machine and timestamp. |
 
@@ -741,6 +939,10 @@ signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
 `src/PdfToDicom.Core/Localization/Strings/` beside `en-US.json`. It is embedded and
 discovered automatically; no code change and no registration. Missing keys fall back to
 English.
+
+**Change how an over-length name is shortened:** `PersonNameShortener.Fit` is the only
+place that decides, and `PersonNameShortenerTests` is the only place that has to change
+with it. Nothing else reads the 64 character limit.
 
 **Add a validation rule:** add it to the relevant validator. Both front ends pick it up,
 because both call `ConversionWorkflowService.ValidateInputs`.
@@ -758,18 +960,20 @@ networking, validation and workflow layers need no change.
 
 Stated plainly, because a hospital deploying this needs to know what it does not do.
 
-1. **The user interface is not covered by automated tests.** The 136 tests cover Core in
+1. **The user interface is not covered by automated tests.** The 173 tests cover Core in
    depth, but WPF cannot run on a build agent without a desktop session, so no test opens
    a window. `build/validate-xaml-bindings.py` catches the binding errors that stop the
    application starting, and is not a substitute for running it. **Launch the application
    once on a real Windows machine before releasing any build.**
-2. **No PDF page rendering.** The interface shows a document icon and metadata, not a
-   thumbnail. Rendering would require a native component and would defeat the single file
-   deployment.
-3. **No Modality Worklist query.** Demographics are typed or scanned, not retrieved from
-   the RIS. A worklist SCU is the obvious next feature and would eliminate the transcription
-   risk that section 4 of the user manual warns about.
-4. **Encrypted PDFs are refused.** Encapsulating one produces an object no clinician can
+2. **No document preview in the window.** Pages are rendered for transmission, but the
+   interface still shows a document icon and metadata rather than a thumbnail.
+3. **A Person Name longer than 64 characters cannot be sent whole.** The limit is the
+   standard's, not this application's, and no implementation can send more. The surname is
+   kept and the given name shortened; see section 8a.
+4. **No Modality Performed Procedure Step.** The worklist is read; an order is never
+   marked started or completed. A site that closes orders through MPPS must continue to do
+   so from the acquiring modality.
+5. **Encrypted PDFs are refused.** Encapsulating one produces an object no clinician can
    open from the archive.
 6. **Single instance per user session.** Two instances would both monitor the folder and
    double-send the same document.
@@ -777,3 +981,6 @@ Stated plainly, because a hospital deploying this needs to know what it does not
    the archive has committed the object to permanent storage.
 8. **`Modality` defaults to `OT`, not the standard's `DOC`.** As specified, configurable,
    and discussed in section 4.
+9. **The worklist settings password cannot be changed by a site.** That was the
+   requirement: it is compiled in, with no interface to alter it. Changing it means a
+   rebuild by the author.

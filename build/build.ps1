@@ -73,7 +73,7 @@ function Invoke-Clean {
         Remove-Item $Artifacts -Recurse -Force
     }
 
-    Get-ChildItem -Path (Join-Path $RepoRoot 'src'), (Join-Path $RepoRoot 'tests') `
+    Get-ChildItem -Path (Join-Path $RepoRoot 'src'), (Join-Path $RepoRoot 'tests'), (Join-Path $RepoRoot 'tools') `
         -Include bin, obj -Recurse -Directory -ErrorAction SilentlyContinue |
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
@@ -267,6 +267,7 @@ function Invoke-Assemble {
         'ManualDoUtilizador.pt-PT.md'  = 'Manual do Utilizador (Portugues).md'
         'DicomConformanceStatement.md' = 'DICOM Conformance Statement (for your PACS administrator).md'
         'TechnicalDocumentation.md'    = 'Technical Documentation (for IT).md'
+        'WorklistSetup.md'             = 'Worklist Setup (for IT).md'
     }
 
     foreach ($source in $shipped.Keys) {
@@ -360,6 +361,23 @@ differs only in case has overwritten it. Windows cannot hold both.
         $detail = ($collisions | ForEach-Object { $_.Group -join ' and ' }) -join '; '
         throw "The package holds names that differ only in case and so cannot both exist on Windows: $detail"
     }
+
+    # Nothing written for the copyright holder may reach a hospital. These three discuss
+    # signing keys, how to rebuild the product, and the customer. An earlier version
+    # copied docs\* wholesale and shipped all three; naming them here means the next
+    # document added to that folder has to be considered rather than inherited.
+    $forbidden = @('BuildingItYourself', 'CodeSigning', 'ProtectingAgainstUnauthorisedDistribution',
+                   'testworklistserver')
+
+    $leaked = $forbidden | Where-Object { $name = $_; $present | Where-Object { $_ -like "*$name*" } }
+
+    if ($leaked) {
+        throw @"
+The package contains material that must never be handed to a site:
+
+    $($leaked -join "`n    ")
+"@
+    }
 }
 
 <#
@@ -429,6 +447,8 @@ WHAT IS IN THIS FOLDER
     Manual do Utilizador (Portugues)         The same, in Portuguese.
     DICOM Conformance Statement              For your PACS administrator.
     Technical Documentation                  For IT.
+    Worklist Setup                           For IT, if your department has
+                                             a modality worklist.
     Changelog                                What changed in each version.
 
   Samples\

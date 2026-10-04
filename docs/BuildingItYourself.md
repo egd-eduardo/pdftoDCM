@@ -101,7 +101,7 @@ Nothing hidden, and nothing that touches your system outside this folder:
    Store, and anything that merely checks the name is fooled by them.
 4. Runs `build\build.ps1`, which restores, builds, validates, tests, publishes, assembles
    the handover package and builds the installer.
-5. **Refuses to continue if any of the 136 tests fails.** A build that fails its tests is
+5. **Refuses to continue if any of the 173 tests fails.** A build that fails its tests is
    not one to hand to a hospital.
 6. Offers to sign the files if a code signing certificate exists, and tells you how to
    create one if not.
@@ -121,8 +121,8 @@ Two things appear under `artifacts\`:
 
 ```
 artifacts\
-  PdfToDicom-2.1.0-win-x64\        <- the folder to hand over
-  PdfToDicom-2.1.0-win-x64.zip     <- the same, ready to email
+  PdfToDicom-3.0.0-win-x64\        <- the folder to hand over
+  PdfToDicom-3.0.0-win-x64.zip     <- the same, ready to email
 ```
 
 The folder contains everything a site needs and nothing it should not have:
@@ -141,6 +141,7 @@ The folder contains everything a site needs and nothing it should not have:
     Manual do Utilizador (Portugues)
     DICOM Conformance Statement (for your PACS administrator)
     Technical Documentation (for IT)
+    Worklist Setup (for IT)
     Changelog
 
   Samples\
@@ -169,7 +170,79 @@ a named list rather than the whole `docs` folder, so a new document has to be co
 rather than shipped by accident.
 
 The installer did not always do this. It used a wildcard, and so put all three of those
-documents into every hospital's application folder. That is fixed.
+documents into every hospital's application folder. That is fixed, and the build now
+fails outright if any of the three, or the test worklist server, turns up in an assembled
+package.
+
+---
+
+## Setting the worklist settings password
+
+The Worklist tab in Settings can be locked behind a password that is compiled into the
+executable. **Nobody but you ever needs to know it**, and nothing you do here writes it
+down.
+
+Run, from the repository:
+
+```powershell
+dotnet run --project src\PdfToDicom.Cli -- worklist-password
+```
+
+It asks for the password twice without showing what you type, and prints one line:
+
+```
+    private const string Verifier = "PBKDF2-SHA256$210000$....$....";
+```
+
+Paste that line into `src\PdfToDicom.Core\Security\WorklistSettingsLock.cs`, replacing
+the empty `Verifier` constant, and rebuild. That is the whole procedure.
+
+**What is stored is not the password.** It is a PBKDF2-HMAC-SHA256 hash with a random
+salt and 210,000 iterations. It can answer whether a password offered to it is correct,
+and it cannot be turned back into the password, which is why a hash is used rather than
+something encrypted: anything encrypted inside the binary would have to carry its key
+inside the binary too.
+
+**Write the password down somewhere safe**, in a password manager rather than in this
+repository. It cannot be recovered from the line above, and there is no interface to
+reset it: a forgotten password means generating a new verifier and rebuilding.
+
+**Never type the password into a chat window, an issue, a commit message or an email.**
+The tool exists so it never has to leave your own machine.
+
+Leaving the constant empty is allowed and means the Worklist tab is open to anyone. The
+application says so in the interface rather than implying a protection that is not there.
+
+---
+
+## Testing the worklist without a real server
+
+A site adopting the worklist usually has no server to point a test workstation at: the
+real one holds live patient data and is not somewhere to try new software against. The
+repository carries one.
+
+```powershell
+dotnet run --project tools\PdfToDicom.TestWorklistServer -- --port 1070 --aet TESTWL
+```
+
+It serves seven invented scheduled procedure steps and nothing else. Point the
+application at `TESTWL@127.0.0.1:1070` with the date range set to **Any date**, since the
+fixtures are scheduled for today but a range of today is the stricter test to make
+second.
+
+The fixtures are deliberately awkward: accented names, one patient with no given name, a
+73 character name whose surname fits, and a 75 character name whose surname alone is over
+the 64 characters DICOM allows. They exist to exercise the shortening rule, not to look
+tidy.
+
+To check the whole path from the command line instead:
+
+```powershell
+dotnet run --project src\PdfToDicom.Cli -- worklist
+```
+
+**This server is never packaged.** It is not on the list of files the build copies, and
+since this release the build fails if it ever appears in an assembled package.
 
 ---
 

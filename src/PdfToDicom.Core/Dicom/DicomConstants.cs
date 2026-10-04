@@ -39,6 +39,17 @@ public static class DicomConstants
     /// </summary>
     public const string ExplicitVrLittleEndianUid = "1.2.840.10008.1.2.1";
 
+    /// <summary>
+    /// Specific Character Set declaring UTF-8, PS3.3 C.12.1.1.2.
+    /// </summary>
+    /// <remarks>
+    /// Always requested on a worklist query, whatever the site writes into its own
+    /// objects. The worklist belongs to another system and may well hold accented names
+    /// even where this department writes Latin 1; asking for less than the server can give
+    /// would mangle them before anyone could see them.
+    /// </remarks>
+    public const string Utf8CharacterSet = "ISO_IR 192";
+
     /// <summary>Implicit VR Little Endian, offered as a fallback presentation context.</summary>
     public const string ImplicitVrLittleEndianUid = "1.2.840.10008.1.2";
 
