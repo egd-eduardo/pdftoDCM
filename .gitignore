@@ -40,3 +40,6 @@ scratch/
 # but is generated per machine, so it is not tracked either.
 *.cer
 code-signing-backup.pfx
+dist/app/PdfToDicom-2.1.0-win-arm64.exe
+dist/app/PdfToDicom-2.1.0-win-x64.exe
+dist/app/PdfToDicom-2.1.0-win-x86.exe
