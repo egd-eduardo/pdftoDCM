@@ -2,7 +2,9 @@ using FellowOakDicom;
 using PdfToDicom.Cli;
 using PdfToDicom.Core.Abstractions;
 using PdfToDicom.Core.Configuration;
+using PdfToDicom.Core.Dicom;
 using PdfToDicom.Core.Models;
+using PdfToDicom.Core.Security;
 using PdfToDicom.Core.Services;
 using PdfToDicom.Core.Validation;
 
@@ -29,6 +31,13 @@ if (options.Command is "help" or "--help" or "h" or "?")
     return ExitCodes.Success;
 }
 
+// Handled before anything else is set up. It needs no configuration, no log folder and
+// no DICOM stack, and it must work on a machine where none of those are in place yet.
+if (string.Equals(options.Command, "worklist-password", StringComparison.OrdinalIgnoreCase))
+{
+    return RunWorklistPassword();
+}
+
 using var services = new ApplicationServices(options.ConfigurationPath, options.Verbose);
 services.AuditLogger.ApplicationStarted($"{ProductVersion()} (command line)");
 
@@ -39,6 +48,7 @@ try
         "send" => await RunConversionAsync(services, options, transmit: !options.NoSend),
         "generate" => await RunConversionAsync(services, options, transmit: false),
         "echo" => await RunEchoAsync(services, options),
+        "worklist" => await RunWorklistAsync(services, options),
         "inspect" => RunInspect(services, options),
         "extract" => RunExtract(services, options),
         "config" => RunShowConfiguration(services),
@@ -59,6 +69,116 @@ finally
 }
 
 // ---------------------------------------------------------------------- Commands
+
+/// <summary>
+/// Turns a password into the verifier that guards the worklist settings.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Exists so the password never has to be told to anyone. It is read from the keyboard
+/// without being echoed, converted here on the author's own machine, and only the verifier
+/// is ever written down. Nothing that could be turned back into the password leaves this
+/// process.
+/// </para>
+/// <para>
+/// The output goes to standard output as a single line, intended to be pasted into
+/// WorklistSettingsLock.Verifier and compiled in.
+/// </para>
+/// </remarks>
+static int RunWorklistPassword()
+{
+    Console.WriteLine();
+    Console.WriteLine("  Worklist settings password");
+    Console.WriteLine("  ==========================");
+    Console.WriteLine();
+    Console.WriteLine("  This produces the line to paste into WorklistSettingsLock.Verifier.");
+    Console.WriteLine("  The password itself is never stored, printed or sent anywhere.");
+    Console.WriteLine();
+
+    string? first = ReadHidden("  Password: ");
+    if (string.IsNullOrWhiteSpace(first))
+    {
+        Console.Error.WriteLine("  No password was entered. Nothing was generated.");
+        return ExitCodes.InvalidArguments;
+    }
+
+    string? second = ReadHidden("  Repeat   : ");
+    if (!string.Equals(first, second, StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("  The two entries did not match. Nothing was generated.");
+        return ExitCodes.InvalidArguments;
+    }
+
+    // Said rather than enforced. A short password is the author's choice to make, and
+    // refusing it outright would be presumptuous about a lock whose realistic job is to
+    // deter a colleague rather than to resist an attacker.
+    if (first.Length < 10)
+    {
+        Console.WriteLine();
+        Console.WriteLine($"  NOTE: that password is {first.Length} characters. A longer passphrase is");
+        Console.WriteLine("  meaningfully harder to guess, and this one is typed rarely.");
+    }
+
+    string verifier = WorklistSettingsLock.CreateVerifier(first);
+
+    Console.WriteLine();
+    Console.WriteLine("  Paste this into src/PdfToDicom.Core/Security/WorklistSettingsLock.cs,");
+    Console.WriteLine("  replacing the empty Verifier constant, then rebuild:");
+    Console.WriteLine();
+    Console.WriteLine($"    private const string Verifier = \"{verifier}\";");
+    Console.WriteLine();
+    Console.WriteLine("  Keep a record of the password somewhere safe. It cannot be recovered");
+    Console.WriteLine("  from the line above, which is the point of storing it this way.");
+    Console.WriteLine();
+
+    return ExitCodes.Success;
+}
+
+/// <summary>
+/// Reads a line without echoing it, falling back to a visible read where the console
+/// cannot be controlled, for instance when input is piped.
+/// </summary>
+static string? ReadHidden(string prompt)
+{
+    Console.Write(prompt);
+
+    if (Console.IsInputRedirected)
+    {
+        // Nothing is being typed at a terminal, so there is nothing to hide. Saying so
+        // beats pretending the input was masked when it was not.
+        Console.WriteLine("(input is not a terminal, so it will not be hidden)");
+        return Console.ReadLine();
+    }
+
+    var builder = new System.Text.StringBuilder();
+
+    while (true)
+    {
+        ConsoleKeyInfo key = Console.ReadKey(intercept: true);
+
+        if (key.Key == ConsoleKey.Enter)
+        {
+            Console.WriteLine();
+            return builder.ToString();
+        }
+
+        if (key.Key == ConsoleKey.Backspace)
+        {
+            if (builder.Length > 0)
+            {
+                builder.Length--;
+            }
+
+            continue;
+        }
+
+        if (!char.IsControl(key.KeyChar))
+        {
+            builder.Append(key.KeyChar);
+        }
+    }
+}
+
 
 /// <summary>Converts a PDF or an image and, unless suppressed, transmits the result.</summary>
 static async Task<int> RunConversionAsync(
@@ -245,6 +365,99 @@ static async Task<int> RunEchoAsync(ApplicationServices services, CommandLineOpt
 
     return allSucceeded ? ExitCodes.Success : ExitCodes.TransmissionFailed;
 }
+
+/// <summary>
+/// Queries the configured Modality Worklist and prints what came back.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Written for the person commissioning a site rather than for daily use: the operator
+/// picks a patient in the window, not here. Its value is that it answers "is the worklist
+/// reachable, and does it return what we expect?" over a real association, from a machine
+/// with nothing but this one file on it, and without touching the clinical interface.
+/// </para>
+/// <para>
+/// It prints the name twice whenever the two differ: once as the worklist sent it, and
+/// once as it would be written to the object. A Person Name may carry sixty four
+/// characters, so a long name is shortened, and seeing both here is how an administrator
+/// learns that before a clinician asks about it.
+/// </para>
+/// </remarks>
+static async Task<int> RunWorklistAsync(ApplicationServices services, CommandLineOptions options)
+{
+    AppConfiguration configuration = services.ConfigurationService.Current;
+    WorklistConfiguration worklist = configuration.Worklist;
+
+    if (string.IsNullOrWhiteSpace(worklist.Host))
+    {
+        Console.Error.WriteLine("error: no worklist server is configured. See the Worklist section of the configuration file.");
+        return ExitCodes.InvalidArguments;
+    }
+
+    // Said rather than refused. Querying a server that the application will not offer to
+    // the operator is exactly what commissioning looks like, and failing here would make
+    // the command useless for the one job it has.
+    if (!worklist.IsEnabled)
+    {
+        Console.WriteLine("note: the worklist is configured but not enabled, so the application will not offer it yet.");
+        Console.WriteLine();
+    }
+
+    Console.WriteLine($"Querying {worklist.CalledAeTitle}@{worklist.Host}:{worklist.Port} as {CallingAeTitleFor(worklist, configuration)}...");
+
+    WorklistQueryResult result = await services.Worklist.QueryAsync(
+        worklist,
+        configuration.CallingAeTitle,
+        options.Demographics.PatientId,
+        options.Demographics.FamilyName);
+
+    Console.WriteLine(result.Message);
+
+    if (!result.IsSuccess)
+    {
+        return ExitCodes.TransmissionFailed;
+    }
+
+    foreach (WorklistEntry entry in result.Entries)
+    {
+        ShortenedPersonName fitted = PersonNameShortener.Fit(entry.FamilyName, entry.GivenName);
+
+        Console.WriteLine();
+        Console.WriteLine($"  {entry.PatientId}  {entry.DisplayName}");
+        Console.WriteLine($"    accession  {entry.AccessionNumber}");
+        Console.WriteLine($"    born       {entry.DisplayDateOfBirth}   sex {entry.Sex.ToDicomValue()}");
+        Console.WriteLine($"    scheduled  {entry.DisplayScheduled}   modality {entry.Modality}");
+        Console.WriteLine($"    procedure  {entry.DisplayProcedure}");
+        Console.WriteLine($"    study UID  {entry.StudyInstanceUid}");
+
+        if (fitted.WasShortened)
+        {
+            // No trailing caret when nothing is left of the given name. It is a valid
+            // Person Name either way, but printing one invites the reader to wonder
+            // whether something was lost in this output rather than in the name.
+            string sent = string.IsNullOrEmpty(fitted.GivenName)
+                ? fitted.FamilyName
+                : $"{fitted.FamilyName}^{fitted.GivenName}";
+
+            Console.WriteLine(
+                $"    SHORTENED  the name is {fitted.OriginalLength} characters and would be sent as '{sent}'");
+        }
+    }
+
+    if (result.WasTruncated)
+    {
+        Console.WriteLine();
+        Console.WriteLine($"note: the server had more to return than the configured maximum of {worklist.MaximumResults}.");
+    }
+
+    return ExitCodes.Success;
+}
+
+/// <summary>The AE Title the worklist query will present, for the line printed before it runs.</summary>
+static string CallingAeTitleFor(WorklistConfiguration worklist, AppConfiguration configuration) =>
+    string.IsNullOrWhiteSpace(worklist.CallingAeTitleOverride)
+        ? configuration.CallingAeTitle
+        : worklist.CallingAeTitleOverride;
 
 /// <summary>Prints the tags of an existing DICOM file.</summary>
 static int RunInspect(ApplicationServices services, CommandLineOptions options)
@@ -466,7 +679,7 @@ static bool IsInputField(string field) =>
 
 /// <summary>The product version reported in the audit trail.</summary>
 static string ProductVersion() =>
-    typeof(CommandLineOptions).Assembly.GetName().Version?.ToString(3) ?? "2.1.0";
+    typeof(CommandLineOptions).Assembly.GetName().Version?.ToString(3) ?? "3.0.0";
 
 /// <summary>Exit codes returned to the shell.</summary>
 static class ExitCodes

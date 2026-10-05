@@ -21,6 +21,7 @@ buttons, and error messages written in plain language.
 | **Network use** | Outbound DICOM only, to configured destinations. Everything else is offline |
 | **Accepts** | PDF, and JPEG, PNG, TIFF, BMP, GIF, WebP, TGA images |
 | **SOP classes produced** | Encapsulated PDF Storage `1.2.840.10008.5.1.4.1.1.104.1`, Secondary Capture Image Storage `1.2.840.10008.5.1.4.1.1.7` |
+| **SOP classes queried** | Modality Worklist Information Model — FIND `1.2.840.10008.5.1.4.31` |
 | **Languages** | English, Portuguese (Portugal) |
 | **Author** | Eduardo Dias |
 | **Licence** | Free to use, commercially and privately. Not open source; copyright retained |
@@ -32,8 +33,11 @@ buttons, and error messages written in plain language.
 
 1. **Select a PDF** — drag and drop, a Browse button, or automatic pickup from a monitored
    folder.
-2. **Enter the patient information** — Patient ID, name, date of birth and accession number
-   are mandatory and validated as you type. Barcode scanners work with no configuration.
+2. **Take the patient from the modality worklist**, or enter the details — Patient ID,
+   name, date of birth and accession number are mandatory and validated as you type.
+   Barcode scanners work with no configuration. Where a worklist is configured, none of
+   it has to be typed, and the order's Study Instance UID files the document beside the
+   images rather than in a study of its own.
 3. **Generate a DICOM object** — a standard conformant Encapsulated PDF instance, validated
    against its Information Object Definition before it is allowed anywhere near the network.
 4. **Send it to the PACS** — C-ECHO verification, then C-STORE, to one or several
@@ -47,7 +51,7 @@ buttons, and error messages written in plain language.
 
 Prebuilt executables for **all three architectures** are committed at
 [`dist/app/`](dist/app/). They are self contained, so download one and double click. If you
-want a single file that runs anywhere, take `PdfToDicom-win-x86.exe`; on an ARM machine the
+want a single file that runs anywhere, take the `win-x86` build; on an ARM machine the
 native `win-arm64` build is noticeably smoother. Installers for all three architectures are
 attached to every [CI run](../../actions).
 
@@ -77,7 +81,7 @@ cd pdftoDCM
 .\build\build.ps1                          # test, publish and build the installer (x64)
 .\build\build.ps1 -Runtime win-arm64       # native ARM64 build
 .\build\build.ps1 -Runtime win-x86         # 32 bit build
-.\build\build.ps1 -Task test               # run the 136 tests only
+.\build\build.ps1 -Task test               # run the 173 tests only
 ```
 
 The product is Windows only. The build tooling itself is not: `build/build.sh` cross
@@ -121,9 +125,11 @@ BUILD.bat                One click build, for anyone without a development setup
 src/PdfToDicom.Core/     All logic. net8.0, no presentation code, fully testable
 src/PdfToDicom.App/      WPF desktop application. net8.0-windows
 src/PdfToDicom.Cli/      Command line front end for scripted conversion
-tests/                   136 xUnit tests
+tests/                   173 xUnit tests
+tools/                   A Modality Worklist SCP for testing. Never packaged
 build/                   Build scripts, installer, interoperability verification
 dist/app/                The application, prebuilt for x86, x64 and ARM64
+dist/previous/           The release before this one, kept for a site that needs to go back
 docs/                    User manual (EN + PT), technical docs, conformance statement
 samples/                 Annotated configuration, example PDF, example DICOM object
 ```
@@ -144,6 +150,7 @@ application and the CLI provably identical in behaviour.
 | [Manual do Utilizador](docs/ManualDoUtilizador.pt-PT.md) | Pessoal hospitalar |
 | [Technical Documentation](docs/TechnicalDocumentation.md) | Developers and IT |
 | [DICOM Conformance Statement](docs/DicomConformanceStatement.md) | PACS administrators |
+| [Modality Worklist Setup](docs/WorklistSetup.md) | Hospital IT, commissioning the worklist |
 | [Building It Yourself](docs/BuildingItYourself.md) | The copyright holder, no programming assumed |
 | [Code Signing and Tamper Resistance](docs/CodeSigning.md) | The copyright holder |
 | [Protecting Against Unauthorised Distribution](docs/ProtectingAgainstUnauthorisedDistribution.md) | The copyright holder |
@@ -156,9 +163,10 @@ application and the CLI provably identical in behaviour.
 
 ## Verification status
 
-**136 unit and workflow tests pass**, covering validation rules, VR limits, UID uniqueness
+**173 unit and workflow tests pass**, covering validation rules, VR limits, UID uniqueness
 across 20,000 identifiers per strategy, every mandatory attribute, payload padding, UTF-8
-round trips, configuration corruption recovery and the complete workflow.
+round trips, Person Name shortening, the worklist date ranges, the settings password
+verifier, configuration corruption recovery and the complete workflow.
 
 **All three architectures are verified as native builds.** CI checks the PE machine type
 of each published executable, so a build cannot silently fall back to the runner's own
@@ -169,6 +177,12 @@ architecture.
 accented Portuguese patient name, and then confirms that the archive accepted it, that
 `dcmdump` parses it, that every mandatory attribute survived, that the name is intact, and
 that **the extracted PDF is byte identical to the input**.
+
+The same script then starts a real **`wlmscpfs`**, DCMTK's worklist SCP, and drives the
+worklist client against it: the Patient ID, Accession Number and Study Instance UID come
+back intact, an accented name survives, a 73 character name is shortened with the surname
+kept whole, and the filters genuinely narrow the result. Verifying the client against
+this project's own test server would only prove the two agree with each other.
 
 ---
 
@@ -201,8 +215,11 @@ Stated openly; the full list is in the
   so `build/validate-xaml-bindings.py` catches the binding errors that stop the
   application starting, and nothing else does. Launch any build once on real Windows
   before releasing it.
-- **No Modality Worklist query.** Demographics are typed or scanned, not retrieved from the
-  RIS. This is the most significant functional gap and the obvious next feature.
+- **No Modality Performed Procedure Step.** The worklist is read; an order is never marked
+  started or completed. A site that closes orders through MPPS must keep doing so from the
+  acquiring modality.
+- **A Person Name over 64 characters cannot be sent whole.** That limit is DICOM's, not
+  this application's. The surname is kept and the given name shortened at a word boundary.
 - **No PDF thumbnail preview** — a document icon and metadata instead, to preserve the
   single file deployment.
 - **Encrypted PDFs are refused**, because nobody could open one from the archive.
@@ -257,6 +274,8 @@ See [`LICENSE`](LICENSE) for the terms and [`CHANGELOG.md`](CHANGELOG.md) for wh
 | [fo-dicom](https://github.com/fo-dicom/fo-dicom) 5.2 | MS-PL | DICOM encoding and networking |
 | [PdfPig](https://github.com/UglyToad/PdfPig) 0.1 | MIT | Managed PDF inspection |
 | [Serilog](https://serilog.net/) 4 | Apache 2.0 | Structured logging |
+| [ImageSharp](https://github.com/SixLabors/ImageSharp) 2.1 | Apache 2.0 | Image decoding. Pinned to 2.x; 3.0 changed licence |
+| [PDFtoImage](https://github.com/sungaila/PDFtoImage) 4.1 | MIT | PDF page rendering, over PDFium (Apache 2.0) and SkiaSharp (MIT) |
 
 All permissive and suitable for hospital deployment.
 

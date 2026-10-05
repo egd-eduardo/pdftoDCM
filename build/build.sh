@@ -52,7 +52,7 @@ MESSAGE
 do_clean() {
     step "Cleaning"
     rm -rf "$ARTIFACTS"
-    find "$REPO_ROOT/src" "$REPO_ROOT/tests" -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} + 2>/dev/null || true
+    find "$REPO_ROOT/src" "$REPO_ROOT/tests" "$REPO_ROOT/tools" -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} + 2>/dev/null || true
     info "build output removed"
 }
 
@@ -129,6 +129,24 @@ assert_package_is_sound() {
         printf 'on Windows:\n\n%s\n' "$collisions" >&2
         exit 1
     fi
+
+    # Nothing written for the copyright holder may reach a hospital. These three discuss
+    # signing keys, how to rebuild the product, and the customer. An earlier version
+    # copied docs/* wholesale and shipped all three; naming them here means the next
+    # document added to that folder has to be considered rather than inherited.
+    local forbidden=("BuildingItYourself" "CodeSigning" "ProtectingAgainstUnauthorisedDistribution"
+                     "testworklistserver")
+    local leaked=()
+    local secret
+    for secret in "${forbidden[@]}"; do
+        grep -Fq -- "$secret" <<<"$present" && leaked+=("$secret")
+    done
+
+    if (( ${#leaked[@]} > 0 )); then
+        printf '\nThe package contains material that must never be handed to a site:\n\n' >&2
+        printf '    %s\n' "${leaked[@]}" >&2
+        exit 1
+    fi
 }
 
 # Writes the note a recipient sees first. CRLF and ASCII, because it has to open
@@ -197,6 +215,8 @@ WHAT IS IN THIS FOLDER
     Manual do Utilizador (Portugues)         The same, in Portuguese.
     DICOM Conformance Statement              For your PACS administrator.
     Technical Documentation                  For IT.
+    Worklist Setup                           For IT, if your department has
+                                             a modality worklist.
     Changelog                                What changed in each version.
 
   Samples\\
@@ -298,6 +318,8 @@ do_publish() {
        "$package/Documentation/DICOM Conformance Statement (for your PACS administrator).md"
     cp "$REPO_ROOT/docs/TechnicalDocumentation.md" \
        "$package/Documentation/Technical Documentation (for IT).md"
+    cp "$REPO_ROOT/docs/WorklistSetup.md" \
+       "$package/Documentation/Worklist Setup (for IT).md"
 
     cp "$REPO_ROOT/samples/config.sample.json" "$package/Samples/"
     cp "$REPO_ROOT/samples/example-report.pdf" "$package/Samples/"

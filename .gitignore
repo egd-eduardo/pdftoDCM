@@ -40,6 +40,23 @@ scratch/
 # but is generated per machine, so it is not tracked either.
 *.cer
 code-signing-backup.pfx
-dist/app/PdfToDicom-2.1.0-win-arm64.exe
-dist/app/PdfToDicom-2.1.0-win-x64.exe
-dist/app/PdfToDicom-2.1.0-win-x86.exe
+# ---------------------------------------------------------------------------
+# Published executables.
+#
+# Each is around 70 MB, three are produced per release, and git keeps every
+# one of them for ever. Committing them was growing this repository faster
+# than it was worth, so they are no longer tracked.
+#
+# The pattern is deliberately general rather than one line per version: a
+# release that adds its own three lines is a release that forgets to, and the
+# cost of forgetting is 220 MB that cannot be taken out again without
+# rewriting history.
+#
+# Where to get a build instead: run the Windows workflow by hand, or push a
+# version tag, and the standalone executable, the handover package and the
+# installer are attached to that run for all three architectures. Any commit
+# can also be built locally with BUILD.bat or build/build.ps1.
+#
+# The READMEs under dist/ are tracked; the binaries beside them are not.
+# ---------------------------------------------------------------------------
+dist/**/*.exe

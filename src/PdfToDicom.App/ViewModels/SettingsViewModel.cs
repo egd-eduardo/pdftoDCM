@@ -9,6 +9,7 @@ using PdfToDicom.Core.Dicom;
 using PdfToDicom.Core.Models;
 using PdfToDicom.Core.Services;
 using PdfToDicom.Core.Validation;
+using PdfToDicom.Core.Security;
 
 namespace PdfToDicom.App.ViewModels;
 
@@ -49,6 +50,8 @@ public sealed class SettingsViewModel : ObservableObject
         AddDestinationCommand = new RelayCommand(AddDestination);
         RemoveDestinationCommand = new RelayCommand(RemoveDestination, () => SelectedDestination is not null);
         TestDestinationCommand = new AsyncRelayCommand(TestDestinationAsync, () => SelectedDestination is not null && !IsTesting);
+        UnlockWorklistCommand = new RelayCommand(UnlockWorklist);
+        TestWorklistCommand = new AsyncRelayCommand(TestWorklistAsync);
         BrowseLogFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.LogFolder = f, Working.LogFolder));
         BrowseOutputFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.OutputFolder = f, Working.OutputFolder));
         BrowsePdfFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.DefaultPdfFolder = f, Working.DefaultPdfFolder));
@@ -84,6 +87,111 @@ public sealed class SettingsViewModel : ObservableObject
     /// secret: every DICOM object the application produces carries UIDs built from it.
     /// </remarks>
     public string RegisteredUidRootForDisplay => UidGenerator.RegisteredUidRootForDisplay;
+
+    // ---------------------------------------------------------------- Worklist
+
+    private bool _isWorklistUnlocked = !WorklistSettingsLock.IsProtected;
+    private string _worklistPasswordAttempt = string.Empty;
+    private string _worklistLockMessage = string.Empty;
+    private string _worklistTestResult = string.Empty;
+
+    /// <summary>
+    /// Whether the worklist settings are readable and editable in this dialog.
+    /// </summary>
+    /// <remarks>
+    /// Starts unlocked when no password has been compiled in, because a lock nobody can
+    /// open is not a protection, it is a defect. The dialog says plainly which of the two
+    /// states it is in rather than implying a protection that is not there.
+    /// </remarks>
+    public bool IsWorklistUnlocked
+    {
+        get => _isWorklistUnlocked;
+        private set
+        {
+            if (SetProperty(ref _isWorklistUnlocked, value))
+            {
+                OnPropertyChanged(nameof(IsWorklistLocked));
+            }
+        }
+    }
+
+    /// <summary>Inverse of <see cref="IsWorklistUnlocked"/>, for binding.</summary>
+    public bool IsWorklistLocked => !IsWorklistUnlocked;
+
+    /// <summary>True when a password was compiled into this build.</summary>
+    public bool IsWorklistPasswordSet => WorklistSettingsLock.IsProtected;
+
+    /// <summary>The password being offered. Never stored and never written anywhere.</summary>
+    public string WorklistPasswordAttempt
+    {
+        get => _worklistPasswordAttempt;
+        set => SetProperty(ref _worklistPasswordAttempt, value);
+    }
+
+    /// <summary>Why the last unlock attempt failed, when it did.</summary>
+    public string WorklistLockMessage
+    {
+        get => _worklistLockMessage;
+        private set => SetProperty(ref _worklistLockMessage, value);
+    }
+
+    /// <summary>Result of the last worklist connection test.</summary>
+    public string WorklistTestResult
+    {
+        get => _worklistTestResult;
+        private set => SetProperty(ref _worklistTestResult, value);
+    }
+
+    /// <summary>The date interval choices offered for a worklist query.</summary>
+    public IReadOnlyList<EnumOption<WorklistDateRange>> WorklistDateRanges { get; } = new[]
+    {
+        new EnumOption<WorklistDateRange>(WorklistDateRange.Today, "Settings.Worklist.Range.Today"),
+        new EnumOption<WorklistDateRange>(WorklistDateRange.YesterdayAndToday, "Settings.Worklist.Range.YesterdayAndToday"),
+        new EnumOption<WorklistDateRange>(WorklistDateRange.LastSevenDays, "Settings.Worklist.Range.LastSevenDays"),
+        new EnumOption<WorklistDateRange>(WorklistDateRange.AnyDate, "Settings.Worklist.Range.AnyDate"),
+        new EnumOption<WorklistDateRange>(WorklistDateRange.Explicit, "Settings.Worklist.Range.Explicit")
+    };
+
+    /// <summary>Checks the offered password and unlocks on success.</summary>
+    public RelayCommand UnlockWorklistCommand { get; }
+
+    /// <summary>Confirms the worklist server answers.</summary>
+    /// <remarks>
+    /// Asynchronous rather than fire and forget, so the button disables itself while the
+    /// association is being attempted. A worklist that is simply not there takes the full
+    /// timeout to say so, and a button that stays live for thirty seconds invites a second
+    /// click and a second association.
+    /// </remarks>
+    public AsyncRelayCommand TestWorklistCommand { get; }
+
+    private void UnlockWorklist()
+    {
+        if (WorklistSettingsLock.Verify(WorklistPasswordAttempt))
+        {
+            IsWorklistUnlocked = true;
+            WorklistLockMessage = string.Empty;
+            _services.Logger.Information("The worklist settings were unlocked.");
+        }
+        else
+        {
+            WorklistLockMessage = _services.Localizer.Get("Settings.Worklist.WrongPassword");
+            _services.Logger.Warning("An incorrect password was offered for the worklist settings.");
+        }
+
+        // Cleared either way, so it is not left sitting in memory or on screen.
+        WorklistPasswordAttempt = string.Empty;
+    }
+
+    private async Task TestWorklistAsync()
+    {
+        WorklistTestResult = _services.Localizer.Get("Settings.Worklist.Testing");
+
+        (bool _, string message) = await _services.Worklist
+            .TestConnectionAsync(Working.Worklist, Working.CallingAeTitle)
+            .ConfigureAwait(true);
+
+        WorklistTestResult = message;
+    }
 
     public IReadOnlyList<EnumOption<UidGenerationStrategy>> UidStrategies { get; } = new[]
     {
@@ -423,6 +531,7 @@ public sealed class SettingsViewModel : ObservableObject
         StationName = source.StationName,
         CallingAeTitle = source.CallingAeTitle,
         Destinations = source.Destinations.Select(d => d.Clone()).ToList(),
+        Worklist = source.Worklist.Clone(),
         RecentDestinationLimit = source.RecentDestinationLimit,
         CharacterSet = source.CharacterSet,
         UidStrategy = source.UidStrategy,

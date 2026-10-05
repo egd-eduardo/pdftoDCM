@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A Modality Worklist SCP for testing, and only for testing.
+
+    It exists because a site adopting the worklist feature usually has no worklist server
+    it can point a test workstation at: the real one holds live patient data and is not
+    somewhere to try a new application against. This serves a handful of invented
+    scheduled procedure steps over a real DICOM association, so the whole path can be
+    exercised without touching anything clinical.
+
+    It is NOT part of what a hospital receives. The packaging scripts copy a named list of
+    files and this is not on it.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>PdfToDicom.TestWorklistServer</RootNamespace>
+    <AssemblyName>testworklistserver</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- So it can be published for the architectures a test machine might be. -->
+    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="fo-dicom" Version="5.2.2" />
+  </ItemGroup>
+
+</Project>

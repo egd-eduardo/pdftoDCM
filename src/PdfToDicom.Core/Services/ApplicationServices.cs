@@ -59,6 +59,7 @@ public sealed class ApplicationServices : IDisposable
         // the encapsulated documents and the images.
         DicomValidator = new SopClassDicomValidator();
         NetworkService = new DicomNetworkService(Logger);
+        Worklist = new WorklistService(Logger);
         TagInspector = new DicomTagInspector();
         FolderMonitor = new FolderMonitor(Logger, configuration.MonitorSettleDelayMilliseconds);
 
@@ -104,6 +105,9 @@ public sealed class ApplicationServices : IDisposable
 
     /// <summary>Verification and storage service class user.</summary>
     public IDicomNetworkService NetworkService { get; }
+
+    /// <summary>Queries the Modality Worklist for scheduled procedure steps.</summary>
+    public IWorklistService Worklist { get; }
 
     /// <summary>Tag viewer support.</summary>
     public DicomTagInspector TagInspector { get; }

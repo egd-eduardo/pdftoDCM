@@ -1,6 +1,6 @@
 # PDF para DICOM — Manual do Utilizador
 
-**Versão 1.5 · Para profissionais hospitalares**
+**Versão 3.0 · Para profissionais hospitalares**
 
 Esta aplicação recebe um documento PDF produzido por outro sistema, converte-o num objeto
 DICOM de PDF Encapsulado e envia-o para o PACS, de forma a que o documento passe a fazer
@@ -17,6 +17,7 @@ utilizar esta aplicação.
 2. [A janela principal](#2-a-janela-principal)
 3. [Passo 1 — Escolher o documento ou a imagem](#3-passo-1--escolher-o-documento-ou-a-imagem)
 4. [Passo 2 — Introduzir os dados do doente](#4-passo-2--introduzir-os-dados-do-doente)
+   - [Obter o doente a partir da lista de trabalho](#obter-o-doente-a-partir-da-lista-de-trabalho)
 5. [Passo 3 — Confirmar o destino](#5-passo-3--confirmar-o-destino)
 6. [Enviar o documento](#6-enviar-o-documento)
 7. [O que fazer quando algo corre mal](#7-o-que-fazer-quando-algo-corre-mal)
@@ -62,6 +63,7 @@ Tudo acontece numa só janela, que se lê de cima para baixo.
 │  └─────────────────────────────────┘  │  │ PACS@192.168.10.20:104 │  │
 │                                       │  └────────────────────────┘  │
 │  2. Informação do doente              │   [Testar ligação]           │
+│  [Modelo ▾] [Da lista de trabalho...] │                              │
 │  Nº processo *     Nº de acesso *     │                              │
 │  [_____________]   [_____________]    │  Os resultados aparecem      │
 │  Apelido *         Nome próprio       │  aqui após o envio.          │
@@ -158,7 +160,77 @@ converta-o e só depois largue o seguinte.
 **Este é o passo mais importante de todo o processo.** Tudo o resto é mecânico; é aqui que
 um erro chega ao registo do doente.
 
+### Obter o doente a partir da lista de trabalho
+
+**Se o seu serviço tiver uma lista de trabalho de modalidade, utilize-a.** Escrever um
+número de processo à mão é a forma mais provável de um documento acabar no registo do
+doente errado, e a lista de trabalho elimina esse passo por completo.
+
+Prima **Da lista de trabalho...**, por cima dos campos do doente. O botão só aparece
+quando o departamento de informática tiver configurado uma lista de trabalho; se não o vir,
+não existe nada a que ligar e deve preencher o formulário como habitualmente.
+
+Abre-se uma janela com os procedimentos agendados para hoje:
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│  Lista de Trabalho de Modalidade                                           │
+│  Escolha o procedimento agendado a que este documento pertence.            │
+│                                                                            │
+│  ID do doente contém      Apelido contém                                   │
+│  [________________]       [________________]  [Procurar] [Mostrar tudo]    │
+│                                                                            │
+│  ID do doente │ Nome                 │ Data nasc. │ Nº acesso │ Procedim.  │
+│  P0000002     │ GONÇALVES, JOÃO MIG. │ 1970-09-03 │ ACC...002 │ Relat...   │
+│  P0000006     │ MARTINS, BEATRIZ     │ 2001-04-18 │ ACC...006 │ Radio...   │
+│                                                                            │
+│  Será utilizado                                                            │
+│  GONÇALVES, JOÃO MIGUEL                                                    │
+│                                   [Cancelar]  [Utilizar este doente]       │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Deixe ambas as caixas vazias** para ver a lista completa. Escreva parte de um apelido
+  ou de um número de processo e prima **Procurar** para a restringir.
+- Faça duplo clique numa linha, ou selecione-a e prima **Utilizar este doente**.
+- Os campos do doente são preenchidos automaticamente, e o número de acesso passa a vir
+  do pedido e não dos papéis que estão em cima da secretária.
+
+**Confirme a linha "Será utilizado" antes de premir o botão.** Mostra exatamente o que vai
+ficar no registo do doente. Normalmente coincide com a linha acima. Ocasionalmente é mais
+curta, pelo motivo explicado a seguir.
+
+**Porque é que um nome muito longo é por vezes abreviado.** O DICOM permite 64 carateres
+para um nome. Alguns nomes portugueses são mais longos do que isso, e a norma não oferece
+forma de os enviar por inteiro. O apelido é mantido completo, por ser aquilo por que um
+arquivo indexa e pesquisa, e o nome próprio é cortado no fim de uma palavra, para que
+continue a ler-se como um nome. *ALBUQUERQUE MONTENEGRO DOS SANTOS RODRIGUES, JOSÉ ANTÓNIO
+FRANCISCO XAVIER* é enviado como *ALBUQUERQUE MONTENEGRO DOS SANTOS RODRIGUES, JOSÉ
+ANTÓNIO*. O nome completo permanece na lista de trabalho, a abreviatura fica registada no
+registo de atividade, e nada o interrompe.
+
+**Os nomes do meio não são transportados.** O serviço não os utiliza, e deixá-los de fora
+significa que não consomem os carateres de que o primeiro e o último nome precisam.
+
+**A lista de trabalho é apenas de leitura.** Nunca lhe é enviado nada de volta e nenhum
+dado de doente sai da sua estação de trabalho quando a abre. Se escolher a linha errada,
+basta abrir de novo a janela e escolher outra: o formulário é substituído por inteiro,
+nunca misturado.
+
+### Se não vier nada
+
+| O que vê | O que normalmente significa |
+|---|---|
+| *A lista de trabalho não devolveu procedimentos agendados para esta consulta* | O doente não está agendado para hoje. Peça ao departamento de informática para alargar o intervalo de datas, ou preencha o formulário à mão. |
+| *não foi possível contactar* | O servidor da lista de trabalho está indisponível, ou o endereço está errado. Preencha o formulário à mão e avise a informática. |
+| *rejeitou a ligação* | Esta estação de trabalho não está registada no servidor da lista de trabalho. A informática tem de o fazer uma vez. |
+| *Existiam mais resultados do que os apresentados* | Restrinja a procura com um apelido ou um número de processo. |
+
+Pode sempre escrever os dados. A lista de trabalho é uma comodidade, nunca uma obrigação.
+
 ### Campos obrigatórios
+
+Preencha-os quando não estiver a utilizar a lista de trabalho.
 
 | Campo | Notas |
 |---|---|
@@ -310,6 +382,7 @@ pelo departamento de informática.
 | **Instituição** | Nome do hospital e do serviço, e o AE Title desta estação. |
 | **Destinos** | Os sistemas PACS de destino, com **Testar ligação** por destino. |
 | **DICOM** | Conjunto de carateres, geração de identificadores, modalidade, descrições por omissão. Não altere sem indicação do administrador do PACS. |
+| **Lista de trabalho** | O servidor da lista de trabalho de modalidade. Normalmente protegido por uma palavra-passe na posse de quem instalou a aplicação; apontá-lo para o servidor errado colocaria à sua frente os doentes errados. |
 | **Pastas** | Onde são guardados os ficheiros e os registos, e a monitorização de pastas. |
 | **Aspeto** | Idioma, modo escuro e confirmação antes de enviar. |
 
@@ -341,6 +414,10 @@ Para que o envio funcione, o administrador do PACS tem de ter registado:
 
 O ponto 3 é o mais frequentemente esquecido. Um PACS pode estar perfeitamente acessível e
 ainda assim recusar documentos PDF por essa classe SOP nunca ter sido ativada.
+
+Se utilizar a lista de trabalho, o mesmo registo tem de existir também no **servidor da
+lista de trabalho**. É um sistema distinto do PACS, e estar registado num não o regista no
+outro.
 
 ---
 
@@ -374,6 +451,20 @@ previamente qualquer outro componente.
 
 **Preciso de direitos de administrador?**
 Não. Nem para instalar nem para utilizar.
+
+**O botão "Da lista de trabalho..." não aparece.**
+Não foi configurada nenhuma lista de trabalho nesta estação. Pergunte ao departamento de
+informática se o seu serviço tem uma. Até lá, preencha os campos do doente à mão.
+
+**O nome na lista de trabalho é mais longo do que o nome enviado.**
+O DICOM permite 64 carateres para um nome e alguns nomes são mais longos. O apelido é
+mantido por inteiro e o nome próprio é abreviado, pelo que o registo continua a
+identificar a pessoa certa. É o comportamento esperado e fica registado.
+
+**Se o pedido for alterado, os dados mudam no formulário?**
+Não. Os dados são copiados para o formulário no momento em que prime *Utilizar este
+doente*. Nada é relido depois disso, e nunca é escrito nada de volta na lista de
+trabalho.
 
 ---
 

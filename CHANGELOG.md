@@ -1,5 +1,118 @@
 # Changelog
 
+## 3.0.0
+
+**Patient details can now be taken from a Modality Worklist, so the step where a document
+is most likely to be filed against the wrong patient disappears.**
+
+Typing a patient number by hand is the single likeliest way a report ends up in someone
+else's record. Where a department has a modality worklist, the operator now presses
+**From worklist...**, picks the scheduled procedure, and the Patient ID, name, date of
+birth, sex, accession number and referring physician come from the order itself.
+
+This is a major version because the worklist changes where identity comes from, not
+because anything was removed. Nothing in the previous behaviour has gone: a site with no
+worklist uses the application exactly as before, and the feature is disabled by default.
+
+### What it does
+
+- **Modality Worklist Information Model — FIND** (`1.2.840.10008.5.1.4.31`) as an SCU.
+  Configured separately from the destinations, because a worklist server is usually a
+  different system from the archive.
+- **The order's Study Instance UID is carried into the document.** This is the most
+  valuable thing the response holds: the order already created the study the images will
+  land in, so the report is filed beside them rather than in a study of its own. It
+  overrides study grouping exactly as a Study Instance UID typed by the operator does.
+- **Configurable match keys**: Called AE Title, host, port, Calling AE Title override,
+  modality and scheduled station, each of which may be left blank. Blank is not an
+  incomplete setting; it is DICOM universal matching, which is what "any modality" should
+  mean.
+- **Date intervals**: today (the default), yesterday and today, the last seven days, any
+  date, or an explicit range. A range entered backwards is put the right way round rather
+  than refused.
+- **Any character set.** The query declares `ISO_IR 192`, so accented and non Latin names
+  come back intact rather than transliterated.
+- **Search by patient number or surname**, wildcards included, or leave both blank for
+  the whole list.
+- **Read only.** Nothing is ever written back to the worklist, nothing is cached on disk,
+  and a worklist that is unreachable never blocks anything: the operator types the
+  details in as before.
+
+### Long names
+
+DICOM allows 64 characters for a Person Name component group, which is the whole
+`Family^Given` pair and not 64 each. Some Portuguese names are longer, and no
+implementation can send them whole; the limit is the standard's.
+
+The surname is kept complete, because that is what an archive indexes and what a
+clinician searches by, and the given name is shortened at a word boundary so it still
+reads as a name. Where the surname alone is over the limit, it is cut at a word boundary
+and the given name dropped.
+
+This happens without interrupting anyone, as asked. It is not hidden: the worklist window
+shows the name that will actually be used underneath the selected row, and every
+shortening is written to the audit log with the original length, so a later question
+about why a name differs from the RIS has an answer.
+
+Middle names are not carried across. The department does not use them, and leaving them
+out means they cannot consume characters the first and last name need.
+
+### The worklist settings are locked
+
+Pointing a workstation at the wrong worklist server does not produce an error. It
+produces a list of the wrong patients, presented exactly as convincingly as the right
+ones. The Worklist tab in Settings is therefore protected by a password compiled into the
+executable, with no interface to change it.
+
+What is stored is a **PBKDF2-HMAC-SHA256 verifier**, 210,000 iterations with a random
+salt, not an encrypted password. A hash is strictly stronger here: anything encrypted
+inside a binary must carry its key inside the binary too, and could be decrypted back to
+the password. This cannot.
+
+Stated honestly: the check runs on the workstation, so it deters a colleague who should
+not be in there. It is not a defence against someone with a decompiler, and no password a
+desktop application checks by itself could be.
+
+### A test worklist server, for sites that have none
+
+`tools/PdfToDicom.TestWorklistServer` serves seven invented scheduled procedure steps
+over a real DICOM association, so the whole path can be exercised without touching
+anything clinical. Its fixtures are deliberately awkward: accented names, a patient with
+no given name, a 73 character name whose surname fits, and a 75 character name whose
+surname alone is over the limit.
+
+**It is never packaged**, and the build now fails outright if it, or any of the three
+documents written for the copyright holder, turns up in an assembled package.
+
+### Also in this release
+
+- **`pdftodicom worklist`** queries the configured worklist and prints what came back,
+  including the name as it would be written to the object whenever that differs. Written
+  for commissioning a site: it answers "is the worklist reachable, and does it return
+  what we expect?" from a machine with nothing on it but one file.
+- **`pdftodicom worklist-password`** turns a password into the verifier to compile in,
+  reading it without echoing so it never has to be told to anyone.
+- **The interoperability script now verifies the worklist against DCMTK `wlmscpfs`**, not
+  against this project's own test server. Verifying a client against our own server would
+  only prove the two agree with each other.
+- **The previous release is kept** under `dist/previous/2.1.0/`.
+
+### Verified
+
+173 automated tests, and the full interoperability script against DCMTK `storescp` and
+`wlmscpfs`: the Patient ID, Accession Number and Study Instance UID come back intact, an
+accented name survives the round trip, a 73 character name is shortened with the surname
+kept whole, and the filters genuinely narrow the result — a wildcard matches, an unknown
+Patient ID returns nothing, and a date range in the past returns nothing.
+
+### Upgrading
+
+Nothing to do. Existing configuration files load unchanged; the `Worklist` section is
+added with the worklist disabled. Objects produced by this version carry Implementation
+Version Name `PDFTODICOM_3_0`.
+
+---
+
 ## 2.1.0
 
 **A converted PDF now also arrives as page images, so a viewer that needs an image will

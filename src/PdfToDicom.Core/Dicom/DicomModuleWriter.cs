@@ -38,7 +38,7 @@ internal sealed class DicomModuleWriter
 
     /// <summary>Product version reported in Software Versions (0018,1020).</summary>
     internal static string ProductVersion =>
-        typeof(DicomModuleWriter).Assembly.GetName().Version?.ToString(3) ?? "2.1.0";
+        typeof(DicomModuleWriter).Assembly.GetName().Version?.ToString(3) ?? "3.0.0";
 
     /// <summary>
     /// Writes Specific Character Set (0008,0005). The attribute is Type 1C and is

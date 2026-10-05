@@ -47,6 +47,37 @@
   ],
   "RecentDestinationLimit": 8,
 
+  "//Worklist": "Modality Worklist. When IsEnabled is true, a \"Worklist\" button appears on the main window and the operator picks a scheduled procedure step instead of typing the patient details, which is where the costly mistakes happen. The worklist server is usually a different system from the archive, which is why it is configured here and not as a destination. The settings below can be protected by a password compiled into the software; see the Worklist Setup document supplied with the application.",
+  "Worklist": {
+    "//IsEnabled": "False hides the Worklist button entirely. Nothing is queried and no association is attempted.",
+    "IsEnabled": false,
+
+    "//Connection": "CalledAeTitle, Host and Port identify the worklist SCP. Your worklist administrator must register the Calling AE Title of this workstation before a query will be answered. CallingAeTitleOverride is normally left empty, so the application's own CallingAeTitle above is used.",
+    "CalledAeTitle": "WORKLIST",
+    "Host": "192.168.10.40",
+    "Port": 104,
+    "CallingAeTitleOverride": "",
+
+    "//Matching": "Modality and ScheduledStationAeTitle are match keys. Leave either empty to match everything, which is what DICOM calls universal matching and is a legitimate and common choice: a department filing documents for several modalities wants the whole list.",
+    "Modality": "",
+    "ScheduledStationAeTitle": "",
+
+    "//DateRange": "Which scheduled dates to ask for. Today, YesterdayAndToday, LastSevenDays, AnyDate or Explicit. Today is the default and is what a reception desk wants almost always. AnyDate sends no date key at all, so a busy department may get thousands of entries back.",
+    "DateRange": "Today",
+
+    "//ExplicitDates": "Used only when DateRange is Explicit. ISO dates, for example 2026-10-01. Either may be left null, in which case today is used for that end, and a range entered backwards is put the right way round rather than refused.",
+    "ExplicitFrom": null,
+    "ExplicitTo": null,
+
+    "//Limits": "TimeoutSeconds covers the association and the response. MaximumResults stops a mistyped query returning an entire schedule and freezing the window; the list says so when it has been cut short.",
+    "TimeoutSeconds": 30,
+    "MaximumResults": 500,
+
+    "//Tls": "AcceptAnyTlsCertificate is convenient on a closed hospital network with a self signed certificate, and a hole anywhere else.",
+    "UseTls": false,
+    "AcceptAnyTlsCertificate": false
+  },
+
   "//CharacterSet": "Utf8 writes Specific Character Set as ISO_IR 192 and represents any accented or non Latin name correctly. Change to Latin1 only if your archive is known to reject UTF-8.",
   "CharacterSet": "Utf8",
 

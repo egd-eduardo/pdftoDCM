@@ -13,6 +13,7 @@
 
     <Window.Resources>
         <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <conv:BooleanToVisibilityConverter x:Key="InverseBoolToVisibility" Invert="True" />
         <conv:StringToVisibilityConverter x:Key="StringToVisibility" />
     </Window.Resources>
 
@@ -269,6 +270,144 @@
                         <CheckBox Content="Include coded document title sequences"
                                   IsChecked="{Binding Working.IncludeConceptNameCodeSequence}"
                                   Style="{StaticResource SettingCheckBoxStyle}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- =================================================== Worklist -->
+            <TabItem Header="{loc:Localize Settings.Tab.Worklist}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
+                    <StackPanel MaxWidth="560" HorizontalAlignment="Left" Margin="0,4,0,0">
+
+                        <!-- Locked. Shown until the password is accepted. -->
+                        <Border Style="{StaticResource CardBorderStyle}"
+                                Visibility="{Binding IsWorklistLocked, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="{loc:Localize Settings.Worklist.Locked}"
+                                           Style="{StaticResource SectionHeaderTextStyle}" Margin="0,0,0,6" />
+                                <TextBlock Text="{loc:Localize Settings.Worklist.LockedCaption}"
+                                           Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,0,0,12" />
+
+                                <TextBlock Text="{loc:Localize Settings.Worklist.Password}" Style="{StaticResource FieldLabelTextStyle}" />
+                                <!-- A plain TextBox would leave the password readable on a
+                                     shared clinical workstation. PasswordBox does not expose
+                                     its value as a bindable property on purpose, so the view
+                                     passes it to the command explicitly. -->
+                                <PasswordBox x:Name="WorklistPasswordBox"
+                                             PasswordChanged="OnWorklistPasswordChanged"
+                                             MinHeight="36" Padding="10,0" Margin="0,0,0,10"
+                                             FontSize="{StaticResource BodyFontSize}" />
+
+                                <Button Content="{loc:Localize Settings.Worklist.Unlock}"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Command="{Binding UnlockWorklistCommand}"
+                                        HorizontalAlignment="Left" MinWidth="130" MinHeight="36" />
+
+                                <TextBlock Text="{Binding WorklistLockMessage}"
+                                           Style="{StaticResource CaptionTextStyle}"
+                                           Foreground="{DynamicResource ErrorBrush}"
+                                           TextWrapping="Wrap" Margin="0,10,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Unlocked, or never locked. -->
+                        <StackPanel Visibility="{Binding IsWorklistUnlocked, Converter={StaticResource BoolToVisibility}}">
+
+                            <TextBlock Text="{loc:Localize Settings.Worklist.Unprotected}"
+                                       Style="{StaticResource CaptionTextStyle}"
+                                       TextWrapping="Wrap" Margin="0,0,0,14"
+                                       Visibility="{Binding IsWorklistPasswordSet, Converter={StaticResource InverseBoolToVisibility}}" />
+
+                            <CheckBox Content="{loc:Localize Settings.Worklist.Enabled}"
+                                      IsChecked="{Binding Working.Worklist.IsEnabled}"
+                                      Style="{StaticResource SettingCheckBoxStyle}" Margin="0,0,0,14" />
+
+                            <TextBlock Text="{loc:Localize Settings.Worklist.CalledAeTitle}" Style="{StaticResource FieldLabelTextStyle}" />
+                            <TextBox Text="{Binding Working.Worklist.CalledAeTitle, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14" />
+
+                            <TextBlock Text="{loc:Localize Settings.Worklist.Host}" Style="{StaticResource FieldLabelTextStyle}" />
+                            <TextBox Text="{Binding Working.Worklist.Host, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14" />
+
+                            <TextBlock Text="{loc:Localize Settings.Worklist.Port}" Style="{StaticResource FieldLabelTextStyle}" />
+                            <TextBox Text="{Binding Working.Worklist.Port, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14" />
+
+                            <TextBlock Text="{loc:Localize Settings.Worklist.CallingAeOverride}" Style="{StaticResource FieldLabelTextStyle}" />
+                            <TextBox Text="{Binding Working.Worklist.CallingAeTitleOverride, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,4" />
+                            <TextBlock Text="{loc:Localize Settings.Worklist.CallingAeOverride.Caption}"
+                                       Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                            <TextBlock Text="{loc:Localize Settings.Worklist.Modality}" Style="{StaticResource FieldLabelTextStyle}" />
+                            <TextBox Text="{Binding Working.Worklist.Modality, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,4" />
+                            <TextBlock Text="{loc:Localize Settings.Worklist.Modality.Caption}"
+                                       Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                            <TextBlock Text="{loc:Localize Settings.Worklist.ScheduledStation}" Style="{StaticResource FieldLabelTextStyle}" />
+                            <TextBox Text="{Binding Working.Worklist.ScheduledStationAeTitle, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,4" />
+                            <TextBlock Text="{loc:Localize Settings.Worklist.ScheduledStation.Caption}"
+                                       Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                            <TextBlock Text="{loc:Localize Settings.Worklist.DateRange}" Style="{StaticResource FieldLabelTextStyle}" />
+                            <ComboBox ItemsSource="{Binding WorklistDateRanges}"
+                                      SelectedValue="{Binding Working.Worklist.DateRange}"
+                                      SelectedValuePath="Value" DisplayMemberPath="Display"
+                                      Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,10" />
+
+                            <!-- Always visible rather than revealed by the choice above. Hiding
+                                 them would leave "Explicit range" looking like it had no
+                                 settings, and the caption says plainly when they apply. -->
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                    <TextBlock Text="{loc:Localize Settings.Worklist.From}" Style="{StaticResource FieldLabelTextStyle}" />
+                                    <DatePicker SelectedDate="{Binding Working.Worklist.ExplicitFrom}" MinHeight="36" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="{loc:Localize Settings.Worklist.To}" Style="{StaticResource FieldLabelTextStyle}" />
+                                    <DatePicker SelectedDate="{Binding Working.Worklist.ExplicitTo}" MinHeight="36" />
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Text="{loc:Localize Settings.Worklist.ExplicitDates.Caption}"
+                                       Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                            <TextBlock Text="{loc:Localize Settings.Worklist.Timeout}" Style="{StaticResource FieldLabelTextStyle}" />
+                            <TextBox Text="{Binding Working.Worklist.TimeoutSeconds, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14" />
+
+                            <TextBlock Text="{loc:Localize Settings.Worklist.MaximumResults}" Style="{StaticResource FieldLabelTextStyle}" />
+                            <TextBox Text="{Binding Working.Worklist.MaximumResults, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,4" />
+                            <TextBlock Text="{loc:Localize Settings.Worklist.MaximumResults.Caption}"
+                                       Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                            <CheckBox Content="{loc:Localize Settings.Worklist.UseTls}"
+                                      IsChecked="{Binding Working.Worklist.UseTls}"
+                                      Style="{StaticResource SettingCheckBoxStyle}" Margin="0,0,0,10" />
+
+                            <CheckBox Content="{loc:Localize Settings.Worklist.AcceptAnyCertificate}"
+                                      IsChecked="{Binding Working.Worklist.AcceptAnyTlsCertificate}"
+                                      IsEnabled="{Binding Working.Worklist.UseTls}"
+                                      Style="{StaticResource SettingCheckBoxStyle}" Margin="0,0,0,4" />
+                            <TextBlock Text="{loc:Localize Settings.Worklist.AcceptAnyCertificate.Caption}"
+                                       Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                            <Button Content="{loc:Localize Settings.Worklist.Test}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Command="{Binding TestWorklistCommand}"
+                                    HorizontalAlignment="Left" MinWidth="150" MinHeight="36" />
+
+                            <TextBlock Text="{Binding WorklistTestResult}"
+                                       Style="{StaticResource CaptionTextStyle}"
+                                       TextWrapping="Wrap" Margin="0,10,0,0" />
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
