@@ -30,10 +30,17 @@ namespace PdfToDicom.Core.Security;
 /// expensive rather than instant.
 /// </para>
 /// <para>
-/// <b>The password never passes through anyone's hands but the author's.</b> The verifier
-/// below is produced by <c>pdftodicom worklist-password</c>, which reads the password
-/// without echoing it and prints the line to paste here. It is never typed into a message,
-/// a chat window or a commit.
+/// <b>The tool that sets it never records the password.</b>
+/// <c>pdftodicom worklist-password</c> reads it without echoing, derives the verifier on
+/// the spot and prints only the line to paste in. Nothing that could be turned back into
+/// the password leaves that process.
+/// </para>
+/// <para>
+/// <b>The current password is nevertheless written in the clear on the Verifier
+/// constant below</b>, at the copyright holder's request, so that it cannot be forgotten.
+/// That is a deliberate trade and the reasoning is recorded there. It is why the design
+/// above still matters: the verifier remains one way, so removing that one comment is all
+/// it takes to stop the password being recoverable from this repository.
 /// </para>
 /// </remarks>
 public static class WorklistSettingsLock
@@ -50,16 +57,32 @@ public static class WorklistSettingsLock
     /// application reports the setting as unprotected so it cannot be forgotten.
     /// </para>
     /// <para>
-    /// To change it:
-    ///     pdftodicom worklist-password
-    /// then paste the line it prints here and rebuild. Nothing else needs to change, and
-    /// the password itself never has to be written down anywhere but a password manager.
+    /// <b>The password currently compiled in is NeverWinterNights.</b> It is written here
+    /// in the clear at the copyright holder's request, so that it cannot be forgotten and
+    /// can be changed or removed later. The verifier below cannot be turned back into it,
+    /// so this comment is the only record of it in the repository: change the two
+    /// together or they will disagree.
     /// </para>
     /// <para>
-    /// The value below cannot be turned back into the password, which is the point of
-    /// storing a hash rather than something encrypted. It is safe to keep in source
-    /// control; what must not go in source control, or into a message or a commit, is the
-    /// password it was derived from.
+    /// This weakens the lock only against somebody who already has the source, and such a
+    /// person can delete the check outright, so it costs very little against the risk the
+    /// lock is actually for: a member of staff wandering into the worklist configuration
+    /// on a shared clinical workstation, who has the executable and not this file. The
+    /// source is not part of what a site receives.
+    /// </para>
+    /// <para>
+    /// <b>If this repository is ever made public, or shared outside the copyright
+    /// holder, remove this comment and generate a new password.</b> At that point it is
+    /// published, and a published password is no password.
+    /// </para>
+    /// <para>
+    /// <b>To change it.</b> Run <c>pdftodicom worklist-password</c>, paste the single line
+    /// it prints over the constant below, update the comment above to match, and rebuild.
+    /// </para>
+    /// <para>
+    /// <b>To remove it.</b> Set the constant to an empty string. The worklist settings are
+    /// then open to anyone and the dialog says so plainly, which is the honest behaviour
+    /// for a lock that is not set rather than one that pretends otherwise.
     /// </para>
     /// </remarks>
     private const string Verifier = "PBKDF2-SHA256$210000$KxLec2uxU5q9zFHxleeLeg==$dn8UaNAIilJtHCaDingXvwRi2LW0IIsT2e9PtbHDtYo=";

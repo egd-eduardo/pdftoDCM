@@ -260,8 +260,31 @@ To run it here, install Python from https://www.python.org/downloads/ and tick
 
 function Invoke-Test {
     Write-Step 'Running the test suite'
-    dotnet test (Join-Path $RepoRoot 'tests\PdfToDicom.Core.Tests\PdfToDicom.Core.Tests.csproj') `
-        -c $Configuration --nologo --verbosity minimal
+
+    # Says which runtime the tests are about to run on, when it is not the one they
+    # target.
+    #
+    # Building and running are separate problems. Any recent SDK builds these projects,
+    # because an SDK carries its own reference assemblies and global.json rolls forward.
+    # Running a net8.0 application needs the .NET 8 runtime, and the test host is itself a
+    # net8.0 application, so a machine with only the current SDK built everything and then
+    # could not start a single test. RollForward in Directory.Build.props now lets that
+    # machine run them on the runtime it has, which is better than refusing, but it is not
+    # the runtime the product targets and so is worth one line rather than happening
+    # quietly.
+    $project = Join-Path $RepoRoot 'tests\PdfToDicom.Core.Tests\PdfToDicom.Core.Tests.csproj'
+    $target = ([regex]::Match((Get-Content $project -Raw), '<TargetFramework>net(\d+)\.')).Groups[1].Value
+
+    if ($target) {
+        $runtimes = @(dotnet --list-runtimes 2>$null)
+
+        if (-not ($runtimes | Where-Object { $_ -like "Microsoft.NETCore.App $target.*" })) {
+            Write-Host "    no .NET $target runtime is installed, so the tests will run on a later one"
+            Write-Host "    install it for a like for like run: https://dotnet.microsoft.com/download/dotnet/$target.0"
+        }
+    }
+
+    dotnet test $project -c $Configuration --nologo --verbosity minimal
     if ($LASTEXITCODE -ne 0) { throw 'The test suite failed. The build is not shippable.' }
 }
 

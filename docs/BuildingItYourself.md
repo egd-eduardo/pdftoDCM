@@ -9,7 +9,7 @@ double click.
 
 ## The short version
 
-1. Install the **.NET 8 SDK** from
+1. Install the **.NET 8 SDK**, or any later one, from
    [dotnet.microsoft.com/download/dotnet/8.0](https://dotnet.microsoft.com/download/dotnet/8.0).
    Choose the **SDK**, not the Runtime, matching your computer's architecture. It is an
    ordinary Windows installer; accept the defaults.
@@ -200,11 +200,16 @@ folder that `prune` removes.
 
 ## Setting the worklist settings password
 
-The Worklist tab in Settings can be locked behind a password that is compiled into the
-executable. **Nobody but you ever needs to know it**, and nothing you do here writes it
-down.
+The Worklist tab in Settings is locked behind a password compiled into the executable.
 
-Run, from the repository:
+**The password currently set is recorded in the clear** in the comment on the `Verifier`
+constant in `src\PdfToDicom.Core\Security\WorklistSettingsLock.cs`, so that it cannot be
+forgotten. That is deliberate, and that comment is the **only** record of it in the
+repository: it is written down in exactly one place on purpose, because two copies are
+how two copies come to disagree. The reasoning, and what to do if this repository is ever
+shared or made public, are recorded there rather than repeated here.
+
+To change it, run from the repository:
 
 ```powershell
 dotnet run --project src\PdfToDicom.Cli -- worklist-password
@@ -216,8 +221,9 @@ It asks for the password twice without showing what you type, and prints one lin
     private const string Verifier = "PBKDF2-SHA256$210000$....$....";
 ```
 
-Paste that line into `src\PdfToDicom.Core\Security\WorklistSettingsLock.cs`, replacing
-the empty `Verifier` constant, and rebuild. That is the whole procedure.
+Paste that line over the `Verifier` constant in
+`src\PdfToDicom.Core\Security\WorklistSettingsLock.cs`, **update the comment above it to
+name the new password**, and rebuild. That is the whole procedure.
 
 **What is stored is not the password.** It is a PBKDF2-HMAC-SHA256 hash with a random
 salt and 210,000 iterations. It can answer whether a password offered to it is correct,
@@ -225,15 +231,18 @@ and it cannot be turned back into the password, which is why a hash is used rath
 something encrypted: anything encrypted inside the binary would have to carry its key
 inside the binary too.
 
-**Write the password down somewhere safe**, in a password manager rather than in this
-repository. It cannot be recovered from the line above, and there is no interface to
-reset it: a forgotten password means generating a new verifier and rebuilding.
+There is **no interface to reset it**, by design. A password you no longer have means
+generating a new verifier and rebuilding, which is why it is written beside the constant.
 
-**Never type the password into a chat window, an issue, a commit message or an email.**
-The tool exists so it never has to leave your own machine.
+**To remove the lock**, set the constant to an empty string. The Worklist tab is then open
+to anyone, and the dialog says so plainly rather than implying a protection that is not
+there.
 
-Leaving the constant empty is allowed and means the Worklist tab is open to anyone. The
-application says so in the interface rather than implying a protection that is not there.
+Two things still worth keeping to. **Do not put the password in a commit message, an
+issue or an email**: the comment in the source is one controlled place, a commit history
+is not. And **if this repository is ever shared or made public, change the password and
+remove that comment**, because at that point it is published, and a published password is
+no password.
 
 ---
 

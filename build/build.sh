@@ -213,6 +213,31 @@ MESSAGE
 
 do_test() {
     step "Running the test suite"
+
+    # Says which runtime the tests are about to run on, when it is not the one they
+    # target.
+    #
+    # Building and running are separate problems. Any recent SDK builds these projects,
+    # because an SDK carries its own reference assemblies and global.json rolls forward.
+    # Running a net8.0 application needs the .NET 8 runtime, and the test host is itself
+    # a net8.0 application, so a machine with only the current SDK built everything and
+    # then could not start a single test. RollForward in Directory.Build.props now lets
+    # that machine run them on the runtime it has, which is better than refusing, but it
+    # is not the runtime the product targets and so is worth one line rather than
+    # happening quietly.
+    local target
+    target="$(sed -n 's|.*<TargetFramework>net\([0-9]*\)\.[0-9]*</TargetFramework>.*|\1|p' \
+        "$REPO_ROOT/tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj")"
+    target="${target%%$'\n'*}"
+
+    local runtimes
+    runtimes="$(dotnet --list-runtimes 2>/dev/null || true)"
+
+    if [[ -n "$target" && "$runtimes" != *"Microsoft.NETCore.App $target."* ]]; then
+        info "no .NET $target runtime is installed, so the tests will run on a later one"
+        info "install it for a like for like run: https://dotnet.microsoft.com/download/dotnet/$target.0"
+    fi
+
     dotnet test "$REPO_ROOT/tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj" \
         -c "$CONFIGURATION" --nologo --verbosity minimal
 }

@@ -72,7 +72,8 @@ architecture and tells you where the result is. No IDE required. See
 
 ### For a developer
 
-Requires only the .NET 8 SDK.
+Requires only the .NET 8 SDK, or any later one: `global.json` rolls forward, and
+`RollForward` lets the tests run on a newer runtime where the .NET 8 one is absent.
 
 ```powershell
 git clone <repository-url>
