@@ -1,0 +1,512 @@
+# Invented Portuguese patient names for the test worklist server.
+#
+# One entry per line, as Family^Given|Sex, so the split between surname and given names
+# is reviewable data rather than a guess made at run time. The last token of each name is
+# the family name and the rest are given names, which is what a Portuguese hospital
+# system displays: "BRANDAO, Abel Cordeiro".
+#
+# None of these describes a real person, and none of them is longer than the 64 characters
+# a DICOM Person Name allows; the longest composes to 31. The over-length cases live in
+# SampleWorklist.cs, where they can be seen and reasoned about.
+#
+# Lines starting with # and blank lines are ignored.
+Brandão^Abel Cordeiro|M
+Quaresma^Abel|M
+Delgado^Abílio|M
+Barroso^Adelaide|F
+Rebelo^Adelaide Ventura|F
+Damião^Adelino Loureiro|M
+Torres^Adelino|M
+Roque^Afonso Duarte|M
+Teles^Afonso Maria|M
+Costa^Afonso Ribeiro|M
+Sousa^Afonso|M
+Carvalhal^Agostinho|M
+Marinho^Albertina Saraiva|F
+Trindade^Albertina|F
+Gil^Albertino|M
+Dias^Alexandre|M
+Resende^Alexandre Pacheco|M
+Morais^Alice Cunha|F
+Terra^Alice Maria|F
+Reis^Alice|F
+Avelar^Alípio|M
+Conde^Álvaro Lemos|M
+Saraiva^Álvaro|M
+Guedes^Amélia Rego|F
+Sampaio^Amélia|F
+Cerqueira^Américo Gouveia|M
+Salgado^Américo|M
+Lança^Ana Beatriz Bragança|F
+Mamede^Ana Carolina Casimiro|F
+Bragança^Ana Cristina|F
+Dionísio^Ana Isabel|F
+Guerra^Ana Lúcia Barata|F
+Lança^Ana Margarida|F
+Casimiro^Ana Paula|F
+Pereira^Ana|F
+Amorim^Ana Rita|F
+Barata^Ana Sofia|F
+Sardinha^Anabela|F
+Brito^André|M
+Nascimento^André Fagundes|M
+Nicolau^André Filipe|M
+Moura^André Seabra|M
+Ventura^Andreia Dias|F
+Godinho^Andreia|F
+Santana^Andreia Mamede|F
+Salgueiro^Ângelo|M
+Bastos^Aníbal|M
+Furtado^Anselmo Moura|M
+Varela^Anselmo|M
+Ferreira^António|M
+Cristóvão^António José|M
+Grilo^António Manuel|M
+Fidalgo^António Palma|M
+Valverde^Apolónia|F
+Barreto^Armando Camacho|M
+Pais^Armando|M
+Falcão^Arminda Marinho|F
+Pestana^Arminda|F
+Espadinha^Arnaldo|M
+Calado^Artur Fidalgo|M
+Rego^Artur|M
+Jorge^Augusto Pestana|M
+Ventura^Augusto|M
+Caetano^Aurora Estrela|F
+Gouveia^Aurora|F
+Tadeu^Baltasar|M
+Caetano^Bartolomeu|M
+Pires^Beatriz Gonçalves|F
+Perdigão^Beatriz Leonor|F
+Marques^Beatriz|F
+Leal^Belmiro Ramalho|M
+Xavier^Belmiro|M
+Sobral^Benedita Maria|F
+Machado^Benedita Ribeiro|F
+Teixeira^Benedita|F
+Toscano^Bento|M
+Carrilho^Benvinda Gama|F
+Lemos^Benvinda|F
+Esteves^Bernardo Araújo|M
+Pinheiro^Bernardo|M
+Prata^Bernardo|M
+Zambujal^Brígida|F
+Duarte^Bruno|M
+Pena^Bruno Frias|M
+Pascoal^Bruno Miguel|M
+Loureiro^Bruno Sampaio|M
+Vilar^Cândido|M
+Rios^Carla Lança|F
+Bernardes^Carlos Alberto|M
+Vilela^Carlos Domingues|M
+Lagoa^Carlos Manuel|M
+Soeiro^Carlos Marreiros|M
+Nogueira^Carlos|M
+Azevedo^Carlota|F
+Miranda^Carlota Henriques|F
+Mendes^Carolina Ferreira|F
+Gomes^Carolina|F
+Prata^Carolina Isabel|F
+Beja^Casimiro|M
+Morgado^Catarina Maria|F
+Magalhães^Catarina Monteiro|F
+Neves^Catarina|F
+Madeira^Cátia|F
+Albuquerque^Celestino|M
+Caldeira^Célia Maia|F
+Urbano^Célia Nazaré|F
+Neto^Célia|F
+Sacramento^César|M
+Valverde^Clara Beatriz|F
+Fonseca^Clara|F
+Faria^Clara Simões|F
+Borges^Cláudia Nogueira|F
+Sá^Cláudia|F
+Mascarenhas^Clementina Sarmento|F
+Velho^Clementina|F
+Gaspar^Conceição Faria|F
+Vaz^Conceição|F
+Barbosa^Constança Carvalho|F
+Correia^Constança|F
+Taborda^Constança Leonor|F
+Castanheira^Constantino|M
+Pedroso^Cristiano|M
+Rego^Cristina Miranda|F
+Pimentel^Cristina|F
+Vale^Cristóvão|M
+Bettencourt^Custódio|M
+Madeira^Custódio Salema|M
+Borges^Daniel|M
+Palma^Daniel Branco|M
+Varela^Daniela Campos|F
+Domingues^Daniela|F
+Quental^Daniela Januário|F
+Lima^David Vaz|M
+Santana^Débora|F
+Tomé^Deolinda Bettencourt|F
+Camacho^Deolinda|F
+Pimentel^Dinis Azevedo|M
+Chaves^Dinis|M
+Pimenta^Diogo Grilo|M
+Marcelino^Diogo Manuel|M
+Mendes^Diogo|M
+Tavares^Diogo Teixeira|M
+Caldeira^Domingos|M
+Mesquita^Domingos Severino|M
+Gonçalves^Duarte|M
+Cunha^Duarte Martins|M
+Pimenta^Duarte Miguel|M
+Carmo^Dulce Moniz|F
+Valverde^Dulce Neiva|F
+Palma^Dulce|F
+Falcão^Edgar|M
+Rios^Eduarda|F
+Medeiros^Eduardo Esteves|M
+Gaspar^Eduardo|M
+Crespo^Élio|M
+Peixoto^Elisabete|F
+Escudeiro^Elvira|F
+Amado^Emídio|M
+Lobo^Emília Salgado|F
+Seabra^Emília|F
+Alcobia^Ermelinda|F
+Noronha^Ermelinda Torres|F
+Vasconcelos^Ermelinda|F
+Taborda^Estela|F
+Abrantes^Eurico|M
+Jesus^Eusébio|M
+Carmo^Evaristo|M
+Nobre^Evaristo Velho|M
+Laranjeira^Fábio|M
+Ramires^Fábio|M
+Carneiro^Fátima|F
+Dias^Fátima Melo|F
+Carrilho^Fausto|M
+Brandão^Felismina|F
+Paixão^Felismina Vilar|F
+Castro^Fernando|M
+Inácio^Fernando Jorge|M
+Cabral^Fernando Lima|M
+Toscano^Fernando Nascimento|M
+Macedo^Filipa Amaral|F
+Figueiredo^Filipa|F
+Frade^Filipa|F
+Perdigão^Filipa Gameiro|F
+Campos^Filipe|M
+Queirós^Filipe Mota|M
+Estrela^Firmino|M
+Vinagre^Florentino|M
+Antunes^Francisca Alves|F
+Pinto^Francisca|F
+Ramires^Francisco Maria|M
+Oliveira^Francisco|M
+Elias^Francisco Xavier|M
+Seabra^Frederico Serra|M
+Pacheco^Gabriel Figueiredo|M
+Sampaio^Gaspar Pimentel|M
+Serrão^Gastão|M
+Terra^Genoveva|F
+Valadares^Gil|M
+Catarino^Gilberto|M
+Zambujal^Glória Patrício|F
+Gama^Glória Quaresma|F
+Resende^Glória|F
+Fonseca^Gonçalo Almeida|M
+Carvalho^Gonçalo|M
+Pena^Gonçalo Nuno|M
+Guimarães^Graça Castro|F
+Esteves^Graça|F
+Bandeira^Graciete|F
+Zarco^Guilherme Afonso|M
+Andrade^Guilherme Cruz|M
+Ramos^Guilherme|M
+Neto^Gustavo Abreu|M
+Moutinho^Hélder|M
+Pais^Helena Brito|F
+Mota^Helena|F
+Amaral^Henrique|M
+Abreu^Henrique Tavares|M
+Gama^Hermínio|M
+Guedes^Horácio|M
+Anjos^Hortense|F
+Pascoal^Hugo Franco|M
+Macedo^Hugo|M
+Mira^Hugo Miguel|M
+Pestana^Hugo Trindade|M
+Portela^Idalina Varela|F
+Vilela^Idalina|F
+Lobo^Ilídio|M
+Proença^Ilídio|M
+Côrte-Real^Inês|F
+Costa^Inês|F
+Morgado^Inês Encarnação|F
+Patrício^Inês Filipa|F
+Urbano^Irene|F
+Furtado^Iria|F
+Branco^Isabel|F
+Moniz^Isabel Duarte|F
+Pombo^Ivo|M
+Coutinho^Ivo Sá|M
+Zarco^Jacinto|M
+Cardoso^Joana|F
+Meireles^Joana Dionísio|F
+Mamede^Joana Rita|F
+Henriques^Joana Soares|F
+Marcelino^João Afonso Cavaco|M
+Fagundes^João Carlos|M
+Lino^João Filipe Bernardes|M
+Inácio^João Maria Belo|M
+Arruda^João Pedro|M
+Silva^João|M
+Nascimento^João Tiago|M
+Vasconcelos^Joaquim Coutinho|M
+Moniz^Joaquim|M
+Faria^Jorge|M
+Barroso^Jorge Godinho|M
+Tadeu^Jorge Mira|M
+Franco^José António|M
+Belo^José Carlos|M
+Magalhães^José|M
+Vinagre^José Pascoal|M
+Gouveia^José Queirós|M
+Barreto^Josefa|F
+Moutinho^Josefa Tomé|F
+Antunes^Lara|F
+Melo^Lara Ramos|F
+Urbano^Lara Sofia|F
+Nogueira^Laura Coelho|F
+Pires^Laura|F
+Paixão^Leandro|M
+Domingues^Leonardo Guerreiro|M
+Roque^Leonel|M
+Calado^Leonilde|F
+Matos^Leonor Carvalho|F
+Rios^Leonor Maria|F
+Martins^Leonor|F
+Noronha^Leopoldo|M
+Barradas^Lídia|F
+Jorge^Liliana|F
+Serrão^Lourenço Pedro|M
+Sá^Lourenço Pires|M
+Simões^Lourenço|M
+Mota^Lucas Baptista|M
+Silveira^Lúcia|F
+Galvão^Lucinda Noronha|F
+Ramalho^Lucinda|F
+Sobral^Ludovina|F
+Botelho^Luís Filipe|M
+Camacho^Luís Medeiros|M
+Lagoa^Luís Miguel Botelho|M
+Morais^Luís|M
+Vale^Luís Nicolau|M
+Leite^Luísa|F
+Paiva^Luísa Magalhães|F
+Estrela^Lurdes Pais|F
+Queirós^Lurdes|F
+Rosário^Madalena Inês|F
+Amaral^Madalena Mendes|F
+Vieira^Madalena|F
+Quental^Mafalda|F
+Zambujal^Mafalda Rita|F
+Rolo^Mafalda|F
+Trindade^Manuel Câmara|M
+Freitas^Manuel|M
+Frias^Manuel Joaquim|M
+Marinho^Manuel|M
+Zarco^Manuel Pena|M
+Rijo^Márcio|M
+Severino^Marco Barroso|M
+Maia^Marco|M
+Pinheiro^Margarida Moreira|F
+Nunes^Margarida|F
+Santana^Margarida Sofia|F
+Valente^Maria Adelaide|F
+Pinheiro^Maria Alice|F
+Gameiro^Maria Amélia|F
+Macedo^Maria Antónia|F
+Coutinho^Maria Augusta|F
+Amaral^Maria Beatriz|F
+Cabral^Maria Benedita|F
+Barbosa^Maria Carolina|F
+Mariano^Maria Carolina Coimbra|F
+Januário^Maria Clara|F
+Vilar^Maria Constança|F
+Guerra^Maria da Graça|F
+Figueiredo^Maria da Luz|F
+Encarnação^Maria de Fátima|F
+Félix^Maria de Lurdes|F
+Farinha^Maria do Carmo|F
+Salgado^Maria do Céu|F
+Carvalho^Maria Eduarda|F
+Goulart^Maria Emília|F
+Januário^Maria Francisca Bento|F
+Lourenço^Maria Francisca|F
+Caldas^Maria Helena|F
+Carneiro^Maria Inês|F
+Louro^Maria Inês|F
+Assunção^Maria João|F
+Tomé^Maria José|F
+Louro^Maria Leonor Caldas|F
+Fonseca^Maria Leonor|F
+Frazão^Maria Luísa|F
+Rocha^Maria Madalena|F
+Coimbra^Maria Manuela|F
+Sequeira^Maria Matilde|F
+Santos^Maria|F
+Bento^Maria Teresa|F
+Almeida^Mariana|F
+Reis^Mariana Gomes|F
+Nazaré^Mariana Sofia|F
+Conde^Marília|F
+Quintas^Marisa|F
+Rosário^Marisa|F
+Duarte^Marta Barbosa|F
+Nazaré^Marta Farinha|F
+Lourenço^Marta|F
+Alves^Martim|M
+Ramos^Martim Fernandes|M
+Vale^Martim Santiago|M
+Henriques^Mateus|M
+Branco^Mateus Lourenço|M
+Guilherme^Matias|M
+Fernandes^Matilde|F
+Quental^Matilde Sofia|F
+Rocha^Matilde Sousa|F
+Cunha^Miguel|M
+Roque^Miguel Lino|M
+Leite^Miguel Neves|M
+Leal^Mónica|F
+Crespo^Natália Lobo|F
+Moura^Natália|F
+Figueira^Nazaré|F
+Paiva^Nelson|M
+Salema^Nelson Vilela|M
+Soeiro^Nicolau|M
+Veloso^Noémia|F
+Bispo^Norberto|M
+Proença^Nuno Inácio|M
+Vilaça^Nuno Miguel|M
+Monteiro^Nuno|M
+Baptista^Nuno Nunes|M
+Viegas^Odete|F
+Chaves^Ofélia Guedes|F
+Loureiro^Ofélia|F
+Bastos^Olívia Carmo|F
+Fidalgo^Olívia|F
+Vidal^Osvaldo|M
+Cerqueira^Otília|F
+Vilar^Palmira Caldeira|F
+Cordeiro^Palmira|F
+Câmara^Patrícia|F
+Sobral^Patrícia Mariano|F
+Saraiva^Patrícia Sequeira|F
+Quaresma^Paula Macedo|F
+Pacheco^Paula|F
+Capela^Paulo Jorge|M
+Salgueiro^Paulo Luz|M
+Melo^Paulo|M
+Cordeiro^Paulo Neto|M
+Luz^Pedro Afonso Capela|M
+Azevedo^Pedro Cardoso|M
+Coelho^Pedro|M
+Serrão^Pedro Marcelino|M
+Ávila^Pedro Miguel|M
+Lino^Pedro Nuno|M
+Arriaga^Prazeres|F
+Alvarenga^Quirino|M
+Câmara^Rafael Andrade|M
+Sequeira^Rafael|M
+Torres^Raquel Borges|F
+Coutinho^Raquel|F
+Prata^Raquel Guerra|F
+Galvão^Renato|M
+Marreiros^Ricardo Jorge|M
+Ramires^Ricardo Lagoa|M
+Lemos^Ricardo Resende|M
+Valente^Ricardo|M
+Neiva^Rita Félix|F
+Valente^Rita Machado|F
+Neiva^Rita Margarida|F
+Tavares^Rita|F
+Vinagre^Rodrigo Filipe|M
+Simões^Rodrigo Marques|M
+Ribeiro^Rodrigo|M
+Portela^Rogério|M
+Abreu^Rosa|F
+Maia^Rosa Valente|F
+Laranjeira^Rosalina Portela|F
+Salema^Rosalina|F
+Alcântara^Rosário|F
+Mascarenhas^Rúben|M
+Mira^Rui Elias|M
+Cavaco^Rui Manuel|M
+Rocha^Rui|M
+Figueiredo^Rui Vieira|M
+Matos^Salvador|M
+Guerreiro^Salvador Reis|M
+Soeiro^Salvador Tomás|M
+Godinho^Samuel Carneiro|M
+Nobre^Sandra|F
+Vieira^Santiago Lopes|M
+Rodrigues^Santiago|M
+Baptista^Sara|F
+Mariano^Sara Filipa|F
+Patrício^Sara Frazão|F
+Brito^Sara Pinheiro|F
+Ermida^Sebastião|M
+Rebelo^Serafim|M
+Miranda^Sérgio|M
+Ramalho^Sérgio Vasconcelos|M
+Penha^Sílvia|F
+Barbosa^Simão|M
+Vaz^Simão Fonseca|M
+Tadeu^Simão Pedro|M
+Meireles^Sofia Alexandra|F
+Cruz^Sofia|F
+Rosário^Sofia Louro|F
+Freitas^Sofia Rocha|F
+Guerreiro^Sónia|F
+Campos^Sónia Morais|F
+Salgado^Susana Paiva|F
+Serra^Susana|F
+Bettencourt^Tânia Guimarães|F
+Medeiros^Tânia|F
+Terra^Tânia Morgado|F
+Mesquita^Telma|F
+Carvalho^Telmo Lage|M
+Sarmento^Teodoro|M
+Araújo^Teresa|F
+Castro^Teresa Matos|F
+Nicolau^Tiago Feliciano|M
+Luz^Tiago Filipe|M
+Moreira^Tiago|M
+Araújo^Tiago Pinto|M
+Proença^Tomás Afonso|M
+Lopes^Tomás|M
+Neves^Tomás Pereira|M
+Leão^Tomé|M
+Tomé^Valdemar|M
+Semedo^Valter|M
+Xavier^Vanessa Gaspar|F
+Lima^Vanessa|F
+Taborda^Vanessa Meireles|F
+Lourenço^Vasco Correia|M
+Marreiros^Vasco Cristóvão|M
+Salgueiro^Vasco Manuel|M
+Soares^Vasco|M
+Aragão^Venâncio|M
+Andrade^Vera|F
+Sequeira^Vera Freitas|F
+Toscano^Vicente Afonso|M
+Carneiro^Vicente Antunes|M
+Machado^Vicente|M
+Leão^Virgínia Rebelo|F
+Severino^Virgínia|F
+Velho^Vítor Cabral|M
+Guimarães^Vítor|M
+Feliciano^Vítor Manuel|M
+Damião^Vitória|F
+Serra^Xavier Leite|M
+Cabral^Zulmira|F
+Sarmento^Zulmira Xavier|F

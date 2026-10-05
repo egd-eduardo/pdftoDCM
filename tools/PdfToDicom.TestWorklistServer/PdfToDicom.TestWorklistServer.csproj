@@ -28,4 +28,23 @@
     <PackageReference Include="fo-dicom" Version="5.2.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      The name list travels inside the executable, so the server can be copied to a test
+      machine as one file, exactly as the application is.
+
+      Two things here are deliberate, because the obvious spelling silently does the wrong
+      thing. The file is named names-pt-PT.txt with a hyphen, not names.pt-PT.txt: MSBuild
+      reads the segment between the last two dots of a resource file name as a CULTURE, so
+      the dotted form was taken for Portuguese (Portugal) and compiled into a
+      pt-PT/testworklistserver.resources.dll satellite instead of into the assembly. The
+      resource then could not be found at run time, and the single file publish gained a
+      loose directory beside the executable.
+
+      LogicalName pins the name the code asks for, so a future rename cannot quietly
+      change it again.
+    -->
+    <EmbeddedResource Include="names-pt-PT.txt" LogicalName="PdfToDicom.TestWorklistServer.names-pt-PT.txt" />
+  </ItemGroup>
+
 </Project>

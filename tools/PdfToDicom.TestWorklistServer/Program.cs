@@ -9,6 +9,8 @@ using PdfToDicom.TestWorklistServer;
 
 int port = 1070;
 string aeTitle = "TESTWL";
+int randomCount = SampleWorklist.DefaultRandomCount;
+int? seed = null;
 
 for (int i = 0; i < args.Length; i++)
 {
@@ -25,6 +27,25 @@ for (int i = 0; i < args.Length; i++)
 
         case "--aet" or "-a" when i + 1 < args.Length:
             aeTitle = args[++i];
+            break;
+
+        case "--random" or "-r" when i + 1 < args.Length:
+            if (!int.TryParse(args[++i], out randomCount) || randomCount < 0)
+            {
+                Console.Error.WriteLine("The number of random entries must be zero or more.");
+                return 2;
+            }
+
+            break;
+
+        case "--seed" or "-s" when i + 1 < args.Length:
+            if (!int.TryParse(args[++i], out int parsedSeed))
+            {
+                Console.Error.WriteLine("The seed must be a number.");
+                return 2;
+            }
+
+            seed = parsedSeed;
             break;
 
         case "--help" or "-h" or "/?":
@@ -45,11 +66,39 @@ Console.WriteLine();
 Console.WriteLine("  Test Modality Worklist server");
 Console.WriteLine("  =============================");
 Console.WriteLine();
+// Drawn once, here, rather than per association, so the list does not change under
+// somebody who is pressing Search to find out whether their worklist works.
+IReadOnlyList<SampleWorklist.Item> serving = SampleWorklist.Choose(randomCount, seed);
+
 Console.WriteLine($"  AE Title : {aeTitle}");
 Console.WriteLine($"  Port     : {port}");
-Console.WriteLine($"  Entries  : {SampleWorklist.Items.Count}, scheduled for today");
+Console.WriteLine($"  Entries  : {serving.Count}, scheduled for today");
+Console.WriteLine($"             {SampleWorklist.Awkward.Count} fixed, the ones that break something");
+Console.WriteLine($"             {serving.Count - SampleWorklist.Awkward.Count} drawn at random " +
+                  $"from {SampleWorklist.Pool.Count}" + (seed is null ? string.Empty : $", seed {seed}"));
 Console.WriteLine();
-Console.WriteLine("  THIS IS FOR TESTING. It invents patients and holds nothing real.");
+Console.WriteLine("  THIS IS FOR TESTING. Every patient here is invented.");
+Console.WriteLine();
+Console.WriteLine($"  Every identifier and description carries \"{SampleWorklist.TestMarker}\", so a study");
+Console.WriteLine("  generated from this list is recognisable as a test wherever it ends");
+Console.WriteLine("  up. The names are left realistic on purpose, because their length and");
+Console.WriteLine("  their accents are what is being tested.");
+Console.WriteLine();
+Console.WriteLine("  Even so, point the application at a test archive and not a live one.");
+Console.WriteLine();
+Console.WriteLine("  Today's list:");
+
+foreach (SampleWorklist.Item item in serving.OrderBy(i => i.MinutesFromStartOfDay))
+{
+    string name = item.GivenName.Length == 0
+        ? item.FamilyName
+        : $"{item.FamilyName}, {item.GivenName}";
+
+    Console.WriteLine(
+        $"    {TimeSpan.FromMinutes(item.MinutesFromStartOfDay):hh\\:mm}  " +
+        $"{item.PatientId,-14}  {item.Modality,-2}  {name}");
+}
+
 Console.WriteLine();
 Console.WriteLine("  Point the application's worklist settings at this machine on the");
 Console.WriteLine("  address and port above, then press Search.");
@@ -74,13 +123,21 @@ return 0;
 static void PrintUsage()
 {
     Console.WriteLine();
-    Console.WriteLine("  testworklistserver [--port <n>] [--aet <title>]");
+    Console.WriteLine("  testworklistserver [--port <n>] [--aet <title>] [--random <n>] [--seed <n>]");
     Console.WriteLine();
-    Console.WriteLine("    --port, -p   Port to listen on. Default 1070, which needs no privileges.");
-    Console.WriteLine("    --aet,  -a   AE Title to answer as. Default TESTWL.");
+    Console.WriteLine("    --port,   -p   Port to listen on. Default 1070, which needs no privileges.");
+    Console.WriteLine("    --aet,    -a   AE Title to answer as. Default TESTWL.");
+    Console.WriteLine($"    --random, -r   How many names to draw from the pool of {SampleWorklist.Pool.Count}.");
+    Console.WriteLine($"                   Default {SampleWorklist.DefaultRandomCount}. Zero serves only the fixed entries.");
+    Console.WriteLine("    --seed,   -s   Fix the draw, so a run can be repeated exactly.");
     Console.WriteLine();
-    Console.WriteLine("  Serves a handful of invented scheduled procedure steps so the worklist");
-    Console.WriteLine("  feature can be exercised without a real hospital system. Some of the names");
-    Console.WriteLine("  are deliberately longer than DICOM allows, and several carry accents.");
+    Console.WriteLine("  Serves invented scheduled procedure steps so the worklist feature can be");
+    Console.WriteLine("  exercised without a real hospital system. A few fixed entries are always");
+    Console.WriteLine("  present because each one breaks something: two names longer than DICOM");
+    Console.WriteLine("  allows, a patient with no given name, and a different modality. The rest");
+    Console.WriteLine("  are drawn fresh each run from ordinary Portuguese names, accents included.");
+    Console.WriteLine();
+    Console.WriteLine($"  Every identifier and description carries \"{SampleWorklist.TestMarker}\", so anything");
+    Console.WriteLine("  generated from this list is recognisable as a test.");
     Console.WriteLine();
 }

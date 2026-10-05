@@ -15,7 +15,8 @@ working in the first place, and about what to check when it does not.
 5. [Commissioning checklist](#5-commissioning-checklist)
 6. [Troubleshooting](#6-troubleshooting)
 7. [Long names](#7-long-names)
-8. [Why the settings are locked](#8-why-the-settings-are-locked)
+8. [Testing without a real worklist](#8-testing-without-a-real-worklist)
+9. [Why the settings are locked](#9-why-the-settings-are-locked)
 
 ---
 
@@ -192,7 +193,40 @@ the RIS, the log answers it.
 
 ---
 
-## 8. Why the settings are locked
+## 8. Testing without a real worklist
+
+A worklist server that holds live patient data is not somewhere to try new software
+against, and a site adopting this feature often has nothing else to point at. The
+publisher can supply a small test worklist server that answers on an ordinary DICOM
+association with invented patients.
+
+It serves seventeen scheduled procedure steps for today: seven fixed ones chosen to be
+awkward, including two names longer than DICOM allows and one patient with no given name,
+and ten drawn at random from five hundred ordinary Portuguese names so the list looks
+different each time.
+
+**Nothing it serves can be mistaken for a real patient.** Every identifier and description
+carries `TESTE`:
+
+| Attribute | Value |
+|---|---|
+| Patient ID | `TESTE0000001`, `TESTE1000259` … |
+| Accession Number | `TESTEACC000001`, `TESTEACC1000259` … |
+| Study and Procedure Description | `[TESTE] Relatório de Cardiologia` |
+| Referring and Performing Physician | `TESTE^FICTÍCIO` |
+| Study Instance UID | under `1.2.826.0.1.3680043.9.6008.99.`, used for nothing else |
+
+So a study generated from it is identifiable in your study list, in a patient lookup and
+in a raw dump, and can be found again and removed. The patient names themselves are left
+realistic, because their length and their accents are what is being tested.
+
+**Point the application at a test archive even so.** The marking exists so that a mistake
+is obvious and recoverable, not so that it is acceptable to send invented patients to a
+live PACS.
+
+---
+
+## 9. Why the settings are locked
 
 The Worklist tab in Settings may be protected by a password. It is set when the software
 is built and there is no interface to change it, which is deliberate.

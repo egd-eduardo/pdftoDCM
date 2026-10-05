@@ -617,11 +617,45 @@ live patient data and is not somewhere to try new software against.
 dotnet run --project tools/PdfToDicom.TestWorklistServer -- --port 1070 --aet TESTWL
 ```
 
-Its fixtures are chosen to be awkward rather than convenient: accented names, a patient
-with no given name, a 73 character name whose surname fits, and a 75 character name whose
-surname alone is over the limit. It builds its data sets with `NotValidated()` precisely
-so it can serve names fo-dicom would otherwise refuse to construct, which is the only way
-to exercise the shortening rule against a real association.
+It serves two sets joined. **Seven fixed entries**, always present and chosen to be
+awkward rather than convenient: accented names, a patient with no given name, a different
+modality, a 73 character name whose surname fits, and a 75 character name whose surname
+alone is over the limit. It builds its data sets with `NotValidated()` precisely so it can
+serve names fo-dicom would otherwise refuse to construct, which is the only way to
+exercise the shortening rule against a real association.
+
+**Ten more drawn at random each run** from a pool of five hundred ordinary Portuguese
+names, read from an embedded list that holds each one already split as
+`Family^Given|Sex`. The split is data rather than a heuristic applied at run time, because
+Portuguese names do not split by rule: the last token is the family name often enough to
+look right, and no rule gets "Maria do Carmo Farinha" and "Abel Cordeiro Brandão" both
+right without being told. `--random n` changes the count, `--random 0` gives the fixed
+seven, and `--seed n` reproduces a draw.
+
+The awkward entries are kept **out** of the pool deliberately. Measured, the pool's
+longest name composes to 31 characters against the 64 the standard allows, so a random
+draw from it would exercise the shortening rule roughly never, and the server would
+quietly become a test of nothing.
+
+Everything about a pool entry derives from its position, so a name always carries the same
+Patient ID, accession number, birth date and scheduled time; only its presence in the draw
+varies. That is what makes `--seed` reproduce a run and what makes converting twice for
+the same patient file into the same study.
+
+**Everything it serves is marked.** `TESTE` is stamped on the Patient ID, the accession
+number, both descriptions and both physician names, and Study Instance UIDs are issued
+under `…9.6008.99.`. A study generated from this list is therefore recognisable as a test
+in a study list, a patient lookup and a raw dump, which matters because commissioning a
+worklist is one wrong destination away from putting these studies into a live archive. The
+patient names are left realistic, since their length and their accents are the thing under
+test, and the identifiers carry the mark instead.
+
+> The embedded list is named `names-pt-PT.txt` with a hyphen, not `names.pt-PT.txt`.
+> MSBuild reads the segment between the last two dots of a resource file name as a
+> **culture**, so the dotted form was compiled into a `pt-PT` satellite assembly instead of
+> into the executable: the resource could not be found at run time and the single file
+> publish gained a loose directory beside it. The project file pins the `LogicalName` as
+> well, so a future rename cannot quietly change it again.
 
 **It is never packaged.** The build scripts copy a named list of files into the customer
 package and it is not on that list; `assert_package_is_sound` checks the list rather than
