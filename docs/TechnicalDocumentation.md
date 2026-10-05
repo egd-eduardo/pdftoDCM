@@ -705,7 +705,12 @@ fall back to the runner's own architecture.
 
 ### Prerequisites
 
-- .NET 8 SDK
+- **.NET 8 SDK**, or any later one. `global.json` sets `rollForward: latestMajor`, so a
+  machine with only the .NET 9 or .NET 10 SDK builds the solution without complaint.
+- **The .NET 8 runtime**, to run the tests on the runtime the projects actually target.
+  It is not required: `RollForward` is `LatestMajor`, so on a machine without it the test
+  host runs on the newest installed runtime instead, and both build scripts say so when
+  that happens. Installing it is what makes a local run like for like with CI.
 - Inno Setup **6.3 or later** — only needed to build the installer, and only available on
   Windows. The architecture identifiers used by the installer script require 6.3.
 
@@ -734,6 +739,21 @@ build/build.sh clean
 ```
 
 This produces the Windows executables. It cannot produce the installer.
+
+> **Building and running are separate problems**, and this is the one that catches people
+> out. An SDK carries its own reference assemblies, so any recent SDK compiles a `net8.0`
+> project. Starting one needs the .NET 8 runtime specifically, and the test host is itself
+> a `net8.0` application. A machine with only the current SDK therefore built the whole
+> solution and then failed to start a single test, reporting
+> `You must install or update .NET to run this application` against `testhost.dll` without
+> saying which of the two was missing. `RollForward` resolves it.
+
+Both validators need Python, and both scripts treat it as **optional**: if `python3` is
+absent, or present but unable to run, the build says so and carries on. That matters on a
+macOS without the Command Line Tools installed, where `/usr/bin/python3` exists and
+resolves and then refuses to run, so testing the name is not enough and the scripts test
+whether it executes. CI runs both checks on every push, so nothing is lost by skipping
+them locally.
 
 > Cross compiling WPF from a non Windows host works because `EnableWindowsTargeting=true`
 > is set in `Directory.Build.props`. The Windows reference assemblies are restored from

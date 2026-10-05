@@ -17,6 +17,23 @@
     <!-- Allows Windows targeting projects (WPF) to be built from macOS or Linux. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
 
+    <!--
+      Lets anything built here RUN on a later major runtime than it targets.
+
+      These projects target net8.0, and global.json already rolls the SDK forward so the
+      solution builds on whatever recent SDK a developer has. Building and running are
+      separate problems though: an SDK brings its own reference assemblies, while running
+      a net8.0 application needs the .NET 8 runtime specifically. A machine with only the
+      current SDK installed therefore built the whole solution and then could not start a
+      single test, because the test host is itself a net8.0 application, and the failure
+      arrived as framework resolution output that never said which of the two was missing.
+
+      LatestMajor uses .NET 8 when it is present, as on CI and on a machine with the 8.0
+      SDK, and the newest installed runtime when it is not. It has no effect on what is
+      shipped: the Windows builds are self contained and carry their own runtime.
+    -->
+    <RollForward>LatestMajor</RollForward>
+
     <!-- Product identity, surfaced in file properties and in the About dialog. -->
     <Product>PDF to DICOM</Product>
     <Company>Eduardo Dias</Company>
