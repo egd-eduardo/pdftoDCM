@@ -23,6 +23,7 @@
     test     run the test suite only
     publish  publish the executables only
     package  build the installer only, from an existing publish
+    prune    keep the deliverables, drop the intermediate build output
     clean    remove build output
 
 .EXAMPLE
@@ -34,7 +35,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('all', 'test', 'publish', 'package', 'clean')]
+    [ValidateSet('all', 'test', 'publish', 'package', 'prune', 'clean')]
     [string]$Task = 'all',
 
     [string]$Configuration = 'Release',
@@ -64,6 +65,107 @@ function Assert-Sdk {
     }
 
     Write-Host "    using .NET SDK $(dotnet --version)"
+}
+
+<#
+    Total size of everything under artifacts, in bytes.
+
+    Windows does not report a hard link's size as shared, so this is the figure as if
+    every link were a full copy. On a filesystem that does share them, the real
+    occupancy is lower, which is the point of linking in the first place.
+#>
+function Get-ArtifactBytes {
+    # Measure-Object emits nothing at all for an empty pipeline rather than an object
+    # whose Sum is null, so the result is captured before any property is read. Reaching
+    # straight for .Sum is fatal under Set-StrictMode -Version Latest, which is set at the
+    # top of this script, and only on an artifacts folder that holds no files.
+    $measured = Get-ChildItem $Artifacts -Recurse -File -ErrorAction SilentlyContinue |
+        Measure-Object -Property Length -Sum
+
+    if ($null -eq $measured -or $null -eq $measured.Sum) { return 0 }
+
+    return $measured.Sum
+}
+
+<#
+    Places a second name on an existing file rather than a second copy of it.
+
+    The published executable is around 70 MB and ends up under three names: the publish
+    staging directory, the handover folder, and the versioned standalone copy. Three real
+    copies per architecture is a quarter of a gigabyte of the same bytes, which is what
+    made a full three architecture build occupy 1.2 GB.
+
+    A hard link is safe here because nothing rewrites these files in place afterwards.
+    Signing runs BEFORE the package is assembled, deliberately, so that the copies handed
+    out are the signed ones; and a signature applied through one name would in any case be
+    correct under all of them, since every name is meant to hold the same executable.
+
+    Hard links need no elevation on Windows, unlike symbolic links, and both paths here
+    are inside the artifacts folder and so on one volume. It still falls back to a copy if
+    linking is refused: the build must not fail over an optimisation.
+#>
+function Copy-OrLink {
+    param([string]$Source, [string]$Target)
+
+    if (Test-Path $Target) { Remove-Item $Target -Force }
+
+    try {
+        New-Item -ItemType HardLink -Path $Target -Target $Source -ErrorAction Stop | Out-Null
+    }
+    catch {
+        Write-Verbose "Hard linking was refused ($($_.Exception.Message)); copying instead."
+        Copy-Item $Source $Target -Force
+    }
+}
+
+<#
+    Removes what can be produced again and keeps what cannot be produced quickly.
+
+    Kept: the zip, the versioned standalone executable and the installer, which are the
+    things somebody actually asked for. Removed: the publish staging directories and the
+    unpacked handover folder, whose entire content is inside the zip.
+
+    Deliberately a task of its own rather than part of publish or all. The installer is
+    built by a separate "package" run that reads the staging directory, and the CI step
+    that confirms the executable is self contained reads it too, so pruning automatically
+    would break both.
+#>
+function Invoke-Prune {
+    Write-Step 'Pruning the intermediate build output'
+
+    if (-not (Test-Path $Artifacts)) {
+        Write-Host '    nothing to prune'
+        return
+    }
+
+    $before = Get-ArtifactBytes
+
+    foreach ($rid in 'win-x86', 'win-x64', 'win-arm64') {
+        $staging = Join-Path $Artifacts $rid
+
+        if (Test-Path $staging) {
+            Remove-Item $staging -Recurse -Force
+            Write-Host "    removed $rid\ (publish staging)"
+        }
+    }
+
+    # Only a folder whose zip sits beside it. Deleting the one unpacked copy of a package
+    # that was never archived would lose it.
+    Get-ChildItem $Artifacts -Directory -Filter 'PdfToDicom-*-win-*' | ForEach-Object {
+        if (Test-Path "$($_.FullName).zip") {
+            Remove-Item $_.FullName -Recurse -Force
+            Write-Host "    removed $($_.Name)\ (its zip holds the same files)"
+        }
+        else {
+            Write-Host "    kept $($_.Name)\ because it has no zip beside it"
+        }
+    }
+
+    $after = Get-ArtifactBytes
+    $kept  = @(Get-ChildItem $Artifacts -File | Where-Object { $_.Extension -in '.zip', '.exe' }).Count
+
+    Write-Host ("    artifacts: {0:N0} MB -> {1:N0} MB" -f ($before / 1MB), ($after / 1MB))
+    Write-Host "    $kept deliverable file(s) kept"
 }
 
 function Invoke-Clean {
@@ -231,7 +333,7 @@ function Invoke-Assemble {
     New-Item -ItemType Directory -Path $package, $documents, $samples -Force | Out-Null
 
     # ---------------------------------------------------------------- the software
-    Copy-Item $ApplicationPath $package
+    Copy-OrLink -Source $ApplicationPath -Target (Join-Path $package 'PdfToDicom.exe')
 
     # The command line tool goes into a subfolder rather than beside the application,
     # because the two assembly names differ only in case: PdfToDicom and pdftodicom.
@@ -250,7 +352,7 @@ function Invoke-Assemble {
     if (Test-Path $cli) {
         $commandLine = Join-Path $package 'Command line'
         New-Item -ItemType Directory -Path $commandLine -Force | Out-Null
-        Copy-Item $cli $commandLine
+        Copy-OrLink -Source $cli -Target (Join-Path $commandLine 'pdftodicom.exe')
     }
 
     # ---------------------------------------------------------------- legal
@@ -301,7 +403,7 @@ function Invoke-Assemble {
     # handing one file to somebody, where "which build is this?" has to be answerable
     # without opening its properties.
     $standalone = Join-Path $Artifacts "PdfToDicom-$version-$Runtime.exe"
-    Copy-Item $ApplicationPath $standalone -Force
+    Copy-OrLink -Source $ApplicationPath -Target $standalone
 
     $fileCount = (Get-ChildItem $package -Recurse -File).Count
 
@@ -310,6 +412,12 @@ function Invoke-Assemble {
     Write-Host "    exe    : $standalone"
     Write-Host "    $fileCount file(s): the application and the command line tool, the"
     Write-Host "    licence and third party notices, five documents and two samples"
+
+    # Reported rather than left to be discovered. A full three architecture build is the
+    # largest thing this repository produces, and the executables are no longer committed,
+    # so what is on disk here is all there is until somebody asks for it again.
+    Write-Host ("    artifacts: {0:N0} MB if every link were a copy" -f (Get-ArtifactBytes / 1MB))
+    Write-Host "    '.\build\build.ps1 -Task prune' drops the staging and the unpacked folder"
 }
 
 <#
@@ -574,6 +682,7 @@ Assert-Sdk
 
 switch ($Task) {
     'clean'   { Invoke-Clean }
+    'prune'   { Invoke-Prune }
     'test'    { Invoke-Restore; Invoke-Build; Invoke-Validate; Invoke-Test }
     'publish' {
         Invoke-Restore

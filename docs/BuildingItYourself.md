@@ -176,6 +176,28 @@ package.
 
 ---
 
+## Reclaiming the disk afterwards
+
+A build for one architecture occupies about 200 MB, and all three about 640 MB. Nothing
+is committed, so it is all reclaimable: `prune` brings that 640 MB down to 513 MB, and
+`clean` to nothing.
+
+```powershell
+.\build\build.ps1 -Task prune     # keep the zip, the exe and the installer
+.\build\build.ps1 -Task clean     # remove everything the build produced
+```
+
+`prune` keeps the three things worth keeping, the zip, the standalone executable and the
+installer, and removes the working copies: the publish staging folders and the unpacked
+handover folder, whose entire content is already inside the zip. `clean` removes the lot,
+including the compiler's own intermediate output.
+
+Run `prune` after you have taken the files you wanted. Do not run it between
+`-Task publish` and `-Task package`, because the installer is built from the staging
+folder that `prune` removes.
+
+---
+
 ## Setting the worklist settings password
 
 The Worklist tab in Settings can be locked behind a password that is compiled into the
