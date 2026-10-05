@@ -735,6 +735,13 @@ build/build.sh clean
 
 This produces the Windows executables. It cannot produce the installer.
 
+Both validators need Python, and both scripts treat it as **optional**: if `python3` is
+absent, or present but unable to run, the build says so and carries on. That matters on a
+macOS without the Command Line Tools installed, where `/usr/bin/python3` exists and
+resolves and then refuses to run, so testing the name is not enough and the scripts test
+whether it executes. CI runs both checks on every push, so nothing is lost by skipping
+them locally.
+
 > Cross compiling WPF from a non Windows host works because `EnableWindowsTargeting=true`
 > is set in `Directory.Build.props`. The Windows reference assemblies are restored from
 > NuGet.

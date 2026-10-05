@@ -18,6 +18,14 @@
 # Set RID to choose the target architecture (win-x86, win-x64, win-arm64):
 #   RID=win-arm64 build/build.sh publish
 
+# Arrays, [[ ]] and here strings are used throughout, so this needs bash and not the
+# system /bin/sh. Running it with "sh build/build.sh" fails with a syntax error whose
+# message says nothing about the cause, which is worth one line to prevent.
+if [ -z "${BASH_VERSION:-}" ]; then
+    echo "This script needs bash. Run it as 'bash build/build.sh' or './build/build.sh'." >&2
+    exit 1
+fi
+
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -34,6 +42,24 @@ cd "$REPO_ROOT"
 
 step() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 info() { printf '    %s\n' "$1"; }
+
+# Size of a directory, in a form a person reads.
+#
+# "du -sh" is everywhere. "du -shl", which counts a hard linked file once per name and so
+# reports what the build would occupy without the linking, is a GNU and BSD extension with
+# the same meaning on both; it is still probed rather than assumed, because a figure that
+# is only of interest is no reason for a build to fail anywhere.
+human_size() {
+    du -sh "$1" 2>/dev/null | cut -f1 || true
+}
+
+human_size_counting_links() {
+    if du -shl "$1" >/dev/null 2>&1; then
+        du -shl "$1" 2>/dev/null | cut -f1 || true
+    else
+        human_size "$1"
+    fi
+}
 
 require_sdk() {
     if ! command -v dotnet >/dev/null 2>&1; then
@@ -92,7 +118,7 @@ do_prune() {
     fi
 
     local before
-    before=$(du -sh "$ARTIFACTS" 2>/dev/null | cut -f1)
+    before=$(human_size "$ARTIFACTS")
 
     local path
     for path in "$ARTIFACTS"/win-x86 "$ARTIFACTS"/win-x64 "$ARTIFACTS"/win-arm64; do
@@ -115,7 +141,7 @@ do_prune() {
         fi
     done
 
-    info "artifacts: $before -> $(du -sh "$ARTIFACTS" 2>/dev/null | cut -f1)"
+    info "artifacts: $before -> $(human_size "$ARTIFACTS")"
     info "$(find "$ARTIFACTS" -maxdepth 1 -type f \( -name '*.zip' -o -name '*.exe' \) | wc -l | tr -d ' ') deliverable file(s) kept"
 }
 
@@ -138,13 +164,51 @@ do_build() {
         -p:EnableWindowsTargeting=true
 }
 
+# The interpreter that actually runs the two validators, or nothing.
+#
+# "command -v python3" is not enough on either platform this script runs on. A macOS
+# without the Command Line Tools installed has a /usr/bin/python3 that exists, resolves,
+# and then refuses to run, putting up a dialog instead; Windows has equivalent stubs that
+# only advertise the Store. Both answer "yes" to the name and "no" to running anything,
+# so what is tested is whether it executes.
+working_python() {
+    local candidate
+    for candidate in python3 python; do
+        if command -v "$candidate" >/dev/null 2>&1 \
+            && "$candidate" -c 'import sys' >/dev/null 2>&1; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 do_validate() {
     step "Validating XAML bindings and the installer script"
 
     # Both catch failures that only appear at runtime on Windows, so they are checked
     # here where they cost nothing rather than on a clinical workstation.
-    python3 "$REPO_ROOT/build/validate-xaml-bindings.py"
-    python3 "$REPO_ROOT/build/validate-installer-script.py"
+    local python
+    if ! python="$(working_python)"; then
+        cat >&2 <<'MESSAGE'
+    Python is not available, so the XAML bindings and the installer script were
+    not checked. This is optional and the build continues without it.
+
+    The checks exist to catch a binding that compiles but fails when a window
+    opens, and an installer script mistake that only Inno Setup would report. CI
+    runs both on every push, so nothing is lost as long as the branch is pushed.
+
+    To run them here:
+      macOS   : brew install python
+                (or install the Command Line Tools: xcode-select --install)
+      Linux   : sudo apt-get install python3
+MESSAGE
+        return
+    fi
+
+    "$python" "$REPO_ROOT/build/validate-xaml-bindings.py"
+    "$python" "$REPO_ROOT/build/validate-installer-script.py"
 }
 
 do_test() {
@@ -209,7 +273,12 @@ assert_package_is_sound() {
     local leaked=()
     local secret
     for secret in "${forbidden[@]}"; do
-        grep -Fq -- "$secret" <<<"$present" && leaked+=("$secret")
+        # An explicit if rather than "grep ... && leaked+=(...)". The one line form relies
+        # on how a particular bash treats a failing AND list under set -e, and macOS still
+        # ships bash 3.2, so it is not worth depending on.
+        if grep -Fq -- "$secret" <<<"$present"; then
+            leaked+=("$secret")
+        fi
     done
 
     if (( ${#leaked[@]} > 0 )); then
@@ -409,7 +478,7 @@ do_publish() {
     info "zip:     $ARTIFACTS/PdfToDicom-$version-$RUNTIME.zip"
     info "exe:     $ARTIFACTS/PdfToDicom-$version-$RUNTIME.exe"
     info "$(find "$package" -type f | wc -l | tr -d ' ') file(s)"
-    info "artifacts: $(du -sh "$ARTIFACTS" 2>/dev/null | cut -f1) on disk, $(du -shl "$ARTIFACTS" 2>/dev/null | cut -f1) if every link were a copy"
+    info "artifacts: $(human_size "$ARTIFACTS") on disk, $(human_size_counting_links "$ARTIFACTS") if every link were a copy"
     info "'build/build.sh prune' drops the staging and the unpacked folder"
 
     step "Result"

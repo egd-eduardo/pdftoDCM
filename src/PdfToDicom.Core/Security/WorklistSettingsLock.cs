@@ -43,16 +43,26 @@ public static class WorklistSettingsLock
     /// the salt and hash base64 encoded.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Empty means no password has been set, and the worklist settings are then open. That
     /// is deliberate: shipping with a placeholder password nobody knows would lock the
     /// author out of their own software, which is a worse failure than an unset lock. The
     /// application reports the setting as unprotected so it cannot be forgotten.
-    ///
-    /// To set one:
+    /// </para>
+    /// <para>
+    /// To change it:
     ///     pdftodicom worklist-password
-    /// then paste the line it prints here and rebuild.
+    /// then paste the line it prints here and rebuild. Nothing else needs to change, and
+    /// the password itself never has to be written down anywhere but a password manager.
+    /// </para>
+    /// <para>
+    /// The value below cannot be turned back into the password, which is the point of
+    /// storing a hash rather than something encrypted. It is safe to keep in source
+    /// control; what must not go in source control, or into a message or a commit, is the
+    /// password it was derived from.
+    /// </para>
     /// </remarks>
-    private const string Verifier = "";
+    private const string Verifier = "PBKDF2-SHA256$210000$KxLec2uxU5q9zFHxleeLeg==$dn8UaNAIilJtHCaDingXvwRi2LW0IIsT2e9PtbHDtYo=";
 
     /// <summary>The algorithm label written into, and expected in, a verifier.</summary>
     private const string Algorithm = "PBKDF2-SHA256";

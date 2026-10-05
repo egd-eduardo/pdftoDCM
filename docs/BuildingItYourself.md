@@ -278,6 +278,11 @@ the name resolves.
 **This is not a problem and does not stop the build.** Python is optional: it runs the XAML
 binding check, which CI runs on every push anyway. The build skips it and carries on.
 
+The same is true of `build/build.sh` on a Mac, where `/usr/bin/python3` exists but refuses
+to run until the Command Line Tools are installed. Both scripts test whether Python
+actually executes rather than whether the name resolves, because on both platforms the
+name resolves to something that does not work.
+
 If you want the check locally, install Python from
 [python.org/downloads](https://www.python.org/downloads/) and tick **"Add python.exe to
 PATH"** during setup. To silence the stubs instead, go to **Settings → Apps → Advanced app
