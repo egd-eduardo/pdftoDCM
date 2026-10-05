@@ -717,6 +717,7 @@ fall back to the runner's own architecture.
 .\build\build.ps1 -Runtime win-x86       # 32 bit
 .\build\build.ps1 -Task publish
 .\build\build.ps1 -Task package
+.\build\build.ps1 -Task prune          # keep the deliverables, drop the intermediates
 ```
 
 ### From macOS or Linux
@@ -728,6 +729,7 @@ interoperability check run on a Linux CI runner.
 build/build.sh                       # restore, build, test, publish (win-x64)
 RID=win-arm64 build/build.sh publish # a different architecture
 build/build.sh test
+build/build.sh prune                 # keep the deliverables, drop the intermediates
 build/build.sh clean
 ```
 
@@ -753,7 +755,41 @@ Output is written per architecture, so all three can coexist.
 | `artifacts/<rid>/cli/pdftodicom.exe` | Self contained command line tool |
 | `artifacts/PdfToDicom-<version>-<rid>/` | The folder handed to a site |
 | `artifacts/PdfToDicom-<version>-<rid>.zip` | The same, zipped |
+| `artifacts/PdfToDicom-<version>-<rid>.exe` | The application again, named for the build, for handing one file to somebody |
 | `artifacts/PdfToDicom-Setup-<version>-<arch>.exe` | Per user installer (Windows build only) |
+
+#### Disk, and why the duplicates are free
+
+The published application ends up under three names: the publish staging directory, the
+handover folder, and the versioned standalone copy. Three real copies per architecture is
+a quarter of a gigabyte of identical bytes, and a full three architecture build occupied
+**1.2 GB** because of it.
+
+The two derived names are now **hard links** rather than copies, which brings the same
+build down to a measured **640 MB** while leaving every path present and every file
+complete.
+It is safe because nothing rewrites these files in place: signing runs before the package
+is assembled, deliberately, so that the copies handed out are the signed ones. Linking
+falls back to a copy wherever it is refused, because a build must not fail over an
+optimisation.
+
+`prune` then removes what can be produced again and keeps what somebody asked for. It
+drops the publish staging directories and the unpacked handover folder, whose whole
+content is inside the zip, and keeps the zip, the standalone executable and the installer.
+A hard link is an independent name, so the standalone executable survives the staging
+directory being deleted. A package folder with no zip beside it is kept, because deleting
+the only copy of something never archived would lose it.
+
+Measured on a three architecture build: 640 MB before, 513 MB after, with every remaining
+file verified byte identical and every zip tested.
+
+It is deliberately **not** part of `publish` or `all`: on Windows the installer is built by
+a separate `package` run that reads the staging directory, and the CI step that confirms
+the executable is self contained reads it too.
+
+Since the executables are no longer committed, what is in `artifacts/` after a build is
+all there is until somebody asks for a build again, so both scripts now report the size
+rather than leaving it to be discovered.
 
 Inside the handover folder and under the installer's application directory, the command
 line tool sits in a `Command line` subfolder rather than beside `PdfToDicom.exe`. The two

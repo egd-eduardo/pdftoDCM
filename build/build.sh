@@ -12,6 +12,7 @@
 #   build/build.sh              build, test and publish
 #   build/build.sh test         run the validators and the tests only
 #   build/build.sh publish      publish only
+#   build/build.sh prune        keep the deliverables, drop the intermediates
 #   build/build.sh clean        remove build output
 #
 # Set RID to choose the target architecture (win-x86, win-x64, win-arm64):
@@ -47,6 +48,75 @@ MESSAGE
     fi
 
     info "using .NET SDK $(dotnet --version)"
+}
+
+# Places a second name on an existing file rather than a second copy of it.
+#
+# The published executable is around 70 MB and ends up under three names: the publish
+# staging directory, the handover folder, and the versioned standalone copy. Three real
+# copies per architecture is a quarter of a gigabyte of the same bytes, which is what made
+# a full three architecture build occupy 1.2 GB.
+#
+# A hard link is safe here because nothing rewrites these files in place afterwards.
+# Signing runs BEFORE the package is assembled, deliberately, so that the copies handed
+# out are the signed ones; and a signature applied through one name would in any case be
+# correct under all of them, since every name is meant to hold the same executable.
+#
+# Falls back to a copy when linking is refused, which happens across filesystems and on
+# filesystems without hard link support. The build must not fail over an optimisation.
+link_or_copy() {
+    local source=$1
+    local target=$2
+
+    rm -f "$target"
+
+    ln "$source" "$target" 2>/dev/null || cp "$source" "$target"
+}
+
+# Removes what can be produced again and keeps what cannot be produced quickly.
+#
+# Kept: the zip, the versioned standalone executable and the installer, which are the
+# things somebody actually asked for. Removed: the publish staging directories and the
+# unpacked handover folder, whose entire content is inside the zip.
+#
+# Deliberately a task of its own rather than part of "publish" or "all". On Windows the
+# installer is built by a separate "package" run that reads the staging directory, and the
+# CI step that confirms the executable is self contained reads it too, so pruning
+# automatically would break both.
+do_prune() {
+    step "Pruning the intermediate build output"
+
+    if [[ ! -d "$ARTIFACTS" ]]; then
+        info "nothing to prune"
+        return
+    fi
+
+    local before
+    before=$(du -sh "$ARTIFACTS" 2>/dev/null | cut -f1)
+
+    local path
+    for path in "$ARTIFACTS"/win-x86 "$ARTIFACTS"/win-x64 "$ARTIFACTS"/win-arm64; do
+        if [[ -d "$path" ]]; then
+            rm -rf "$path"
+            info "removed $(basename "$path")/ (publish staging)"
+        fi
+    done
+
+    # Only a folder whose zip sits beside it. Deleting the one unpacked copy of a package
+    # that was never archived would lose it.
+    for path in "$ARTIFACTS"/PdfToDicom-*-win-*; do
+        if [[ -d "$path" ]]; then
+            if [[ -f "$path.zip" ]]; then
+                rm -rf "$path"
+                info "removed $(basename "$path")/ (its zip holds the same files)"
+            else
+                info "kept $(basename "$path")/ because it has no zip beside it"
+            fi
+        fi
+    done
+
+    info "artifacts: $before -> $(du -sh "$ARTIFACTS" 2>/dev/null | cut -f1)"
+    info "$(find "$ARTIFACTS" -maxdepth 1 -type f \( -name '*.zip' -o -name '*.exe' \) | wc -l | tr -d ' ') deliverable file(s) kept"
 }
 
 do_clean() {
@@ -287,7 +357,7 @@ do_publish() {
     rm -rf "$package"
     mkdir -p "$package/Documentation" "$package/Samples"
 
-    cp "$ARTIFACTS/$RUNTIME/app/PdfToDicom.exe" "$package/"
+    link_or_copy "$ARTIFACTS/$RUNTIME/app/PdfToDicom.exe" "$package/PdfToDicom.exe"
 
     # The command line tool goes into a subfolder rather than beside the application. The
     # two assembly names, PdfToDicom and pdftodicom, differ only in case, and a Windows
@@ -298,7 +368,7 @@ do_publish() {
     local have_cli=no
     if [[ -f "$ARTIFACTS/$RUNTIME/cli/pdftodicom.exe" ]]; then
         mkdir -p "$package/Command line"
-        cp "$ARTIFACTS/$RUNTIME/cli/pdftodicom.exe" "$package/Command line/"
+        link_or_copy "$ARTIFACTS/$RUNTIME/cli/pdftodicom.exe" "$package/Command line/pdftodicom.exe"
         have_cli=yes
     fi
 
@@ -333,12 +403,14 @@ do_publish() {
     # A standalone copy whose name carries the version and the architecture. The file
     # inside the package stays PdfToDicom.exe, because the manuals, the shortcuts and the
     # installer all name it. This copy is for handing one file to somebody.
-    cp "$ARTIFACTS/$RUNTIME/app/PdfToDicom.exe" "$ARTIFACTS/PdfToDicom-$version-$RUNTIME.exe"
+    link_or_copy "$ARTIFACTS/$RUNTIME/app/PdfToDicom.exe" "$ARTIFACTS/PdfToDicom-$version-$RUNTIME.exe"
 
     info "package: $package"
     info "zip:     $ARTIFACTS/PdfToDicom-$version-$RUNTIME.zip"
     info "exe:     $ARTIFACTS/PdfToDicom-$version-$RUNTIME.exe"
     info "$(find "$package" -type f | wc -l | tr -d ' ') file(s)"
+    info "artifacts: $(du -sh "$ARTIFACTS" 2>/dev/null | cut -f1) on disk, $(du -shl "$ARTIFACTS" 2>/dev/null | cut -f1) if every link were a copy"
+    info "'build/build.sh prune' drops the staging and the unpacked folder"
 
     step "Result"
     ls -lh "$ARTIFACTS/$RUNTIME/app/PdfToDicom.exe" | awk '{print "    desktop application: " $9 " (" $5 ")"}'
@@ -356,11 +428,12 @@ require_sdk
 
 case "${1:-all}" in
     clean)   do_clean ;;
+    prune)   do_prune ;;
     test)    do_restore; do_build; do_validate; do_test ;;
     publish) do_restore; do_publish ;;
     all)     do_restore; do_build; do_validate; do_test; do_publish ;;
     *)
-        echo "Usage: $0 [all|test|publish|clean]" >&2
+        echo "Usage: $0 [all|test|publish|prune|clean]" >&2
         exit 1
         ;;
 esac
