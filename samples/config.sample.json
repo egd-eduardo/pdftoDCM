@@ -162,6 +162,9 @@
     "//DefaultSex": "Written to Patient Sex when the file name carries no sex, which it usually does not. \"O\" is Other, \"M\" and \"F\" are the obvious ones, and an empty string leaves the attribute present but empty, which is conformant.",
     "DefaultSex": "O",
 
+    "//PadPatientIdTo": "Sending systems often drop the leading zeros from a patient number, writing 77 where the hospital's record is 0000000077. An archive matches patients on the string, so the document would open a second record for the same person. Set this to the width your archive stores, 10 by default, or 0 to use the number exactly as the file name has it. Only a value that is entirely digits is padded; one containing letters is left alone, and a longer one is never shortened. Every padding is written to the log.",
+    "PadPatientIdTo": 10,
+
     "//SplitRunTogetherNames": "True reads \"JohnDoe\" as \"John Doe\" by splitting at an internal capital letter. Off by default because it is a guess, and it is wrong for a surname such as McDonald or DaSilva. With it off, \"JohnDoe\" becomes the surname on its own.",
     "SplitRunTogetherNames": false,
 

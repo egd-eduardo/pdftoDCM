@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using Microsoft.Win32;
@@ -6,6 +7,7 @@ using PdfToDicom.App.Infrastructure;
 using PdfToDicom.Core.Abstractions;
 using PdfToDicom.Core.Configuration;
 using PdfToDicom.Core.Dicom;
+using PdfToDicom.Core.Importing;
 using PdfToDicom.Core.Models;
 using PdfToDicom.Core.Services;
 using PdfToDicom.Core.Validation;
@@ -30,6 +32,8 @@ public sealed class SettingsViewModel : ObservableObject
     private PacsDestination? _selectedDestination;
     private string _testResult = string.Empty;
     private bool _isTesting;
+    private string _filenameTestName = string.Empty;
+    private string _filenameTestResult = string.Empty;
 
     /// <summary>Creates the view model over a working copy of the current configuration.</summary>
     public SettingsViewModel(ApplicationServices services)
@@ -37,7 +41,7 @@ public sealed class SettingsViewModel : ObservableObject
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _original = services.ConfigurationService.Current;
 
-        Working = CloneConfiguration(_original);
+        Working = _original.Clone();
 
         Destinations = new ObservableCollection<PacsDestination>(Working.Destinations);
         SelectedDestination = Destinations.FirstOrDefault();
@@ -52,6 +56,7 @@ public sealed class SettingsViewModel : ObservableObject
         TestDestinationCommand = new AsyncRelayCommand(TestDestinationAsync, () => SelectedDestination is not null && !IsTesting);
         UnlockWorklistCommand = new RelayCommand(UnlockWorklist);
         TestWorklistCommand = new AsyncRelayCommand(TestWorklistAsync);
+        TestFilenameCommand = new RelayCommand(TestFilename);
         BrowseLogFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.LogFolder = f, Working.LogFolder));
         BrowseOutputFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.OutputFolder = f, Working.OutputFolder));
         BrowsePdfFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.DefaultPdfFolder = f, Working.DefaultPdfFolder));
@@ -141,6 +146,152 @@ public sealed class SettingsViewModel : ObservableObject
         get => _worklistTestResult;
         private set => SetProperty(ref _worklistTestResult, value);
     }
+
+    // ---------------------------------------------------------------- Filename import
+
+    /// <summary>
+    /// The configured patterns as editable text, one per line.
+    /// </summary>
+    /// <remarks>
+    /// A list of strings has no sensible editor in a dialog of this kind, and a grid for
+    /// three short lines of text would be heavier than the thing it edits. One per line is
+    /// how an administrator would write them down anyway. Blank lines are dropped, since a
+    /// trailing newline is unavoidable when typing.
+    /// </remarks>
+    public string FilenamePatternsText
+    {
+        get => string.Join(Environment.NewLine, Working.FilenameImport.Patterns);
+        set
+        {
+            Working.FilenameImport.Patterns = SplitLines(value);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    /// The configured date formats as editable text, one per line. Empty means the built in
+    /// list, which is what the caption beneath the box says.
+    /// </summary>
+    public string FilenameDateFormatsText
+    {
+        get => string.Join(Environment.NewLine, Working.FilenameImport.DateFormats);
+        set
+        {
+            Working.FilenameImport.DateFormats = SplitLines(value);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>A file name the administrator is trying out.</summary>
+    public string FilenameTestName
+    {
+        get => _filenameTestName;
+        set => SetProperty(ref _filenameTestName, value);
+    }
+
+    /// <summary>What the patterns made of <see cref="FilenameTestName"/>.</summary>
+    public string FilenameTestResult
+    {
+        get => _filenameTestResult;
+        private set => SetProperty(ref _filenameTestResult, value);
+    }
+
+    /// <summary>Reads the test file name with the settings as they stand in the dialog.</summary>
+    public RelayCommand TestFilenameCommand { get; }
+
+    /// <summary>What may happen to a source file once it has been dealt with.</summary>
+    public IReadOnlyList<EnumOption<ImportedFileDisposition>> ImportedFileDispositions { get; } = new[]
+    {
+        new EnumOption<ImportedFileDisposition>(
+            ImportedFileDisposition.MoveToSubfolder, "Settings.Import.After.Move"),
+        new EnumOption<ImportedFileDisposition>(
+            ImportedFileDisposition.Rename, "Settings.Import.After.Rename"),
+        new EnumOption<ImportedFileDisposition>(
+            ImportedFileDisposition.Leave, "Settings.Import.After.Leave")
+    };
+
+    /// <summary>
+    /// Tries the current settings against the name in the test box.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same work <c>pdftodicom check-names</c> does, in the dialog, because a naming
+    /// layout agreed with another vendor is routinely slightly different in practice and
+    /// this is where that should be discovered. It reads the settings as they are being
+    /// edited, not as they were saved, so there is no need to save first.
+    /// </para>
+    /// <para>
+    /// Nothing is converted, nothing is transmitted and no file has to exist. The name is
+    /// text, and only text.
+    /// </para>
+    /// </remarks>
+    private void TestFilename()
+    {
+        string name = FilenameTestName.Trim();
+
+        if (name.Length == 0)
+        {
+            FilenameTestResult = Localized("Settings.Import.Test.Empty");
+            return;
+        }
+
+        var reader = new FilenameMetadataReader(Working.FilenameImport);
+        var lines = new List<string>();
+
+        // Reported first and separately: a pattern the dialog rejected explains a name that
+        // does not read, and leaving it unsaid is how somebody spends an afternoon on a
+        // missing brace.
+        foreach (string patternError in reader.PatternErrors)
+        {
+            lines.Add(patternError);
+        }
+
+        FilenameReadResult read = reader.Read(name);
+
+        if (!read.IsMatch || read.Demographics is null)
+        {
+            lines.AddRange(read.Notes);
+            FilenameTestResult = string.Join(Environment.NewLine, lines);
+            return;
+        }
+
+        PatientDemographics d = read.Demographics;
+
+        lines.Add(_services.Localizer.Format("Settings.Import.Test.Matched", read.Pattern));
+        lines.Add(Pair("Step2.PatientId", d.PatientId));
+        lines.Add(Pair("Step2.FamilyName", d.FamilyName));
+        lines.Add(Pair("Step2.GivenName", d.GivenName));
+        lines.Add(Pair("Step2.AccessionNumber", d.AccessionNumber));
+        lines.Add(Pair(
+            "Step2.DateOfBirth",
+            d.DateOfBirth?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty));
+        lines.Add(Pair("Step2.Sex", d.Sex.ToDicomValue()));
+
+        if (d.StudyDescription.Length > 0)
+        {
+            lines.Add(Pair("Step2.StudyDescription", d.StudyDescription));
+        }
+
+        lines.AddRange(read.Notes);
+
+        FilenameTestResult = string.Join(Environment.NewLine, lines);
+    }
+
+    /// <summary>One "label: value" line, with an empty value shown as empty rather than lost.</summary>
+    private string Pair(string labelKey, string value) =>
+        $"{Localized(labelKey)}: {(value.Length > 0 ? value : Localized("Settings.Import.Test.Blank"))}";
+
+    private static string Localized(string key) => LocalizationSource.Instance[key];
+
+    /// <summary>
+    /// Non blank lines, trimmed. Shared by the pattern and date format boxes.
+    /// </summary>
+    private static List<string> SplitLines(string? text) =>
+        (text ?? string.Empty)
+            .Split('\n')
+            .Select(line => line.Trim('\r', ' ', '\t'))
+            .Where(line => line.Length > 0)
+            .ToList();
 
     /// <summary>The date interval choices offered for a worklist query.</summary>
     public IReadOnlyList<EnumOption<WorklistDateRange>> WorklistDateRanges { get; } = new[]
@@ -512,67 +663,18 @@ public sealed class SettingsViewModel : ObservableObject
         Compare("LogFolder", _original.LogFolder, Working.LogFolder);
         Compare("AutoDelete", _original.AutoDeleteAfterSuccessfulTransmission, Working.AutoDeleteAfterSuccessfulTransmission);
         Compare("FolderMonitoring", _original.EnableFolderMonitoring, Working.EnableFolderMonitoring);
+        Compare("FilenameImport", _original.FilenameImport.IsEnabled, Working.FilenameImport.IsEnabled);
+        Compare(
+            "FilenameImportPatterns",
+            string.Join("|", _original.FilenameImport.Patterns),
+            string.Join("|", Working.FilenameImport.Patterns));
+        Compare("PadPatientIdTo", _original.FilenameImport.PadPatientIdTo, Working.FilenameImport.PadPatientIdTo);
+        Compare("AfterImport", _original.FilenameImport.AfterImport, Working.FilenameImport.AfterImport);
         Compare("Language", _original.Language, Working.Language);
         Compare("DestinationCount", _original.Destinations.Count, Working.Destinations.Count);
 
         return changes.Count == 0 ? "No effective change." : string.Join("; ", changes);
     }
-
-    /// <summary>
-    /// Produces a deep copy so that cancelling the dialog leaves the live configuration
-    /// untouched, including the nested destination and template collections.
-    /// </summary>
-    private static AppConfiguration CloneConfiguration(AppConfiguration source) => new()
-    {
-        ConfigurationVersion = source.ConfigurationVersion,
-        HospitalName = source.HospitalName,
-        InstitutionName = source.InstitutionName,
-        DepartmentName = source.DepartmentName,
-        StationName = source.StationName,
-        CallingAeTitle = source.CallingAeTitle,
-        Destinations = source.Destinations.Select(d => d.Clone()).ToList(),
-        Worklist = source.Worklist.Clone(),
-        RecentDestinationLimit = source.RecentDestinationLimit,
-        CharacterSet = source.CharacterSet,
-        UidStrategy = source.UidStrategy,
-        OrganizationUidRoot = source.OrganizationUidRoot,
-        Modality = source.Modality,
-        ImageModality = source.ImageModality,
-        StudyGrouping = source.StudyGrouping,
-        DefaultImageStudyDescription = source.DefaultImageStudyDescription,
-        DefaultImageSeriesDescription = source.DefaultImageSeriesDescription,
-        ConversionType = source.ConversionType,
-        Manufacturer = source.Manufacturer,
-        BurnedInAnnotation = source.BurnedInAnnotation,
-        DefaultDocumentTitle = source.DefaultDocumentTitle,
-        DefaultStudyDescription = source.DefaultStudyDescription,
-        DefaultSeriesDescription = source.DefaultSeriesDescription,
-        SeriesNumber = source.SeriesNumber,
-        InstanceNumber = source.InstanceNumber,
-        RecordPageCountInPrivateTag = source.RecordPageCountInPrivateTag,
-        IncludeConceptNameCodeSequence = source.IncludeConceptNameCodeSequence,
-        DefaultPdfFolder = source.DefaultPdfFolder,
-        OutputFolder = source.OutputFolder,
-        LogFolder = source.LogFolder,
-        AutoDeleteAfterSuccessfulTransmission = source.AutoDeleteAfterSuccessfulTransmission,
-        AlwaysSaveDicomLocally = source.AlwaysSaveDicomLocally,
-        LogRetentionDays = source.LogRetentionDays,
-        EnableFolderMonitoring = source.EnableFolderMonitoring,
-        MonitoredFolder = source.MonitoredFolder,
-        MonitorSettleDelayMilliseconds = source.MonitorSettleDelayMilliseconds,
-        DarkMode = source.DarkMode,
-        Language = source.Language,
-        ShowAdvancedFields = source.ShowAdvancedFields,
-        ConfirmBeforeSending = source.ConfirmBeforeSending,
-        Templates = source.Templates.Select(t => new PatientTemplate
-        {
-            Name = t.Name,
-            ReferringPhysicianName = t.ReferringPhysicianName,
-            StudyDescription = t.StudyDescription,
-            SeriesDescription = t.SeriesDescription,
-            DocumentTitle = t.DocumentTitle
-        }).ToList()
-    };
 }
 
 /// <summary>

@@ -134,6 +134,10 @@ Three things are worth knowing.
 - **Check what was filled in.** Anybody can rename a file, so a file name is not proof of
   identity. Nothing is sent until you press **Convert and Send** and confirm, exactly as
   before. The whole point of the confirmation is this moment.
+- **A short patient number gets its leading zeros back.** Many systems write `77` where
+  your records hold `0000000077`. The archive treats those as two different patients, so
+  the number is padded out to the width your department uses, ten digits unless your IT
+  department changed it. A patient number containing letters is left exactly as it was.
 - **Empty fields are normal.** Most naming schemes carry no date of birth, so the date of
   birth is left empty and the sex is recorded as *Other* rather than guessed at. Where the
   date of birth is genuinely unknown, an empty one is correct; an invented one is not.
@@ -153,8 +157,9 @@ looked at. Nothing is ever deleted and nothing is ever overwritten; if a file of
 name is already there, a number is added to the new one.
 
 If the fields fill in wrongly, or do not fill in at all, your IT department can change the
-naming layout, which is a setting and can be matched to whatever the other system produces.
-Section 11 says what to tell them.
+naming layout in **Settings**, on the **File names** page, where there is also a box that
+tries a file name and shows exactly what would be read from it. Section 11 says what to
+tell them.
 
 ### What happens to an image
 
@@ -425,6 +430,7 @@ Click **Settings** in the header. Most of these are set once by your IT departme
 | **DICOM** | Character set, identifier generation, modality, default descriptions. Leave these alone unless your PACS administrator asks. |
 | **Worklist** | The modality worklist server. Usually locked with a password held by whoever installed the application; pointing it at the wrong server would put the wrong patients in front of you. |
 | **Folders** | Where files and logs are kept, and folder monitoring. |
+| **File names** | The naming layout used to read the patient details out of a file name, and a box that tries a name and shows what it would read. See section 3. |
 | **Appearance** | Language, dark mode, and whether to confirm before sending. |
 
 Two settings are worth knowing about as a user:

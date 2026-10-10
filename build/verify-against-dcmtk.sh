@@ -1141,6 +1141,49 @@ else
     fail "the file in Imported/ differs from the document that was handed over"
 fi
 
+step "Confirming a short patient number gets its leading zeros back"
+
+# The failure this prevents: a sending system writes 77 where the hospital's record is
+# 0000000077, the archive matches patients on the string, and the document opens a second
+# record for the same person.
+PADDED_NAME="77_JaneRoe_TEST777777.pdf"
+PADDED_FILE="$INBOX/$PADDED_NAME"
+cp "$SAMPLE_PDF" "$PADDED_FILE"
+
+if dotnet "$CLI" send \
+    --config "$WORK_DIR/import.json" \
+    --pdf "$PADDED_FILE" \
+    --from-filename > "$WORK_DIR/padded.log" 2>&1; then
+    pass "the document was converted and transmitted"
+else
+    fail "the padded import failed; see below"
+    cat "$WORK_DIR/padded.log"
+fi
+
+PADDED_OBJECT=""
+padded_deadline=$((SECONDS + 30))
+
+while (( SECONDS < padded_deadline )); do
+    while read -r stored; do
+        if [[ "$(attribute_of "$stored" "0008,0050")" == "TEST777777" ]] \
+            && declares_sop_class "$stored" "EncapsulatedPDFStorage"; then
+            PADDED_OBJECT="$stored"
+            break
+        fi
+    done < <(find "$RECEIVED_DIR" -type f)
+
+    [[ -n "$PADDED_OBJECT" ]] && break
+    sleep 0.2
+done
+
+if [[ -z "$PADDED_OBJECT" ]]; then
+    fail "no object with Accession Number TEST777777 reached the archive"
+elif [[ "$(attribute_of "$PADDED_OBJECT" "0010,0020")" == "0000000077" ]]; then
+    pass "the archive received Patient ID 0000000077, padded from the 77 in the file name"
+else
+    fail "the archive received Patient ID '$(attribute_of "$PADDED_OBJECT" "0010,0020")', expected 0000000077"
+fi
+
 step "Confirming a file name that matches nothing is refused rather than guessed at"
 
 UNREADABLE="$INBOX/scan0001.pdf"

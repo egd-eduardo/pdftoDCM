@@ -495,6 +495,135 @@
                 </ScrollViewer>
             </TabItem>
 
+            <!-- ==================================================== Filename import -->
+            <TabItem Header="{loc:Localize Settings.Tab.Import}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
+                    <StackPanel MaxWidth="620" HorizontalAlignment="Left">
+
+                        <TextBlock Text="{loc:Localize Settings.Import.Intro}"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                        <CheckBox Content="{loc:Localize Settings.Import.Enabled}"
+                                  IsChecked="{Binding Working.FilenameImport.IsEnabled}"
+                                  Style="{StaticResource SettingCheckBoxStyle}" Margin="0,0,0,4" />
+                        <TextBlock Text="{loc:Localize Settings.Import.Enabled.Caption}"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.Import.Patterns}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding FilenamePatternsText, UpdateSourceTrigger=LostFocus}"
+                                 Style="{StaticResource InputTextBoxStyle}"
+                                 AcceptsReturn="True" TextWrapping="NoWrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Auto"
+                                 MinHeight="84" Margin="0,0,0,4" />
+                        <TextBlock Text="{loc:Localize Settings.Import.Patterns.Caption}"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.Import.DateFormats}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding FilenameDateFormatsText, UpdateSourceTrigger=LostFocus}"
+                                 Style="{StaticResource InputTextBoxStyle}"
+                                 AcceptsReturn="True" TextWrapping="NoWrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 MinHeight="60" Margin="0,0,0,4" />
+                        <TextBlock Text="{loc:Localize Settings.Import.DateFormats.Caption}"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.Import.PadPatientId}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.FilenameImport.PadPatientIdTo, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Width="120"
+                                 HorizontalAlignment="Left" Margin="0,0,0,4" />
+                        <TextBlock Text="{loc:Localize Settings.Import.PadPatientId.Caption}"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.Import.DefaultSex}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.FilenameImport.DefaultSex, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Width="120"
+                                 HorizontalAlignment="Left" Margin="0,0,0,4" />
+                        <TextBlock Text="{loc:Localize Settings.Import.DefaultSex.Caption}"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                        <CheckBox Content="{loc:Localize Settings.Import.UseFileDate}"
+                                  IsChecked="{Binding Working.FilenameImport.UseFileDateAsStudyDate}"
+                                  Style="{StaticResource SettingCheckBoxStyle}" Margin="0,0,0,4" />
+                        <TextBlock Text="{loc:Localize Settings.Import.UseFileDate.Caption}"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                        <CheckBox Content="{loc:Localize Settings.Import.SplitNames}"
+                                  IsChecked="{Binding Working.FilenameImport.SplitRunTogetherNames}"
+                                  Style="{StaticResource SettingCheckBoxStyle}" Margin="0,0,0,4" />
+                        <TextBlock Text="{loc:Localize Settings.Import.SplitNames.Caption}"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                        <Separator Margin="0,4,0,14" Background="{DynamicResource SeparatorBrush}" />
+
+                        <TextBlock Text="{loc:Localize Settings.Import.After}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <ComboBox ItemsSource="{Binding ImportedFileDispositions}"
+                                  SelectedValue="{Binding Working.FilenameImport.AfterImport}"
+                                  SelectedValuePath="Value" DisplayMemberPath="Display"
+                                  Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,4" />
+                        <TextBlock Text="{loc:Localize Settings.Import.After.Caption}"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.Import.ImportedSubfolder}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.FilenameImport.ImportedSubfolder, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.Import.FailedSubfolder}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.FilenameImport.FailedSubfolder, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,4" />
+                        <TextBlock Text="{loc:Localize Settings.Import.FailedSubfolder.Caption}"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                        <TextBlock Text="{loc:Localize Settings.Import.RenameSuffix}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Working.FilenameImport.RenameSuffix, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputTextBoxStyle}" Width="200"
+                                 HorizontalAlignment="Left" Margin="0,0,0,4" />
+                        <TextBlock Text="{loc:Localize Settings.Import.RenameSuffix.Caption}"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                        <Separator Margin="0,4,0,14" Background="{DynamicResource SeparatorBrush}" />
+
+                        <!-- Trying a name here is the whole reason an administrator can get
+                             this right first time. It reads the settings as they are being
+                             edited, so there is no need to save and reopen. -->
+                        <TextBlock Text="{loc:Localize Settings.Import.Test}" Style="{StaticResource SectionHeaderTextStyle}" />
+                        <TextBlock Text="{loc:Localize Settings.Import.Test.Caption}"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap" Margin="0,0,0,10" />
+
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding FilenameTestName, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" />
+                            <Button Grid.Column="1" Content="{loc:Localize Settings.Import.Test.Button}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Command="{Binding TestFilenameCommand}"
+                                    MinWidth="110" Margin="8,0,0,0" />
+                        </Grid>
+
+                        <TextBlock Text="{Binding FilenameTestResult}"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap"
+                                   Visibility="{Binding FilenameTestResult, Converter={StaticResource StringToVisibility}}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
             <!-- ==================================================== Appearance -->
             <TabItem Header="{loc:Localize Settings.Tab.Appearance}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">

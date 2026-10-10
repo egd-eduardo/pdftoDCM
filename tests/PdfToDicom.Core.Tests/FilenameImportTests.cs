@@ -1,3 +1,6 @@
+using System.Collections;
+using System.Globalization;
+using System.Reflection;
 using PdfToDicom.Core.Configuration;
 using PdfToDicom.Core.Importing;
 using PdfToDicom.Core.Logging;
@@ -159,15 +162,102 @@ public sealed class FilenameMetadataReaderTests
         IEnumerable<string> patterns,
         bool splitRunTogether = false,
         string sex = "O",
-        IEnumerable<string>? dateFormats = null) =>
+        IEnumerable<string>? dateFormats = null,
+        int padPatientIdTo = 0) =>
         new(new FilenameImportConfiguration
         {
             IsEnabled = true,
             Patterns = patterns.ToList(),
             SplitRunTogetherNames = splitRunTogether,
             DefaultSex = sex,
-            DateFormats = dateFormats?.ToList() ?? new List<string>()
+            DateFormats = dateFormats?.ToList() ?? new List<string>(),
+            PadPatientIdTo = padPatientIdTo
         });
+
+    // ------------------------------------------------------- Patient number padding
+    //
+    // These guard the one value that decides whose record a document joins, so each case
+    // that must NOT be padded has a test of its own.
+
+    [Fact]
+    public void AShortPatientNumberIsPaddedToTheConfiguredWidth()
+    {
+        FilenameReadResult result = Reader(new[] { "{PatientId}_{Name}" }, padPatientIdTo: 10)
+            .Read("77_Ana Silva.pdf");
+
+        Assert.Equal("0000000077", result.Demographics!.PatientId);
+    }
+
+    [Fact]
+    public void ThePaddingIsReported()
+    {
+        FilenameReadResult result = Reader(new[] { "{PatientId}_{Name}" }, padPatientIdTo: 10)
+            .Read("77_Ana Silva.pdf");
+
+        Assert.Contains(result.Notes, n => n.Contains("0000000077", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void APatientNumberAlreadyAtTheWidthIsUntouched()
+    {
+        FilenameReadResult result = Reader(new[] { "{PatientId}_{Name}" }, padPatientIdTo: 10)
+            .Read("9999999999_Ana Silva.pdf");
+
+        Assert.Equal("9999999999", result.Demographics!.PatientId);
+        Assert.Empty(result.Notes);
+    }
+
+    [Fact]
+    public void ALongerPatientNumberIsNeverTruncated()
+    {
+        // The right hand end of an identifier is what tells two people apart, so shortening
+        // one would be worse than leaving it at the wrong width.
+        FilenameReadResult result = Reader(new[] { "{PatientId}_{Name}" }, padPatientIdTo: 10)
+            .Read("123456789012_Ana Silva.pdf");
+
+        Assert.Equal("123456789012", result.Demographics!.PatientId);
+    }
+
+    [Fact]
+    public void ANonNumericPatientIdIsLeftAloneAndSaidSo()
+    {
+        FilenameReadResult result = Reader(new[] { "{PatientId}_{Name}" }, padPatientIdTo: 10)
+            .Read("AB12_Ana Silva.pdf");
+
+        Assert.Equal("AB12", result.Demographics!.PatientId);
+        Assert.Contains(result.Notes, n => n.Contains("not a plain number", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TenDigitsIsTheShippedDefault()
+    {
+        // Pinned because it is a deployment decision rather than an implementation detail:
+        // the hospital this was built for stores ten digit patient numbers, and a sending
+        // system that drops the leading zeros would otherwise open a second record.
+        Assert.Equal(10, new FilenameImportConfiguration().PadPatientIdTo);
+    }
+
+    [Fact]
+    public void PaddingIsOffWhenTheWidthIsZero()
+    {
+        FilenameReadResult result = Reader(new[] { "{PatientId}_{Name}" })
+            .Read("77_Ana Silva.pdf");
+
+        Assert.Equal("77", result.Demographics!.PatientId);
+        Assert.Empty(result.Notes);
+    }
+
+    [Fact]
+    public void ANonAsciiDigitIsNotTreatedAsANumber()
+    {
+        // char.IsDigit would accept an Arabic-Indic digit, which is a digit but not one an
+        // archive's patient index will match. IsAsciiDigit is deliberate.
+        FilenameReadResult result = Reader(new[] { "{PatientId}_{Name}" }, padPatientIdTo: 10)
+            .Read("٧٧_Ana Silva.pdf");
+
+        Assert.Equal("٧٧", result.Demographics!.PatientId);
+        Assert.Contains(result.Notes, n => n.Contains("not a plain number", StringComparison.Ordinal));
+    }
 
     [Fact]
     public void TheStatedFormatProducesSendableDemographics()
@@ -561,4 +651,184 @@ public sealed class FilenameImportAuditTests : IDisposable
         Assert.Contains("file=9999999999_JohnDoe_TEST123451.pdf", written, StringComparison.Ordinal);
         Assert.Contains("pattern={PatientId}_{Name}_{AccessionNumber}", written, StringComparison.Ordinal);
     }
+}
+
+/// <summary>
+/// That a copy of the configuration is faithful, property by property.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This exists because the settings dialog used to hold a hand written copy that assigned
+/// each property by name, and it silently stopped copying three settings as they were
+/// added. Opening Settings and pressing Save, having changed nothing, reset page rendering,
+/// its resolution and the whole file name import section to their defaults. No error, and
+/// nothing in the log.
+/// </para>
+/// <para>
+/// The test walks the properties by reflection rather than listing them, so a setting added
+/// in the future is covered the moment it exists. A test that listed them would drift in
+/// exactly the way the code did.
+/// </para>
+/// </remarks>
+public sealed class ConfigurationCloneTests
+{
+    [Fact]
+    public void EverySettablePropertySurvivesACopy()
+    {
+        AppConfiguration original = Distinctive();
+        AppConfiguration copy = original.Clone();
+
+        var differences = new List<string>();
+
+        foreach (PropertyInfo property in Settable())
+        {
+            string before = Describe(property.GetValue(original));
+            string after = Describe(property.GetValue(copy));
+
+            if (!string.Equals(before, after, StringComparison.Ordinal))
+            {
+                differences.Add($"{property.Name}: '{before}' became '{after}'");
+            }
+        }
+
+        Assert.Empty(differences);
+    }
+
+    [Fact]
+    public void TheCopyIsIndependentOfTheOriginal()
+    {
+        // The point of copying at all: cancelling the dialog must genuinely discard every
+        // change, including one made inside a nested object or a list.
+        AppConfiguration original = Distinctive();
+        AppConfiguration copy = original.Clone();
+
+        copy.FilenameImport.PadPatientIdTo = 4;
+        copy.FilenameImport.Patterns.Add("{PatientId}");
+        copy.Destinations[0].Host = "10.0.0.1";
+        copy.Worklist.Host = "10.0.0.2";
+        copy.Templates[0].Name = "changed";
+
+        Assert.Equal(8, original.FilenameImport.PadPatientIdTo);
+        Assert.Single(original.FilenameImport.Patterns);
+        Assert.Equal("192.168.0.1", original.Destinations[0].Host);
+        Assert.Equal("192.168.0.2", original.Worklist.Host);
+        Assert.Equal("Template", original.Templates[0].Name);
+    }
+
+    [Fact]
+    public void TheFilenameImportSectionIsCopied()
+    {
+        // Named explicitly as well as covered by reflection, because this is the setting
+        // whose loss prompted all of the above.
+        AppConfiguration copy = Distinctive().Clone();
+
+        Assert.True(copy.FilenameImport.IsEnabled);
+        Assert.Equal(8, copy.FilenameImport.PadPatientIdTo);
+        Assert.Equal(ImportedFileDisposition.Rename, copy.FilenameImport.AfterImport);
+        Assert.Equal("{PatientId}_{Name}_{AccessionNumber}", Assert.Single(copy.FilenameImport.Patterns));
+    }
+
+    /// <summary>
+    /// A configuration in which no property holds its default, so a property that is not
+    /// copied shows up as a difference rather than matching by luck.
+    /// </summary>
+    private static AppConfiguration Distinctive()
+    {
+        var configuration = new AppConfiguration
+        {
+            HospitalName = "Hospital",
+            InstitutionName = "Institution",
+            DepartmentName = "Department",
+            StationName = "Station",
+            CallingAeTitle = "CALLER",
+            CharacterSet = DicomCharacterSet.Latin1,
+            UidStrategy = UidGenerationStrategy.RegisteredRoot,
+            OrganizationUidRoot = "1.2.826.0.1.3680043.9.6008",
+            Modality = "SR",
+            ImageModality = "XC",
+            StudyGrouping = StudyGroupingMode.GroupByPatient,
+            ConversionType = "DI",
+            Manufacturer = "Manufacturer",
+            BurnedInAnnotation = true,
+            DefaultDocumentTitle = "Title",
+            DefaultStudyDescription = "Study",
+            DefaultSeriesDescription = "Series",
+            DefaultImageStudyDescription = "Image study",
+            DefaultImageSeriesDescription = "Image series",
+            SeriesNumber = 7,
+            InstanceNumber = 9,
+            RecordPageCountInPrivateTag = false,
+            IncludeConceptNameCodeSequence = false,
+            RenderPdfPagesAsImages = false,
+            PdfRenderDotsPerInch = 222,
+            DefaultPdfFolder = "/pdf",
+            OutputFolder = "/out",
+            LogFolder = "/log",
+            AutoDeleteAfterSuccessfulTransmission = true,
+            AlwaysSaveDicomLocally = false,
+            LogRetentionDays = 42,
+            EnableFolderMonitoring = true,
+            MonitoredFolder = "/watch",
+            MonitorSettleDelayMilliseconds = 2222,
+            RecentDestinationLimit = 5,
+            DarkMode = true,
+            Language = "pt-PT",
+            ShowAdvancedFields = true,
+            ConfirmBeforeSending = false,
+            ConfigurationVersion = 1,
+            FilenameImport = new FilenameImportConfiguration
+            {
+                IsEnabled = true,
+                Patterns = new List<string> { "{PatientId}_{Name}_{AccessionNumber}" },
+                DateFormats = new List<string> { "yyyyMMdd" },
+                UseFileDateAsStudyDate = false,
+                DefaultSex = "F",
+                SplitRunTogetherNames = true,
+                PadPatientIdTo = 8,
+                AfterImport = ImportedFileDisposition.Rename,
+                ImportedSubfolder = "Done",
+                FailedSubfolder = "Rejected",
+                RenameSuffix = ".done"
+            }
+        };
+
+        configuration.Destinations.Add(new PacsDestination
+        {
+            Id = "one",
+            Name = "One",
+            CalledAeTitle = "PACS",
+            Host = "192.168.0.1",
+            Port = 104
+        });
+
+        configuration.Worklist.Host = "192.168.0.2";
+        configuration.Templates.Add(new PatientTemplate { Name = "Template" });
+
+        return configuration;
+    }
+
+    private static IEnumerable<PropertyInfo> Settable() =>
+        typeof(AppConfiguration)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanRead && p.CanWrite);
+
+    /// <summary>
+    /// A value rendered as text, so a list or a nested object is compared by content rather
+    /// than by reference. Reference equality would pass for every property on a copy that
+    /// shared its objects with the original, which is the opposite of what is wanted.
+    /// </summary>
+    private static string Describe(object? value) => value switch
+    {
+        null => "(null)",
+        string text => text,
+        IEnumerable items => "[" + string.Join("|", items.Cast<object?>().Select(Describe)) + "]",
+        FilenameImportConfiguration f =>
+            $"{f.IsEnabled};{Describe(f.Patterns)};{Describe(f.DateFormats)};" +
+            $"{f.UseFileDateAsStudyDate};{f.DefaultSex};{f.SplitRunTogetherNames};" +
+            $"{f.PadPatientIdTo};{f.AfterImport};{f.ImportedSubfolder};{f.FailedSubfolder};{f.RenameSuffix}",
+        WorklistConfiguration w => $"{w.IsEnabled};{w.CalledAeTitle};{w.Host};{w.Port};{w.DateRange}",
+        PacsDestination d => $"{d.Id};{d.Name};{d.CalledAeTitle};{d.Host};{d.Port};{d.IsEnabled}",
+        PatientTemplate t => $"{t.Name};{t.StudyDescription};{t.SeriesDescription};{t.DocumentTitle}",
+        _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty
+    };
 }
