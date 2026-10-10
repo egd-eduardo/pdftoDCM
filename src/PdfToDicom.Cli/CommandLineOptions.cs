@@ -1,5 +1,6 @@
 using System.Globalization;
 using PdfToDicom.Core.Models;
+using PdfToDicom.Core.Validation;
 
 namespace PdfToDicom.Cli;
 
@@ -66,6 +67,12 @@ public sealed class CommandLineOptions
     /// Try splitting a run-together name such as JohnDoe, overriding the configuration.
     /// </summary>
     public bool SplitNames { get; private set; }
+
+    /// <summary>
+    /// Width to pad a patient number read from a file name to, overriding the
+    /// configuration. Null leaves the configured width alone.
+    /// </summary>
+    public int? PadPatientIdTo { get; private set; }
 
     /// <summary>Generate and save the object without transmitting it.</summary>
     public bool NoSend { get; private set; }
@@ -218,6 +225,20 @@ public sealed class CommandLineOptions
             case "pattern":
                 Patterns.Add(value);
                 break;
+            case "pad-patient-id":
+                if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int padWidth) &&
+                    padWidth >= 0 && padWidth <= DicomValueRules.MaxLongStringLength)
+                {
+                    PadPatientIdTo = padWidth;
+                }
+                else
+                {
+                    ParseErrors.Add(
+                        $"'--pad-patient-id {value}' is not a width between 0 and " +
+                        $"{DicomValueRules.MaxLongStringLength}. 0 means do not pad.");
+                }
+
+                break;
             case "name":
                 NamesToCheck.Add(value);
                 break;
@@ -277,6 +298,11 @@ public sealed class CommandLineOptions
           --split-names                Try splitting a run-together name such as JohnDoe
                                        at its capitals. A guess, so it is off unless asked
                                        for and what it did is always reported.
+          --pad-patient-id <n>        Left-pad a patient number read from a file name
+                                       with zeros to n digits, overriding the configured
+                                       width. 0 does not pad. Only a value that is
+                                       entirely digits is padded, and a longer one is
+                                       never shortened.
 
         WORKLIST OPTIONS
           --patient-id <value>         Narrow the query to this Patient ID. Wildcards are

@@ -137,6 +137,11 @@ Há três pontos a ter em conta.
 - **Confirme o que foi preenchido.** Qualquer pessoa pode mudar o nome de um ficheiro, pelo
   que o nome não é prova de identidade. Nada é enviado até premir **Converter e Enviar** e
   confirmar, exatamente como antes. A confirmação existe precisamente para este momento.
+- **Um número de processo curto recupera os zeros à esquerda.** Muitos sistemas escrevem
+  `77` onde os seus registos têm `0000000077`. Para o arquivo, esses são dois doentes
+  diferentes, pelo que o número é completado até à largura utilizada no seu serviço, dez
+  dígitos salvo indicação em contrário do departamento de informática. Um número de
+  processo com letras fica exatamente como estava.
 - **Campos vazios são normais.** A maioria dos esquemas de nomes não inclui a data de
   nascimento, pelo que esta fica vazia e o sexo é registado como *Outro* em vez de ser
   adivinhado. Quando a data de nascimento é genuinamente desconhecida, deixá-la vazia é
@@ -157,8 +162,9 @@ Nunca nada é apagado nem substituído; se já existir um ficheiro com o mesmo n
 acrescentado um número ao novo.
 
 Se os campos forem preenchidos de forma errada, ou não forem preenchidos, o departamento de
-informática pode alterar o formato dos nomes, que é uma definição e pode ser ajustada ao que
-o outro sistema produz. A secção 11 indica o que lhes dizer.
+informática pode alterar o formato dos nomes em **Definições**, na página **Nomes de
+ficheiros**, onde existe também uma caixa que experimenta um nome de ficheiro e mostra
+exatamente o que seria lido a partir dele. A secção 11 indica o que lhes dizer.
 
 ### O que acontece a uma imagem
 
@@ -431,6 +437,7 @@ pelo departamento de informática.
 | **DICOM** | Conjunto de carateres, geração de identificadores, modalidade, descrições por omissão. Não altere sem indicação do administrador do PACS. |
 | **Lista de trabalho** | O servidor da lista de trabalho de modalidade. Normalmente protegido por uma palavra-passe na posse de quem instalou a aplicação; apontá-lo para o servidor errado colocaria à sua frente os doentes errados. |
 | **Pastas** | Onde são guardados os ficheiros e os registos, e a monitorização de pastas. |
+| **Nomes de ficheiros** | O formato utilizado para ler os dados do doente a partir do nome do ficheiro, e uma caixa que experimenta um nome e mostra o que seria lido. Ver a secção 3. |
 | **Aspeto** | Idioma, modo escuro e confirmação antes de enviar. |
 
 Duas definições são relevantes para o utilizador:

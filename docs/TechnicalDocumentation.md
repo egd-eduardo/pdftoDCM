@@ -133,7 +133,7 @@ pdftoDCM/
 │   │
 │   └── PdfToDicom.Cli/              Headless front end for scripted conversion
 │
-├── tests/PdfToDicom.Core.Tests/     235 xUnit tests
+├── tests/PdfToDicom.Core.Tests/     246 xUnit tests
 │
 ├── tools/
 │   └── PdfToDicom.TestWorklistServer/   A Modality Worklist SCP for testing only.
@@ -743,6 +743,15 @@ matches everything the longer one does.
 - **Study date** is the file's creation time, written to Study Date and Study Time via
   `PatientDemographics.StudyDateTime`. Content Date and Content Time remain the moment of
   conversion, so both facts are preserved rather than conflated.
+- **The Patient ID is padded** with leading zeros to `PadPatientIdTo` digits, ten by
+  default. A sending system routinely writes `77` where the hospital's record is
+  `0000000077`; an archive matches patients on the string, so without this the document
+  opens a second record for the same person. Because this changes the one value that
+  decides whose record a document joins, it is deliberately narrow: **only a value that is
+  entirely ASCII digits is padded**, since zeros in front of `AB12` would be invention
+  rather than restoration, and a value already at or beyond the width is **never
+  truncated**, because the right hand end of an identifier is what tells two people apart.
+  Every padding, and every refusal to pad, is reported.
 
 ### Validation is relaxed, not bypassed
 
@@ -791,6 +800,36 @@ Four properties, each covered by a test:
 - **Nothing is ever deleted.** A collision appends ` (2)`, then a timestamp.
 - **Nothing is ever overwritten.**
 - **It never throws.** A file that has already been moved by somebody else is not an error.
+
+### Configuring it
+
+Every setting has a page of its own in the Settings dialog, **File names**, placed after
+Folders because it acts on what the monitored folder produces. The patterns and the date
+formats are edited as one per line: a list of strings has no sensible editor in a dialog of
+this kind, and a grid for three short lines would be heavier than the thing it edits.
+
+That page also carries a **test box**. Type a file name, press the button, and it shows
+what would be read, including which pattern matched and every note the reader produced. It
+reads the settings **as they are being edited** rather than as they were last saved, so a
+layout can be got right without saving, closing and reopening. Nothing is converted,
+nothing is transmitted, and the file need not exist: the name is text and only text. It is
+`pdftodicom check-names` without the command line.
+
+### Copying the configuration, and a bug worth remembering
+
+The dialog edits a copy, so Cancel genuinely discards everything. That copy used to be a
+hand written method in `SettingsViewModel` that assigned each property by name, and it
+**silently stopped copying three settings** as they were added: `RenderPdfPagesAsImages`
+and `PdfRenderDotsPerInch` from the image release, then the whole `FilenameImport` section.
+Opening Settings and pressing Save, having changed nothing, reset them to their defaults.
+No error, nothing in the log.
+
+It is now `AppConfiguration.Clone()`, a serialize and deserialize round trip. That cannot
+drift, because it enumerates the properties instead of repeating them, and the cost is
+microseconds once per dialog. A test walks every settable property by reflection and
+compares the copy by value rather than by reference, so a setting added later is covered
+the moment it exists; the test was confirmed to fail, naming the property, when the copy
+was deliberately broken.
 
 ### Trying it before trusting it
 
@@ -1019,7 +1058,7 @@ differ only in case.
 dotnet test tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj
 ```
 
-235 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
+246 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
 strategy), person name construction and shortening, the worklist date ranges, the
 settings password verifier, every mandatory attribute, payload integrity and odd length
 padding, UTF-8 round trips, configuration persistence and corruption recovery, file name
@@ -1092,13 +1131,15 @@ and the object the archive received is then read back: the Patient ID and Access
 came from the name, `JohnDoe` became `Doe^John`, Patient Sex is `O`, Patient Birth Date is
 **present and empty** as Type 2 requires of an unknown value, and Study Date is the file's
 own creation date while Content Date is separately the moment of conversion. It then
-confirms the source file was moved into `Imported/` byte for byte rather than deleted, and
-that a file name matching no pattern is refused, reaches the archive as nothing at all, and
-ends up in `Failed/` where somebody will see it. The last of those checks failed the first
+confirms the source file was moved into `Imported/` byte for byte rather than deleted, that
+a document named `77_JaneRoe_TEST777777.pdf` arrives at the archive as Patient ID
+`0000000077` with its leading zeros restored, and that a file name matching no pattern is
+refused, reaches the archive as nothing at all, and ends up in `Failed/` where somebody will
+see it. The last of those checks failed the first
 time it ran: the refused file was being left in the watched folder, where it would have
 been retried for ever.
 
-82 checks, all passing as of this release.
+84 checks, all passing as of this release.
 
 ---
 
@@ -1228,7 +1269,7 @@ networking, validation and workflow layers need no change.
 
 Stated plainly, because a hospital deploying this needs to know what it does not do.
 
-1. **The user interface is not covered by automated tests.** The 235 tests cover Core in
+1. **The user interface is not covered by automated tests.** The 246 tests cover Core in
    depth, but WPF cannot run on a build agent without a desktop session, so no test opens
    a window. `build/validate-xaml-bindings.py` catches the binding errors that stop the
    application starting, and is not a substitute for running it. **Launch the application

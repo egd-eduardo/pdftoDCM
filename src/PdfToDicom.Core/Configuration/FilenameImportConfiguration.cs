@@ -126,6 +126,33 @@ public sealed class FilenameImportConfiguration
     /// </remarks>
     public bool SplitRunTogetherNames { get; set; }
 
+    /// <summary>
+    /// Width to left-pad a Patient ID read from a file name to, with zeros. Zero disables it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A sending system often drops the leading zeros from a patient number, writing
+    /// <c>77</c> where the hospital's record is <c>0000000077</c>. Those are different
+    /// strings, and an archive matches patients on the string, so the document would open a
+    /// second record for the same person. Padding closes that gap.
+    /// </para>
+    /// <para>
+    /// <b>It changes the one value that decides whose record a document joins</b>, so it is
+    /// deliberately narrow. Only a value that is entirely digits is padded, because
+    /// <c>AB12</c> is not a short number and zeros in front of it would be nonsense. A value
+    /// already at or beyond the width is left exactly as it was: never truncated, since the
+    /// right hand end of an identifier is the part that distinguishes people.
+    /// </para>
+    /// <para>
+    /// Ten by default, which is the width asked for and the common one for a hospital
+    /// patient number. Set it to the width your archive stores, or to zero to pass the
+    /// identifier through untouched. Every padding is reported, so
+    /// <c>pdftodicom check-names</c>, the Settings dialog's test box and the log all show
+    /// what was changed rather than leaving it to be discovered.
+    /// </para>
+    /// </remarks>
+    public int PadPatientIdTo { get; set; } = 10;
+
     /// <summary>What happens to a source file once it has been imported.</summary>
     public ImportedFileDisposition AfterImport { get; set; } = ImportedFileDisposition.MoveToSubfolder;
 
@@ -188,6 +215,7 @@ public sealed class FilenameImportConfiguration
         UseFileDateAsStudyDate = UseFileDateAsStudyDate,
         DefaultSex = DefaultSex,
         SplitRunTogetherNames = SplitRunTogetherNames,
+        PadPatientIdTo = PadPatientIdTo,
         AfterImport = AfterImport,
         ImportedSubfolder = ImportedSubfolder,
         FailedSubfolder = FailedSubfolder,

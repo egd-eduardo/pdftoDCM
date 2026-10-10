@@ -1,5 +1,74 @@
 # Changelog
 
+## 3.2.0
+
+**The file name settings now have a page of their own in the dialog, and a short patient
+number gets its leading zeros back.**
+
+### A File names page in Settings
+
+Everything that was configuration-file-only in 3.1.0 is now in **Settings**, on a **File
+names** page placed after Folders, since it acts on what the monitored folder produces.
+Naming layouts and date formats are edited one per line.
+
+The page also has a **test box**. Type a real file name, press the button, and it shows
+what would be read from it: which layout matched, every field, and every note the reader
+produced. It uses the settings **as they are being edited**, so a layout can be got right
+without saving, closing and reopening. Nothing is converted, nothing is sent, and the file
+need not exist. It is `pdftodicom check-names` without the command line, and it is where a
+layout agreed with another vendor should be checked against what that vendor actually
+writes.
+
+### Leading zeros on the patient number
+
+A sending system routinely writes `77` where the hospital's record is `0000000077`. An
+archive matches patients on the string, so without this the document opens a **second
+record for the same person**. The patient number read from a file name is now padded with
+leading zeros, **to ten digits by default**, configurable on the new page or with
+`--pad-patient-id` on the command line.
+
+Because this changes the one value that decides whose record a document joins, it is
+deliberately narrow:
+
+- **Only a value that is entirely digits is padded.** Zeros in front of `AB12` would be
+  invention rather than restoration, so an identifier containing letters is left exactly as
+  it was, and the reason is reported.
+- **A longer value is never shortened.** The right hand end of an identifier is the part
+  that tells two people apart.
+- **Every padding is reported**, in the test box, in `pdftodicom check-names` and in the
+  log, so the identifier written to the object is never quietly different from the one in
+  the file name.
+
+Set the width to `0` to use the number exactly as the file name has it.
+
+### Fixed: Settings used to discard three settings on Save
+
+The dialog edits a copy of the configuration so Cancel can discard changes. That copy was
+a hand written method that assigned each property by name, and it had **silently stopped
+copying three settings** as they were added: page rendering and its resolution from 2.1.0,
+then the whole file name import section from 3.1.0. Opening Settings and pressing **Save**,
+having changed nothing at all, reset those settings to their defaults. There was no error
+and nothing in the log.
+
+The copy is now a serialize and deserialize round trip, which cannot drift because it
+enumerates the properties instead of repeating them. A test walks every setting by
+reflection and compares by value, so a setting added in the future is covered the moment it
+exists; it was confirmed to fail, naming the property, when the copy was deliberately
+broken.
+
+**If you configured page rendering or its resolution and later opened Settings, check those
+values.** They may have been reset without your noticing.
+
+### Notes
+
+- Upgrading from 3.1.0 with file name import already enabled: the patient number will now
+  be padded to ten digits, because that is the new default and the setting was not in your
+  configuration file. Set it to `0` on the File names page if your archive stores patient
+  numbers unpadded.
+- 246 tests pass, up from 235. The interoperability script runs 84 checks against DCMTK, up
+  from 82, and now confirms that a document named `77_JaneRoe_TEST777777.pdf` arrives at the
+  archive as Patient ID `0000000077`.
+
 ## 3.1.0
 
 **Where documents arrive from another system with the patient identifiers already in the

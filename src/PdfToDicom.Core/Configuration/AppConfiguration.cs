@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace PdfToDicom.Core.Configuration;
@@ -322,4 +323,53 @@ public sealed class AppConfiguration
     /// <summary>True when the configured character set can represent any Unicode text.</summary>
     [JsonIgnore]
     public bool CharacterSetSupportsUnicode => CharacterSet == DicomCharacterSet.Utf8;
+
+    // ---------------------------------------------------------------- Copying
+
+    /// <summary>
+    /// An independent deep copy, so a dialog can edit a copy and discard it on cancel.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Done by serializing and deserializing rather than by assigning each property, and
+    /// that is the whole point. The settings dialog used to carry its own hand written copy,
+    /// and it silently stopped copying three settings as they were added: page rendering and
+    /// its resolution from one release, the file name import from the next. The symptom was
+    /// as bad as it sounds. Opening Settings and pressing Save, changing nothing, reset
+    /// those settings to their defaults, with no error and nothing in the log.
+    /// </para>
+    /// <para>
+    /// A round trip cannot drift, because it enumerates the properties rather than repeating
+    /// them. The cost is a few microseconds once per dialog, which is nothing, and a test
+    /// walks every property by reflection to prove the copy is faithful.
+    /// </para>
+    /// <para>
+    /// The derived properties above are <c>[JsonIgnore]</c>d and read only, so they are
+    /// recomputed from the copied state rather than lost.
+    /// </para>
+    /// </remarks>
+    public AppConfiguration Clone()
+    {
+        string json = JsonSerializer.Serialize(this, CloneOptions);
+
+        // The deserializer cannot return null for a non nullable object type given valid
+        // JSON of our own making; the fallback exists so a defect cannot produce a null
+        // configuration that fails somewhere far away from here.
+        return JsonSerializer.Deserialize<AppConfiguration>(json, CloneOptions) ?? new AppConfiguration();
+    }
+
+    /// <summary>
+    /// Options for <see cref="Clone"/>, matching how the configuration is stored.
+    /// </summary>
+    /// <remarks>
+    /// Enumerations go through as names rather than numbers, as they do on disk. It makes no
+    /// difference to a round trip, and it means a clone is readable if one is ever dumped
+    /// while diagnosing something.
+    /// </remarks>
+    private static readonly JsonSerializerOptions CloneOptions = new()
+    {
+        PropertyNamingPolicy = null,
+        DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+        Converters = { new JsonStringEnumConverter() }
+    };
 }

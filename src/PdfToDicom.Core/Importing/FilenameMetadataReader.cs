@@ -186,8 +186,56 @@ public sealed class FilenameMetadataReader
 
         ApplyName(fields, demographics, notes);
         ApplyDateOfBirth(fields, demographics, notes);
+        ApplyPatientIdPadding(demographics, notes);
 
         return demographics;
+    }
+
+    /// <summary>
+    /// Restores the leading zeros a sending system dropped from a patient number.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This changes the one value that decides whose record a document joins, so it does as
+    /// little as it possibly can. A value that is not entirely digits is left alone, because
+    /// zeros in front of <c>AB12</c> are nonsense rather than a restored identifier. A value
+    /// already at or beyond the configured width is left alone too, and in particular is
+    /// never truncated: the right hand end of an identifier is the part that tells two
+    /// people apart.
+    /// </para>
+    /// <para>
+    /// Every change is reported, so the operator and the log both see that the identifier
+    /// written to the object is not the one the file name carried.
+    /// </para>
+    /// </remarks>
+    private void ApplyPatientIdPadding(PatientDemographics demographics, List<string> notes)
+    {
+        int width = _configuration.PadPatientIdTo;
+
+        if (width <= 0)
+        {
+            return;
+        }
+
+        string id = demographics.PatientId;
+
+        if (id.Length == 0 || id.Length >= width)
+        {
+            return;
+        }
+
+        if (!id.All(char.IsAsciiDigit))
+        {
+            notes.Add(
+                $"'{id}' was left as it is: it is not a plain number, so padding it to " +
+                $"{width} digits would change the identifier rather than restore it.");
+            return;
+        }
+
+        string padded = id.PadLeft(width, '0');
+        demographics.PatientId = padded;
+
+        notes.Add($"the patient number '{id}' was padded to {width} digits as '{padded}'.");
     }
 
     /// <summary>

@@ -577,7 +577,7 @@ static int RunCheckNames(ApplicationServices services, CommandLineOptions option
 
     // An explicit pattern on the command line overrides the configured ones, so a format
     // can be tried before anybody commits it to a configuration file.
-    if (options.Patterns.Count > 0 || options.SplitNames)
+    if (options.Patterns.Count > 0 || options.SplitNames || options.PadPatientIdTo is not null)
     {
         configuration = configuration.Clone();
 
@@ -589,6 +589,11 @@ static int RunCheckNames(ApplicationServices services, CommandLineOptions option
         if (options.SplitNames)
         {
             configuration.SplitRunTogetherNames = true;
+        }
+
+        if (options.PadPatientIdTo is int width)
+        {
+            configuration.PadPatientIdTo = width;
         }
     }
 
@@ -616,6 +621,9 @@ static int RunCheckNames(ApplicationServices services, CommandLineOptions option
     }
 
     Console.WriteLine($"  Date formats: {string.Join(", ", configuration.EffectiveDateFormats)}");
+    Console.WriteLine(configuration.PadPatientIdTo > 0
+        ? $"  Patient numbers are padded with zeros to {configuration.PadPatientIdTo} digits."
+        : "  Patient numbers are used exactly as the file name has them.");
     Console.WriteLine();
 
     IReadOnlyList<string> names = CollectNamesToCheck(options);
@@ -902,6 +910,9 @@ static int RunShowConfiguration(ApplicationServices services)
         }
 
         Console.WriteLine($"  study date from the file: {import.UseFileDateAsStudyDate}");
+        Console.WriteLine(import.PadPatientIdTo > 0
+            ? $"  patient number padded to: {import.PadPatientIdTo} digits"
+            : "  patient number padded to: not padded");
         Console.WriteLine($"  after import            : {import.AfterImport}");
     }
 
