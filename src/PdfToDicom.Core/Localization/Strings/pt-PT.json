@@ -16,6 +16,9 @@
   "Step1.ImageMultiPage": "Serão criadas {0} imagens DICOM, uma por página, todas na mesma série.",
   "Step1.NoFileSelected": "Nenhum documento selecionado",
   "Step1.MonitoredFolderPickup": "Recolhido da pasta monitorizada",
+  "Step1.ReadFromFilename": "Os dados do doente foram preenchidos a partir do nome do ficheiro. Confirme-os antes de enviar.",
+  "Step1.SourceFiled": "O ficheiro original foi movido para {0}, pelo que não será recolhido outra vez.",
+  "Step1.SourceNotFiled": "Não foi possível mover o ficheiro original para fora da pasta monitorizada, pelo que pode ser recolhido outra vez. Mova-o manualmente ou peça ao departamento de informática para verificar as permissões da pasta.",
 
   "Step2.Header": "2. Informação do doente",
   "Step2.PatientId": "Nº de processo do doente",

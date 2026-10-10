@@ -141,6 +141,37 @@
   "MonitoredFolder": "",
   "MonitorSettleDelayMilliseconds": 1500,
 
+  "//FilenameImport": "Reads the patient details out of the file name of a document picked up from the monitored folder, so that nothing has to be retyped. It fills the form only; the confirmation before sending is untouched, because a file name is not a trustworthy source of identity. Disabled by default.",
+  "FilenameImport": {
+    "//IsEnabled": "False means file names are never interpreted, which is how every version before 3.1 behaved.",
+    "IsEnabled": false,
+
+    "//Patterns": "Tried in order, but the pattern that reads the MOST fields wins, so a short pattern listed first does not shadow a longer one that also matches. Tokens: {PatientId} {Name} {FamilyName} {GivenName} {AccessionNumber} {DateOfBirth} {StudyDescription} and {*} for a part to ignore. Everything outside the braces is matched literally. A pattern may instead be a regular expression with named groups, written as \"regex:...\". The extension is not part of the match. A name that matches no pattern simply leaves the form empty.",
+    "Patterns": [
+      "{PatientId}_{Name}_{AccessionNumber}_{DateOfBirth}",
+      "{PatientId}_{Name}_{AccessionNumber}",
+      "{PatientId}_{Name}"
+    ],
+
+    "//DateFormats": "Tried in order against whatever {DateOfBirth} captured. Leave the list empty to use the built in formats: yyyyMMdd, yyyy-MM-dd, ddMMyyyy, dd-MM-yyyy and dd.MM.yyyy. A format containing a forward slash can never match, because a file name cannot contain one. A date that matches nothing is left blank and noted in the log rather than guessed at.",
+    "DateFormats": [],
+
+    "//UseFileDateAsStudyDate": "True writes the file's creation time to Study Date and Study Time, which is normally the moment the producing system issued the document. False uses the moment of conversion, as before.",
+    "UseFileDateAsStudyDate": true,
+
+    "//DefaultSex": "Written to Patient Sex when the file name carries no sex, which it usually does not. \"O\" is Other, \"M\" and \"F\" are the obvious ones, and an empty string leaves the attribute present but empty, which is conformant.",
+    "DefaultSex": "O",
+
+    "//SplitRunTogetherNames": "True reads \"JohnDoe\" as \"John Doe\" by splitting at an internal capital letter. Off by default because it is a guess, and it is wrong for a surname such as McDonald or DaSilva. With it off, \"JohnDoe\" becomes the surname on its own.",
+    "SplitRunTogetherNames": false,
+
+    "//AfterImport": "What becomes of the source file once it has been dealt with, so that it is not picked up a second time. MoveToSubfolder moves it into ImportedSubfolder, Rename appends RenameSuffix after the extension so that it no longer looks like a PDF, and Leave does nothing at all, which will cause the same file to be offered again. A file that FAILED is always moved to FailedSubfolder, whichever of these is set. Nothing is ever deleted and nothing is ever overwritten.",
+    "AfterImport": "MoveToSubfolder",
+    "ImportedSubfolder": "Imported",
+    "FailedSubfolder": "Failed",
+    "RenameSuffix": ".imported"
+  },
+
   "//Presentation": "Language accepts en-US and pt-PT. ConfirmBeforeSending shows a summary of the patient details before anything is transmitted and should be left enabled in clinical use.",
   "DarkMode": false,
   "Language": "pt-PT",

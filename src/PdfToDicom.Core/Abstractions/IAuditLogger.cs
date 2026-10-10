@@ -24,6 +24,18 @@ public interface IAuditLogger
     /// <summary>Records the patient information submitted for conversion.</summary>
     void PatientInformationEntered(PatientDemographics demographics);
 
+    /// <summary>
+    /// Records that the patient identifiers were read from the name of the source file
+    /// rather than typed by an operator.
+    /// </summary>
+    /// <remarks>
+    /// Where a document's identifiers came from is an audit question in its own right. If a
+    /// report is later found against the wrong patient, the first thing an information
+    /// governance team needs to know is whether a person read the identifiers off a wristband
+    /// or whether a file name supplied them, and which pattern interpreted that name.
+    /// </remarks>
+    void PatientInformationReadFromFilename(string fileName, string pattern);
+
     /// <summary>Records the identifiers of a generated object and where it was written.</summary>
     void DicomGenerated(string studyUid, string seriesUid, string sopUid, string? filePath);
 

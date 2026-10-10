@@ -45,6 +45,28 @@ public sealed class CommandLineOptions
     /// <summary>Names of the destinations to use. Empty means every enabled destination.</summary>
     public List<string> DestinationNames { get; } = new();
 
+    /// <summary>
+    /// File name patterns supplied on the command line, which replace the configured ones.
+    /// </summary>
+    /// <remarks>
+    /// So a format can be tried before anybody writes it into a configuration file, which
+    /// is the whole point of check-names.
+    /// </remarks>
+    public List<string> Patterns { get; } = new();
+
+    /// <summary>File names to try against the patterns.</summary>
+    public List<string> NamesToCheck { get; } = new();
+
+    /// <summary>
+    /// Read the patient information from the file's own name rather than from options.
+    /// </summary>
+    public bool FromFilename { get; private set; }
+
+    /// <summary>
+    /// Try splitting a run-together name such as JohnDoe, overriding the configuration.
+    /// </summary>
+    public bool SplitNames { get; private set; }
+
     /// <summary>Generate and save the object without transmitting it.</summary>
     public bool NoSend { get; private set; }
 
@@ -103,6 +125,12 @@ public sealed class CommandLineOptions
                     continue;
                 case "show-tags":
                     options.ShowTags = true;
+                    continue;
+                case "from-filename":
+                    options.FromFilename = true;
+                    continue;
+                case "split-names":
+                    options.SplitNames = true;
                     continue;
             }
 
@@ -187,6 +215,12 @@ public sealed class CommandLineOptions
             case "destination":
                 DestinationNames.Add(value);
                 break;
+            case "pattern":
+                Patterns.Add(value);
+                break;
+            case "name":
+                NamesToCheck.Add(value);
+                break;
             case "config":
                 ConfigurationPath = value;
                 break;
@@ -221,10 +255,28 @@ public sealed class CommandLineOptions
           generate    Convert a file and save it locally, without transmitting.
           echo        Send a C-ECHO verification to the configured destination(s).
           worklist    Query the configured Modality Worklist and print the result.
+          check-names Try the file name patterns against names, converting nothing.
           inspect     Print the DICOM tags of an existing .dcm file.
           extract     Recover the original PDF from a .dcm file, byte for byte.
           config      Show the effective configuration and where it is stored.
           help        Show this text.
+
+        FILE NAME IMPORT OPTIONS
+          --from-filename              On send and generate, read the patient information
+                                       from the file's own name using the configured
+                                       patterns, instead of from the options below.
+          --pattern <template>         For check-names, a pattern to try instead of the
+                                       configured ones. May be repeated. Fields are
+                                       {PatientId} {Name} {FamilyName} {GivenName}
+                                       {AccessionNumber} {DateOfBirth} {StudyDescription}
+                                       and {*} for a part to skip. A pattern starting
+                                       "regex:" is a regular expression with named groups.
+          --name <text>                For check-names, a name to try. May be repeated.
+                                       Names are also read from standard input, one per
+                                       line, so a folder listing can be piped in.
+          --split-names                Try splitting a run-together name such as JohnDoe
+                                       at its capitals. A guess, so it is off unless asked
+                                       for and what it did is always reported.
 
         WORKLIST OPTIONS
           --patient-id <value>         Narrow the query to this Patient ID. Wildcards are
@@ -269,6 +321,10 @@ public sealed class CommandLineOptions
         EXAMPLES
           pdftodicom echo
           pdftodicom worklist
+          pdftodicom check-names --pattern "{PatientId}_{Name}_{AccessionNumber}_{DateOfBirth}" \\
+                                 --name "012345_Ana Silva_ACC001_19700521.pdf"
+          ls *.pdf | pdftodicom check-names
+          pdftodicom send --pdf "012345_Ana Silva_ACC001_19700521.pdf" --from-filename
           pdftodicom worklist --patient-id P0000004
           pdftodicom worklist --surname 'SILVA*'
           pdftodicom generate --pdf report.pdf --patient-id 12345 --surname Silva \

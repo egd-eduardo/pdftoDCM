@@ -1,5 +1,64 @@
 # Changelog
 
+## 3.1.0
+
+**Where documents arrive from another system with the patient identifiers already in the
+file name, those identifiers are now read instead of retyped.**
+
+This is the same problem the worklist solved, approached from the other end. A worklist
+needs a worklist server; a great many systems simply write a file called
+`9999999999_JohnDoe_TEST123451.pdf` into a folder. Retyping what is already in that name
+is pointless and it is where a report ends up in the wrong record.
+
+**It is off by default**, and it fills the form rather than sending anything. The
+confirmation before transmission is untouched, because anybody can rename a file and the
+one step this application must not short circuit is the one that decides whose record a
+document joins.
+
+### What it does
+
+- **A configurable naming layout**, written the way the names look:
+  `{PatientId}_{Name}_{AccessionNumber}_{DateOfBirth}`. Tokens for Patient ID, name,
+  surname, given name, accession number, date of birth and study description, plus `{*}`
+  for a part to skip, and a `regex:` form for anything the tokens cannot express. Several
+  layouts can be configured at once, because different sending systems name files
+  differently, and the layout that reads the most fields wins rather than the first one
+  listed.
+- **Date of birth and accession number are optional**, since most naming schemes carry
+  neither. An absent date of birth is left empty and the sex is recorded as `O`, rather
+  than invented. Both attributes are Type 2, so an empty value is conformant; a guessed
+  one would not be.
+- **The study date is the file's creation time**, which is normally when the sending system
+  issued the document. Content Date and Content Time remain the moment of conversion, so
+  both facts survive.
+- **The source file is put away afterwards** so it is not processed twice: moved into
+  `Imported/` by default, or renamed to `report.pdf.imported` so it no longer matches
+  `*.pdf`. This applies to any document the monitored folder produced, including one whose
+  name said nothing and whose details were typed in by hand; what matters is that it has
+  been dealt with. A file that failed always goes to `Failed/` instead, whatever the
+  setting says, and so does one whose name matched no layout at all, because that one would
+  otherwise be retried for ever and never looked at. Nothing is ever deleted and nothing is
+  ever overwritten; a collision adds a number, then a timestamp.
+- **`pdftodicom check-names`** compiles the layouts, says which are usable and why the
+  others are not, and shows exactly what each file name would produce, without converting
+  anything or touching a PACS. A naming layout is agreed with another vendor and then found
+  to differ in practice; this is where that should be discovered.
+- **`pdftodicom send --from-filename`** for unattended conversion. It **refuses** a name it
+  cannot read rather than falling back to values given on the command line.
+- **A new audit event**, `PATIENT_INFO_FROM_FILENAME`, recording the file name and the
+  layout that interpreted it. Where a document's identifiers came from is an audit question
+  in its own right.
+
+### Notes
+
+- A file name that matches no layout leaves the form exactly as every previous version left
+  it. Nothing about the existing behaviour changed.
+- A malformed layout never stops the application. It is reported, skipped, and
+  `pdftodicom config` prints the reason, so a rejected layout cannot fail silently.
+- The settings live in the `FilenameImport` section of the configuration file; see
+  `samples/config.sample.json`, which is annotated. There is no Settings dialog page for
+  them yet.
+
 ## 3.0.0
 
 **Patient details can now be taken from a Modality Worklist, so the step where a document

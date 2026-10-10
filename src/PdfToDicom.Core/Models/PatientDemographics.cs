@@ -64,6 +64,25 @@ public sealed class PatientDemographics
     public string StudyId { get; set; } = string.Empty;
 
     /// <summary>
+    /// Optional Study Date and Time. When supplied, it is written to Study Date (0008,0020)
+    /// and Study Time (0008,0030) in place of the moment of conversion.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Set when a document is imported from a file whose creation time is known. The study
+    /// happened when the document was produced, not when this application got round to
+    /// converting it, and a folder worked through in a batch would otherwise stamp every
+    /// study with the same afternoon and sort uselessly in the archive.
+    /// </para>
+    /// <para>
+    /// It moves the study timestamp only. Content Date and Time still record when this
+    /// object was built, which is the truthful answer for them and is what an auditor
+    /// reconciling the two would expect.
+    /// </para>
+    /// </remarks>
+    public DateTime? StudyDateTime { get; set; }
+
+    /// <summary>
     /// Creates an independent copy. Used when storing and restoring operator templates
     /// so that later edits to the form do not mutate the stored template.
     /// </summary>
@@ -83,6 +102,7 @@ public sealed class PatientDemographics
         SeriesDescription = SeriesDescription,
         DocumentTitle = DocumentTitle,
         ExistingStudyInstanceUid = ExistingStudyInstanceUid,
-        StudyId = StudyId
+        StudyId = StudyId,
+        StudyDateTime = StudyDateTime
     };
 }

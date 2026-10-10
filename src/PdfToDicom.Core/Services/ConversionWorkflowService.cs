@@ -18,9 +18,31 @@ namespace PdfToDicom.Core.Services;
 /// <param name="Destinations">
 /// Destinations to send to. When null, every enabled destination in the configuration is used.
 /// </param>
+/// <param name="Transmit">Whether the generated object is sent as well as built.</param>
+/// <param name="Destinations">Where to send it, or null for every enabled destination.</param>
+/// <param name="UnattendedImport">
+/// True when the patient information came from a file name rather than from somebody
+/// typing it.
+/// </param>
+/// <remarks>
+/// <para>
+/// <c>UnattendedImport</c> relaxes two rules, and only two: a date of birth and an
+/// accession number may be absent. Both are Type 2 attributes, so an empty value is
+/// conformant, and for an unattended import a document that cannot be filed at all is
+/// worse than one filed without a date of birth. Everything else is validated exactly as
+/// it is for a document somebody typed the details for, and a value that IS present is
+/// checked just as strictly.
+/// </para>
+/// <para>
+/// It does not relax the Patient ID or the name. Those are what identify the patient, and
+/// a document filed against nobody in particular is the failure this application exists to
+/// prevent.
+/// </para>
+/// </remarks>
 public sealed record ConversionOptions(
     bool Transmit = true,
-    IReadOnlyList<PacsDestination>? Destinations = null);
+    IReadOnlyList<PacsDestination>? Destinations = null,
+    bool UnattendedImport = false);
 
 /// <summary>
 /// Coordinates the complete convert and send workflow.
@@ -99,10 +121,16 @@ public sealed class ConversionWorkflowService
     /// Exposed separately so that the user interface can enable or disable the action
     /// button as the operator types, using exactly the rules the workflow will apply.
     /// </remarks>
+    /// <param name="unattendedImport">
+    /// True when the values came from a file name rather than from somebody typing them,
+    /// which allows an absent date of birth and accession number. See
+    /// <see cref="ConversionOptions"/>.
+    /// </param>
     public ValidationResult ValidateInputs(
         string? pdfPath,
         PatientDemographics demographics,
-        bool requireDestination)
+        bool requireDestination,
+        bool unattendedImport = false)
     {
         ArgumentNullException.ThrowIfNull(demographics);
 
@@ -138,7 +166,11 @@ public sealed class ConversionWorkflowService
                 break;
         }
 
-        result.Merge(_demographicsValidator.Validate(demographics, configuration.CharacterSetSupportsUnicode));
+        result.Merge(_demographicsValidator.Validate(
+            demographics,
+            configuration.CharacterSetSupportsUnicode,
+            requireDateOfBirth: !unattendedImport,
+            requireAccessionNumber: !unattendedImport));
 
         if (requireDestination)
         {
@@ -173,7 +205,8 @@ public sealed class ConversionWorkflowService
             : Array.Empty<PacsDestination>();
 
         // ---------------------------------------------------------- 1. Validate inputs
-        ValidationResult inputValidation = ValidateInputs(pdfPath, demographics, options.Transmit);
+        ValidationResult inputValidation = ValidateInputs(
+            pdfPath, demographics, options.Transmit, options.UnattendedImport);
 
         if (!inputValidation.IsValid)
         {

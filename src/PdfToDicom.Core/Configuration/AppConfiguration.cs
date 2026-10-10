@@ -201,6 +201,16 @@ public sealed class AppConfiguration
     public bool RenderPdfPagesAsImages { get; set; } = true;
 
     /// <summary>
+    /// How patient information is read out of the names of files arriving in the monitored
+    /// folder.
+    /// </summary>
+    /// <remarks>
+    /// Sits beside the folder monitoring settings because it is what makes them useful: a
+    /// document whose name already carries the identifiers needs nothing retyped.
+    /// </remarks>
+    public FilenameImportConfiguration FilenameImport { get; set; } = new();
+
+    /// <summary>
     /// Connection and query settings for the Modality Worklist.
     /// </summary>
     /// <remarks>

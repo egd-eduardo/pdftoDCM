@@ -15,7 +15,8 @@ this application.
 
 1. [Before you start](#1-before-you-start)
 2. [The main window at a glance](#2-the-main-window-at-a-glance)
-3. [Step 1 — Choose the PDF](#3-step-1--choose-the-pdf)
+3. [Step 1 — Choose the document or image](#3-step-1--choose-the-document-or-image)
+   - [Patient details read from the file name](#patient-details-read-from-the-file-name)
 4. [Step 2 — Enter the patient information](#4-step-2--enter-the-patient-information)
    - [Taking the patient from the worklist](#taking-the-patient-from-the-worklist)
 5. [Step 3 — Check the destination](#5-step-3--check-the-destination)
@@ -111,6 +112,49 @@ monitored folder*.
 Once a file is selected you will see its name, size, date and page count, and a line
 describing what it was recognised as. **Check these before continuing.** The page count in
 particular is a quick way to confirm you have the whole report and not a single page.
+
+### Patient details read from the file name
+
+If your IT department has switched this on as well, the patient fields fill in by
+themselves from the name of the file that was picked up. A document produced by another
+system usually carries the identifiers in its name already, so there is nothing to retype.
+
+A file called
+
+```
+9999999999_JohnDoe_TEST123451.pdf
+```
+
+fills in Patient ID *9999999999*, name *JohnDoe* and Accession Number *TEST123451*. The
+status bar says *The patient fields were filled from the file name. Check them before
+sending.*
+
+Three things are worth knowing.
+
+- **Check what was filled in.** Anybody can rename a file, so a file name is not proof of
+  identity. Nothing is sent until you press **Convert and Send** and confirm, exactly as
+  before. The whole point of the confirmation is this moment.
+- **Empty fields are normal.** Most naming schemes carry no date of birth, so the date of
+  birth is left empty and the sex is recorded as *Other* rather than guessed at. Where the
+  date of birth is genuinely unknown, an empty one is correct; an invented one is not.
+- **A name that is not recognised changes nothing.** If the file name does not follow the
+  agreed layout, the form is simply left for you to fill in by hand, which is how the
+  application behaved before this feature existed.
+
+**The study date comes from the file.** The date and time the file was created are recorded
+as the study date and time, because that is normally when the other system issued the
+document. The date the DICOM object itself was created is recorded separately, so both are
+preserved.
+
+**The file is put away afterwards.** Once a document has been dealt with, the original is
+moved into an **Imported** folder beside the watched folder so that it is not picked up
+again. If something went wrong, it goes into a **Failed** folder instead, where it can be
+looked at. Nothing is ever deleted and nothing is ever overwritten; if a file of the same
+name is already there, a number is added to the new one.
+
+If the fields fill in wrongly, or do not fill in at all, your IT department can change the
+naming layout, which is a setting and can be matched to whatever the other system produces.
+Section 11 says what to tell them.
 
 ### What happens to an image
 
