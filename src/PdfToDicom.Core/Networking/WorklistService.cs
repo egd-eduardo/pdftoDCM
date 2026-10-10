@@ -248,7 +248,7 @@ public sealed class WorklistService : IWorklistService
                 DateOfBirth = Date(dataset, DicomTag.PatientBirthDate),
                 Sex = PatientSexExtensions.FromDicomValue(Text(dataset, DicomTag.PatientSex)),
                 StudyInstanceUid = Text(dataset, DicomTag.StudyInstanceUID),
-                ReferringPhysicianName = Text(dataset, DicomTag.ReferringPhysicianName).Replace('^', ' ').Trim(),
+                ReferringPhysicianName = ReadPhysicianName(dataset),
                 RequestedProcedureDescription = Text(dataset, DicomTag.RequestedProcedureDescription),
                 Modality = Text(step, DicomTag.Modality),
                 ScheduledStart = DateAndTime(step),
@@ -297,6 +297,57 @@ public sealed class WorklistService : IWorklistService
         string given = components.Length > 1 ? components[1].Trim() : string.Empty;
 
         return (family, given);
+    }
+
+    /// <summary>
+    /// Reads Referring Physician's Name into the order a person writes it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A Person Name arrives as <c>Family^Given^Middle</c>. Replacing the carets with
+    /// spaces, which is what this did at first, produces "COSTA MANUEL" and reads
+    /// plausibly, and it is wrong: the form hands that text back to
+    /// <c>PersonNameFormatter.FromFreeText</c>, which treats the last word as the family
+    /// name. "COSTA MANUEL" therefore became <c>MANUEL^COSTA</c> and the physician's
+    /// surname and given name were silently swapped on the way into the object. Spotted by
+    /// dumping a generated object rather than by reading the code.
+    /// </para>
+    /// <para>
+    /// Emitting "Given Middle Family" instead both reads naturally in the form and is
+    /// reconstructed by that same formatter with the family name in the family position,
+    /// which is what an archive indexes and what was being corrupted.
+    /// </para>
+    /// <para>
+    /// It is not lossless, and the tests say so: one text field holds no record of where
+    /// the given name ended, so a given component of several words comes back split across
+    /// the given and middle ones. That is a redistribution within the forenames rather
+    /// than a wrong name, and carrying it faithfully would mean giving the form a
+    /// structured physician field, which is a great deal of interface for a Type 2
+    /// attribute nobody searches on.
+    /// </para>
+    /// </remarks>
+    private static string ReadPhysicianName(DicomDataset dataset)
+    {
+        string raw = Text(dataset, DicomTag.ReferringPhysicianName);
+
+        if (raw.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        // The alphabetic group only, as for the patient's name: a group after "=" is the
+        // same name in another script.
+        string[] components = raw.Split('=')[0].Split('^');
+
+        string family = components.Length > 0 ? components[0].Trim() : string.Empty;
+        string given = components.Length > 1 ? components[1].Trim() : string.Empty;
+        string middle = components.Length > 2 ? components[2].Trim() : string.Empty;
+
+        // Prefix and suffix are dropped: the single text field they would be folded into
+        // cannot represent them, and inventing a position for them would be guesswork.
+        return string.Join(
+            ' ',
+            new[] { given, middle, family }.Where(part => part.Length > 0));
     }
 
     private static string Text(DicomDataset dataset, DicomTag tag) =>

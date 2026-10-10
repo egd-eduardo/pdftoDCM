@@ -256,15 +256,51 @@ repository carries one.
 dotnet run --project tools\PdfToDicom.TestWorklistServer -- --port 1070 --aet TESTWL
 ```
 
-It serves seven invented scheduled procedure steps and nothing else. Point the
-application at `TESTWL@127.0.0.1:1070` with the date range set to **Any date**, since the
-fixtures are scheduled for today but a range of today is the stricter test to make
-second.
+It serves **seventeen** scheduled procedure steps by default, all for today: seven fixed
+ones and ten drawn at random from a pool of five hundred Portuguese names. Point the
+application at `TESTWL@127.0.0.1:1070` and press Search.
 
-The fixtures are deliberately awkward: accented names, one patient with no given name, a
-73 character name whose surname fits, and a 75 character name whose surname alone is over
-the 64 characters DICOM allows. They exist to exercise the shortening rule, not to look
-tidy.
+```powershell
+dotnet run --project tools\PdfToDicom.TestWorklistServer -- --random 0     # the fixed seven only
+dotnet run --project tools\PdfToDicom.TestWorklistServer -- --random 40    # a longer list
+dotnet run --project tools\PdfToDicom.TestWorklistServer -- --seed 7       # repeat a draw exactly
+```
+
+**The seven fixed ones are always there, and are deliberately awkward:** accented names,
+one patient with no given name, a different modality, a 73 character name whose surname
+fits, and a 75 character name whose surname alone is over the 64 characters DICOM allows.
+They exist to exercise the shortening rule, not to look tidy, and they are kept out of the
+random pool on purpose. The pool is realistic but uniformly well behaved, with the longest
+name composing to 31 characters, so a draw from it would exercise the shortening rule
+roughly never.
+
+**Everything about a pool entry is derived from its position**, so a given name always
+carries the same Patient ID, accession number, birth date and scheduled time. Only which
+ten are drawn changes. That is why `--seed` can reproduce a run exactly, and why
+converting twice for the same patient files into the same study.
+
+### Nothing it serves can be mistaken for a real patient
+
+Every identifier and description carries **`TESTE`**, so a study generated from this list
+is recognisable wherever it ends up:
+
+| Attribute | Value |
+|---|---|
+| Patient ID | `TESTE0000001`, `TESTE1000259` … |
+| Accession Number | `TESTEACC000001`, `TESTEACC1000259` … |
+| Study and Procedure Description | `[TESTE] Relatório de Cardiologia` |
+| Referring and Performing Physician | `TESTE^FICTÍCIO` |
+| Study Instance UID | under `…9.6008.99.`, a branch used for nothing else |
+
+The mark leads rather than trails, because a study description is routinely shown
+truncated and a marker at the end is the part that gets cut off.
+
+**The patient names are deliberately left realistic.** They are the one field whose
+realism is the thing under test: the shortening rule turns on their exact length, and
+prefixing them would both break that and make the accented characters harder to read.
+
+None of which is a reason to be casual: **point the application at a test archive.** The
+marking means a mistake is recoverable and obvious, not that it is harmless.
 
 To check the whole path from the command line instead:
 

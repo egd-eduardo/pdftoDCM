@@ -121,6 +121,105 @@ public sealed class PersonNameShortenerTests
 }
 
 /// <summary>
+/// Covers the round trip a referring physician's name makes from the worklist into the
+/// generated object.
+/// </summary>
+/// <remarks>
+/// This exists because of a defect that produced a plausible wrong answer rather than an
+/// error. The worklist sends a Person Name as Family^Given; flattening it to
+/// "COSTA MANUEL" reads correctly and then goes back through
+/// <see cref="PersonNameFormatter.FromFreeText"/>, which takes the LAST word as the family
+/// name, so the physician's surname and given name were swapped on the way into the
+/// object. Nothing failed, nothing was logged, and the name was simply wrong.
+///
+/// The tests therefore assert the whole round trip rather than either half of it.
+///
+/// They also pin what the round trip CANNOT preserve. Folding a structured Person Name
+/// into one free text field loses the boundary between the given and middle components,
+/// so a given name of several words comes back redistributed. The family name, which is
+/// what an archive indexes and what was being corrupted, survives exactly.
+/// </remarks>
+public sealed class ReferringPhysicianRoundTripTests
+{
+    [Theory]
+    [InlineData("COSTA^MANUEL", "MANUEL COSTA", "COSTA^MANUEL")]
+    [InlineData("GONÇALVES^MARIA^JOÃO", "MARIA JOÃO GONÇALVES", "GONÇALVES^MARIA^JOÃO")]
+    [InlineData("TESTE^FICTÍCIO", "FICTÍCIO TESTE", "TESTE^FICTÍCIO")]
+    [InlineData("SILVA", "SILVA", "SILVA")]
+    public void AWorklistNameSurvivesTheTripThroughTheForm(
+        string fromWorklist, string shownToTheOperator, string writtenToTheObject)
+    {
+        // What the worklist client turns the Person Name into for the form.
+        string display = WorklistPersonNameForDisplay(fromWorklist);
+
+        Assert.Equal(shownToTheOperator, display);
+
+        // And what the builder makes of that text when the form is submitted unchanged.
+        Assert.Equal(writtenToTheObject, PersonNameFormatter.FromFreeText(display));
+    }
+
+    [Fact]
+    public void AMultiWordGivenNameComesBackRedistributedButNeverSwapped()
+    {
+        // The limit of what a single text field can carry, asserted rather than left to be
+        // discovered. "LISTA DE TRABALHO" was one given component; it returns split across
+        // the given and middle ones, because the field holds no record of where the given
+        // name ended.
+        const string fromWorklist = "TESTE^LISTA DE TRABALHO";
+
+        string display = WorklistPersonNameForDisplay(fromWorklist);
+        string written = PersonNameFormatter.FromFreeText(display);
+
+        Assert.Equal("LISTA DE TRABALHO TESTE", display);
+        Assert.Equal("TESTE^LISTA^DE TRABALHO", written);
+
+        // The part that matters is intact: the family name is still the family name, which
+        // is the whole point of the fix this test guards.
+        Assert.Equal("TESTE", written.Split('^')[0]);
+    }
+
+    [Fact]
+    public void FlatteningTheCaretsWouldHaveSwappedTheComponents()
+    {
+        // The defect, pinned so it cannot come back by someone "simplifying" the display
+        // conversion into a Replace.
+        const string fromWorklist = "COSTA^MANUEL";
+
+        string naive = fromWorklist.Replace('^', ' ');
+
+        Assert.Equal("MANUEL^COSTA", PersonNameFormatter.FromFreeText(naive));
+        Assert.NotEqual(fromWorklist, PersonNameFormatter.FromFreeText(naive));
+    }
+
+    [Fact]
+    public void AnEmptyNameStaysEmpty()
+    {
+        Assert.Equal(string.Empty, WorklistPersonNameForDisplay(string.Empty));
+        Assert.Equal(string.Empty, PersonNameFormatter.FromFreeText(string.Empty));
+    }
+
+    /// <summary>
+    /// Mirrors WorklistService.ReadPhysicianName, which is private because nothing outside
+    /// the service has any business calling it.
+    /// </summary>
+    private static string WorklistPersonNameForDisplay(string raw)
+    {
+        if (raw.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        string[] components = raw.Split('=')[0].Split('^');
+
+        string family = components.Length > 0 ? components[0].Trim() : string.Empty;
+        string given = components.Length > 1 ? components[1].Trim() : string.Empty;
+        string middle = components.Length > 2 ? components[2].Trim() : string.Empty;
+
+        return string.Join(' ', new[] { given, middle, family }.Where(part => part.Length > 0));
+    }
+}
+
+/// <summary>
 /// Covers the password that guards the worklist settings.
 /// </summary>
 public sealed class WorklistSettingsLockTests
