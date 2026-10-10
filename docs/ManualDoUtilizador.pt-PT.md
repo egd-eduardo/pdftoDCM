@@ -16,6 +16,7 @@ utilizar esta aplicação.
 1. [Antes de começar](#1-antes-de-começar)
 2. [A janela principal](#2-a-janela-principal)
 3. [Passo 1 — Escolher o documento ou a imagem](#3-passo-1--escolher-o-documento-ou-a-imagem)
+   - [Dados do doente lidos do nome do ficheiro](#dados-do-doente-lidos-do-nome-do-ficheiro)
 4. [Passo 2 — Introduzir os dados do doente](#4-passo-2--introduzir-os-dados-do-doente)
    - [Obter o doente a partir da lista de trabalho](#obter-o-doente-a-partir-da-lista-de-trabalho)
 5. [Passo 3 — Confirmar o destino](#5-passo-3--confirmar-o-destino)
@@ -112,6 +113,52 @@ Depois de selecionado, verá o nome, o tamanho, a data e o número de páginas, 
 descrever o que o ficheiro foi reconhecido como sendo. **Confirme estes dados antes de
 continuar.** O número de páginas é a forma mais rápida de confirmar que tem o relatório
 completo e não apenas uma página.
+
+### Dados do doente lidos do nome do ficheiro
+
+Se o departamento de informática também tiver ativado esta opção, os campos do doente são
+preenchidos sozinhos a partir do nome do ficheiro recolhido. Um documento produzido por
+outro sistema costuma já trazer os identificadores no nome, pelo que não há nada a
+reescrever.
+
+Um ficheiro chamado
+
+```
+9999999999_JohnDoe_TEST123451.pdf
+```
+
+preenche o Nº de processo do doente *9999999999*, o nome *JohnDoe* e o Número de acesso
+*TEST123451*. A
+barra de estado indica *Os dados do doente foram preenchidos a partir do nome do ficheiro.
+Confirme-os antes de enviar.*
+
+Há três pontos a ter em conta.
+
+- **Confirme o que foi preenchido.** Qualquer pessoa pode mudar o nome de um ficheiro, pelo
+  que o nome não é prova de identidade. Nada é enviado até premir **Converter e Enviar** e
+  confirmar, exatamente como antes. A confirmação existe precisamente para este momento.
+- **Campos vazios são normais.** A maioria dos esquemas de nomes não inclui a data de
+  nascimento, pelo que esta fica vazia e o sexo é registado como *Outro* em vez de ser
+  adivinhado. Quando a data de nascimento é genuinamente desconhecida, deixá-la vazia é
+  correto; inventá-la não é.
+- **Um nome não reconhecido não altera nada.** Se o nome do ficheiro não seguir o formato
+  acordado, o formulário fica simplesmente à sua espera para ser preenchido à mão, que é
+  como a aplicação se comportava antes desta funcionalidade existir.
+
+**A data do estudo vem do ficheiro.** A data e a hora de criação do ficheiro são registadas
+como data e hora do estudo, porque é normalmente nesse momento que o outro sistema emitiu o
+documento. A data em que o próprio objeto DICOM foi criado é registada em separado, pelo que
+ambas ficam preservadas.
+
+**O ficheiro é arrumado no fim.** Depois de um documento ser tratado, o original é movido
+para uma pasta **Imported**, ao lado da pasta vigiada, para que não seja recolhido outra
+vez. Se algo tiver corrido mal, vai para uma pasta **Failed**, onde pode ser examinado.
+Nunca nada é apagado nem substituído; se já existir um ficheiro com o mesmo nome, é
+acrescentado um número ao novo.
+
+Se os campos forem preenchidos de forma errada, ou não forem preenchidos, o departamento de
+informática pode alterar o formato dos nomes, que é uma definição e pode ser ajustada ao que
+o outro sistema produz. A secção 11 indica o que lhes dizer.
 
 ### O que acontece a uma imagem
 

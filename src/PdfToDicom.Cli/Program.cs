@@ -3,6 +3,7 @@ using PdfToDicom.Cli;
 using PdfToDicom.Core.Abstractions;
 using PdfToDicom.Core.Configuration;
 using PdfToDicom.Core.Dicom;
+using PdfToDicom.Core.Importing;
 using PdfToDicom.Core.Models;
 using PdfToDicom.Core.Security;
 using PdfToDicom.Core.Services;
@@ -49,6 +50,7 @@ try
         "generate" => await RunConversionAsync(services, options, transmit: false),
         "echo" => await RunEchoAsync(services, options),
         "worklist" => await RunWorklistAsync(services, options),
+        "check-names" => RunCheckNames(services, options),
         "inspect" => RunInspect(services, options),
         "extract" => RunExtract(services, options),
         "config" => RunShowConfiguration(services),
@@ -200,7 +202,9 @@ static async Task<int> RunConversionAsync(
         return ExitCodes.InvalidArguments;
     }
 
-    var conversionOptions = new ConversionOptions(transmit, destinations);
+    // --from-filename is the unattended path, so a date of birth and an accession number
+    // the file name does not carry are allowed to be absent. Nothing else is relaxed.
+    var conversionOptions = new ConversionOptions(transmit, destinations, options.FromFilename);
 
     // Progress is written as plain lines rather than an animated bar so the output
     // remains readable when it is redirected to a file by a scheduled task.
@@ -249,10 +253,102 @@ static async Task<int> ConvertOneAsync(
 
     Console.WriteLine($"Converting '{sourcePath}' ({kindDescription})...");
 
+    PatientDemographics demographics = options.Demographics;
+
+    if (options.FromFilename)
+    {
+        FilenameImportConfiguration importSettings = services.ConfigurationService.Current.FilenameImport;
+        var reader = new FilenameMetadataReader(importSettings);
+
+        FilenameReadResult read = reader.Read(sourcePath, StudyDateOf(sourcePath, importSettings));
+
+        foreach (string note in read.Notes)
+        {
+            Console.WriteLine($"  note: {note}");
+        }
+
+        if (!read.IsMatch || read.Demographics is null)
+        {
+            // Refused rather than falling back to whatever was on the command line.
+            // --from-filename says where the identity comes from, and quietly converting
+            // with something else is how a document reaches the wrong patient.
+            Console.Error.WriteLine(
+                $"error: '{Path.GetFileName(sourcePath)}' matches no configured file name pattern. " +
+                "Check it with 'pdftodicom check-names'.");
+
+            // Moved out of the way all the same. A name that matches nothing will never
+            // match on a later run either, so leaving it where it was means retrying it
+            // for ever and nobody ever looking at it. In Failed/ somebody does.
+            FiledSourceFile refused = new ImportedFileFiler(services.Logger)
+                .File(sourcePath, importSettings, succeeded: false);
+
+            if (refused.Message.Length > 0)
+            {
+                Console.Error.WriteLine($"  {refused.Message}");
+            }
+
+            return ExitCodes.InvalidArguments;
+        }
+
+        Console.WriteLine($"  read from the file name using '{read.Pattern}'");
+
+        // The same audit entry the desktop application writes. Where a document's
+        // identifiers came from matters more than usual here, because on this path nobody
+        // looked at them before the object was created.
+        services.AuditLogger.PatientInformationReadFromFilename(
+            Path.GetFileName(sourcePath), read.Pattern);
+
+        demographics = read.Demographics;
+
+        // Anything the pattern cannot carry is still accepted from the command line, so a
+        // caller can supply a referring physician or a document title alongside.
+        if (options.Demographics.ReferringPhysicianName.Length > 0)
+        {
+            demographics.ReferringPhysicianName = options.Demographics.ReferringPhysicianName;
+        }
+
+        if (options.Demographics.DocumentTitle.Length > 0)
+        {
+            demographics.DocumentTitle = options.Demographics.DocumentTitle;
+        }
+
+        if (options.Demographics.SeriesDescription.Length > 0)
+        {
+            demographics.SeriesDescription = options.Demographics.SeriesDescription;
+        }
+
+        if (options.Demographics.StudyDescription.Length > 0)
+        {
+            demographics.StudyDescription = options.Demographics.StudyDescription;
+        }
+    }
+
     ConversionResult result = await services.Workflow.RunAsync(
-        sourcePath, options.Demographics, conversionOptions, progress);
+        sourcePath, demographics, conversionOptions, progress);
 
     PrintValidationIssues(result.ValidationIssues);
+
+    // Only on the --from-filename path, because that is the unattended one. A file named
+    // explicitly by somebody at a prompt is theirs, and moving it under them would be
+    // presumptuous.
+    if (options.FromFilename)
+    {
+        FilenameImportConfiguration importSettings = services.ConfigurationService.Current.FilenameImport;
+        var filer = new ImportedFileFiler(services.Logger);
+
+        // Success here means the object reached every destination it was meant to, or was
+        // generated when nothing was being sent. Anything less leaves the file to be dealt
+        // with rather than filed as done.
+        bool imported = result.DicomGenerated
+            && (!conversionOptions.Transmit || result.IsCompleteSuccess);
+
+        FiledSourceFile filed = filer.File(sourcePath, importSettings, imported);
+
+        if (filed.Message.Length > 0)
+        {
+            Console.WriteLine($"  {filed.Message}");
+        }
+    }
 
     if (!result.DicomGenerated)
     {
@@ -459,6 +555,188 @@ static string CallingAeTitleFor(WorklistConfiguration worklist, AppConfiguration
         ? configuration.CallingAeTitle
         : worklist.CallingAeTitleOverride;
 
+/// <summary>
+/// Tries the configured file name patterns against names, without converting anything.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This is how a format gets established. Getting a pattern right is a few minutes of
+/// trial and error against real file names, and doing that through the desktop
+/// application, a monitored folder and a PACS would be a slow way to discover a missing
+/// underscore.
+/// </para>
+/// <para>
+/// It touches nothing: no conversion, no network, no files written. Names may be given as
+/// arguments, or piped in one per line, which is what makes it easy to point at a whole
+/// folder listing at once.
+/// </para>
+/// </remarks>
+static int RunCheckNames(ApplicationServices services, CommandLineOptions options)
+{
+    FilenameImportConfiguration configuration = services.ConfigurationService.Current.FilenameImport;
+
+    // An explicit pattern on the command line overrides the configured ones, so a format
+    // can be tried before anybody commits it to a configuration file.
+    if (options.Patterns.Count > 0 || options.SplitNames)
+    {
+        configuration = configuration.Clone();
+
+        if (options.Patterns.Count > 0)
+        {
+            configuration.Patterns = new List<string>(options.Patterns);
+        }
+
+        if (options.SplitNames)
+        {
+            configuration.SplitRunTogetherNames = true;
+        }
+    }
+
+    var reader = new FilenameMetadataReader(configuration);
+
+    Console.WriteLine();
+    Console.WriteLine($"  Patterns ({reader.UsablePatternCount} usable):");
+
+    foreach (string pattern in configuration.Patterns.Where(p => !string.IsNullOrWhiteSpace(p)))
+    {
+        Console.WriteLine($"    {pattern}");
+    }
+
+    foreach (string error in reader.PatternErrors)
+    {
+        Console.Error.WriteLine($"    error: {error}");
+    }
+
+    if (reader.UsablePatternCount == 0)
+    {
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("  No usable pattern, so nothing can be read. Supply one with --pattern,");
+        Console.Error.WriteLine("  or fill in the FilenameImport section of the configuration file.");
+        return ExitCodes.InvalidArguments;
+    }
+
+    Console.WriteLine($"  Date formats: {string.Join(", ", configuration.EffectiveDateFormats)}");
+    Console.WriteLine();
+
+    IReadOnlyList<string> names = CollectNamesToCheck(options);
+
+    if (names.Count == 0)
+    {
+        Console.Error.WriteLine("  No names to check. Pass them as --name, or pipe a list in, one per line.");
+        return ExitCodes.InvalidArguments;
+    }
+
+    int matched = 0;
+
+    foreach (string name in names)
+    {
+        FilenameReadResult result = reader.Read(name, StudyDateOf(name, configuration));
+
+        if (result.IsMatch && result.Demographics is not null)
+        {
+            matched++;
+            PatientDemographics d = result.Demographics;
+
+            Console.WriteLine($"  MATCH    {name}");
+            Console.WriteLine($"           pattern     {result.Pattern}");
+            Console.WriteLine($"           patient id  {Shown(d.PatientId)}");
+            Console.WriteLine($"           name        {Shown(ComposeName(d))}");
+            Console.WriteLine($"           accession   {Shown(d.AccessionNumber)}");
+            Console.WriteLine($"           born        {d.DateOfBirth?.ToString("yyyy-MM-dd") ?? "(blank)"}");
+            Console.WriteLine($"           sex         {Shown(d.Sex.ToDicomValue())}");
+
+            if (d.StudyDescription.Length > 0)
+            {
+                Console.WriteLine($"           study       {d.StudyDescription}");
+            }
+
+            if (d.StudyDateTime is not null)
+            {
+                Console.WriteLine($"           study date  {d.StudyDateTime:yyyy-MM-dd HH:mm} (file creation time)");
+            }
+
+            // The same rules the form applies, run here so a pattern that reads correctly
+            // but produces something unsendable is caught now rather than at the PACS.
+            //
+            // Only for a name that is a real file. Checking a list of names, which is the
+            // usual way a format gets worked out, would otherwise report that no document
+            // has been selected against every line, which is true and useless.
+            if (File.Exists(name))
+            {
+                ValidationResult validation = services.Workflow.ValidateInputs(
+                    name, d, requireDestination: false);
+
+                if (!validation.IsValid)
+                {
+                    Console.WriteLine("           NOT YET SENDABLE:");
+                    PrintValidationIssues(validation.Issues);
+                }
+            }
+        }
+        else
+        {
+            Console.WriteLine($"  no match {name}");
+        }
+
+        foreach (string note in result.Notes.Where(n => !reader.PatternErrors.Contains(n)))
+        {
+            Console.WriteLine($"           note        {note}");
+        }
+    }
+
+    Console.WriteLine();
+    Console.WriteLine($"  {matched} of {names.Count} name(s) matched.");
+
+    return matched == names.Count ? ExitCodes.Success : ExitCodes.InvalidArguments;
+}
+
+/// <summary>The names to try: those given as options, plus anything piped in.</summary>
+static IReadOnlyList<string> CollectNamesToCheck(CommandLineOptions options)
+{
+    var names = new List<string>(options.NamesToCheck);
+
+    // Only when nothing was named AND input is redirected.
+    //
+    // Reading stdin whenever it is redirected hangs: under a script, a scheduled task or
+    // any tool that gives the process a pipe nobody writes to, ReadLine blocks for ever,
+    // and it does so after the names from --name have already been collected and could
+    // have been answered. Found by it hanging here rather than by reading the code.
+    if (names.Count == 0 && Console.IsInputRedirected)
+    {
+        string? line;
+
+        while ((line = Console.ReadLine()) is not null)
+        {
+            if (line.Trim().Length > 0)
+            {
+                names.Add(line.Trim());
+            }
+        }
+    }
+
+    return names;
+}
+
+/// <summary>
+/// The file's creation time, when it is a real file and the setting asks for it.
+/// </summary>
+/// <remarks>
+/// A name being checked need not exist, which is the usual case when a format is being
+/// worked out from a list. Nothing is reported then; the study date simply stays as the
+/// moment of conversion, exactly as it does today.
+/// </remarks>
+static DateTime? StudyDateOf(string path, FilenameImportConfiguration configuration) =>
+    configuration.UseFileDateAsStudyDate && File.Exists(path)
+        ? File.GetCreationTime(path)
+        : null;
+
+static string ComposeName(PatientDemographics demographics) =>
+    demographics.GivenName.Length > 0
+        ? $"{demographics.FamilyName}, {demographics.GivenName}"
+        : demographics.FamilyName;
+
+static string Shown(string value) => value.Length > 0 ? value : "(blank)";
+
 /// <summary>Prints the tags of an existing DICOM file.</summary>
 static int RunInspect(ApplicationServices services, CommandLineOptions options)
 {
@@ -600,6 +878,31 @@ static int RunShowConfiguration(ApplicationServices services)
             $"{destination.CalledAeTitle}@{destination.Host}:{destination.Port} " +
             $"(verify={destination.VerifyBeforeSend}, timeout={destination.TimeoutSeconds}s, " +
             $"retries={destination.RetryCount})");
+    }
+
+    // Printed because a pattern that was rejected would otherwise fail silently: the form
+    // would simply never fill in, and nothing on screen would say why.
+    FilenameImportConfiguration import = configuration.FilenameImport;
+
+    Console.WriteLine();
+    Console.WriteLine($"Filename import    : {(import.IsEnabled ? "enabled" : "disabled")}");
+
+    if (import.IsEnabled || import.Patterns.Count > 0)
+    {
+        var reader = new FilenameMetadataReader(import);
+
+        foreach (string pattern in import.Patterns.Where(p => !string.IsNullOrWhiteSpace(p)))
+        {
+            Console.WriteLine($"  pattern  {pattern}");
+        }
+
+        foreach (string patternError in reader.PatternErrors)
+        {
+            Console.Error.WriteLine($"  error    {patternError}");
+        }
+
+        Console.WriteLine($"  study date from the file: {import.UseFileDateAsStudyDate}");
+        Console.WriteLine($"  after import            : {import.AfterImport}");
     }
 
     return ExitCodes.Success;

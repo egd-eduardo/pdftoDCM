@@ -81,8 +81,16 @@ internal sealed class DicomModuleWriter
         DateTime now)
     {
         dataset.AddOrUpdate(DicomTag.StudyInstanceUID, studyUid);
-        dataset.AddOrUpdate(DicomTag.StudyDate, now.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
-        dataset.AddOrUpdate(DicomTag.StudyTime, now.ToString("HHmmss", CultureInfo.InvariantCulture));
+
+        // The study happened when the document was produced, which for an imported file is
+        // its creation time rather than the moment of conversion. Without this a folder
+        // worked through in a batch stamps every study with the same afternoon and sorts
+        // uselessly in the archive. Content Date and Time, written elsewhere, still record
+        // when this object was built.
+        DateTime study = demographics.StudyDateTime ?? now;
+
+        dataset.AddOrUpdate(DicomTag.StudyDate, study.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
+        dataset.AddOrUpdate(DicomTag.StudyTime, study.ToString("HHmmss", CultureInfo.InvariantCulture));
 
         dataset.AddOrUpdate(
             DicomTag.AccessionNumber,

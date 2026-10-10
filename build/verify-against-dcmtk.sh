@@ -944,6 +944,233 @@ else
     fail "a date range in the past still returned the entry scheduled for today"
 fi
 
+# ------------------------------------------------------------------ Filename import
+
+# This section exists because the file name path is the one place where nobody looks at
+# the patient details before the object is created. Everything here is therefore checked
+# against what an independent archive actually received, not against what the application
+# says it sent.
+
+step "Importing a document whose identifiers are only in its file name"
+
+INBOX="$WORK_DIR/inbox"
+mkdir -p "$INBOX"
+
+# The example the feature was built from: patient number, name, accession number.
+IMPORT_NAME="9999999999_JohnDoe_TEST123451.pdf"
+IMPORT_FILE="$INBOX/$IMPORT_NAME"
+cp "$SAMPLE_PDF" "$IMPORT_FILE"
+
+cat > "$WORK_DIR/import.json" <<JSON
+{
+  "ConfigurationVersion": 1,
+  "HospitalName": "Interoperability Test",
+  "InstitutionName": "Interoperability Test",
+  "CallingAeTitle": "$CALLING_AE",
+  "Destinations": [
+    {
+      "Id": "reference",
+      "Name": "DCMTK reference",
+      "CalledAeTitle": "$AE_TITLE",
+      "Host": "127.0.0.1",
+      "Port": $PORT,
+      "IsEnabled": true,
+      "VerifyBeforeSend": true,
+      "TimeoutSeconds": 20,
+      "RetryCount": 1,
+      "RetryDelaySeconds": 1,
+      "UseTls": false
+    }
+  ],
+  "CharacterSet": "Utf8",
+  "UidStrategy": "UuidDerived",
+  "Modality": "OT",
+  "ConversionType": "WSD",
+  "LogFolder": "$WORK_DIR/logs",
+  "OutputFolder": "$WORK_DIR/out-import",
+  "AlwaysSaveDicomLocally": true,
+  "Language": "en-US",
+  "RenderPdfPagesAsImages": false,
+  "FilenameImport": {
+    "IsEnabled": true,
+    "Patterns": [
+      "{PatientId}_{Name}_{AccessionNumber}_{DateOfBirth}",
+      "{PatientId}_{Name}_{AccessionNumber}"
+    ],
+    "UseFileDateAsStudyDate": true,
+    "DefaultSex": "O",
+    "SplitRunTogetherNames": true,
+    "AfterImport": "MoveToSubfolder",
+    "ImportedSubfolder": "Imported",
+    "FailedSubfolder": "Failed"
+  }
+}
+JSON
+
+# The creation date as the operating system reports it, which is what the application
+# reads. Birth time is not recorded by every filesystem; where it is missing, stat prints
+# 0 and the study date is simply not compared, rather than the check being faked.
+IMPORT_BIRTH="$(stat -c %W "$IMPORT_FILE" 2>/dev/null || echo 0)"
+
+if [[ "$IMPORT_BIRTH" =~ ^[0-9]+$ ]] && (( IMPORT_BIRTH > 0 )); then
+    EXPECTED_STUDY_DATE="$(date -d "@$IMPORT_BIRTH" +%Y%m%d 2>/dev/null || echo "")"
+else
+    EXPECTED_STUDY_DATE=""
+fi
+
+if dotnet "$CLI" send \
+    --config "$WORK_DIR/import.json" \
+    --pdf "$IMPORT_FILE" \
+    --from-filename > "$WORK_DIR/import.log" 2>&1; then
+    pass "the document was converted and transmitted with nothing but its file name"
+else
+    fail "the import failed; see below"
+    cat "$WORK_DIR/import.log"
+fi
+
+# Found by its Patient ID rather than by counting, because this archive already holds the
+# objects from every section above.
+IMPORTED_OBJECT=""
+
+import_deadline=$((SECONDS + 30))
+
+while (( SECONDS < import_deadline )); do
+    while read -r stored; do
+        # Both conditions matter. The Patient ID separates this document from every other
+        # section's, and the SOP Class picks the document itself out of the page images
+        # that may accompany it.
+        if [[ "$(attribute_of "$stored" "0010,0020")" == "9999999999" ]] \
+            && declares_sop_class "$stored" "EncapsulatedPDFStorage"; then
+            IMPORTED_OBJECT="$stored"
+            break
+        fi
+    done < <(find "$RECEIVED_DIR" -type f)
+
+    [[ -n "$IMPORTED_OBJECT" ]] && break
+    sleep 0.2
+done
+
+if [[ -n "$IMPORTED_OBJECT" ]]; then
+    pass "the archive received an Encapsulated PDF carrying the Patient ID from the file name"
+else
+    fail "no object with Patient ID 9999999999 reached the archive"
+    cat "$WORK_DIR/import.log"
+fi
+
+if [[ -n "$IMPORTED_OBJECT" ]]; then
+    IMPORT_DUMP="$(dump_of "$IMPORTED_OBJECT")"
+
+    if [[ "$(attribute_of "$IMPORTED_OBJECT" "0008,0050")" == "TEST123451" ]]; then
+        pass "the Accession Number was read from the file name"
+    else
+        fail "the Accession Number is '$(attribute_of "$IMPORTED_OBJECT" "0008,0050")', expected TEST123451"
+    fi
+
+    if [[ "$(attribute_of "$IMPORTED_OBJECT" "0010,0010")" == "Doe^John" ]]; then
+        pass "JohnDoe became the Person Name Doe^John, family name first"
+    else
+        fail "the Patient Name is '$(attribute_of "$IMPORTED_OBJECT" "0010,0010")', expected Doe^John"
+    fi
+
+    if [[ "$(attribute_of "$IMPORTED_OBJECT" "0010,0040")" == "O" ]]; then
+        pass "Patient Sex is O, which is what was asked for rather than a guess"
+    else
+        fail "Patient Sex is '$(attribute_of "$IMPORTED_OBJECT" "0010,0040")', expected O"
+    fi
+
+    # The point is that the attribute is PRESENT and EMPTY. Type 2 says an unknown value is
+    # expressed that way; omitting the attribute would be non conformant, and inventing a
+    # date would be worse than either.
+    if grep -qE '\(0010,0030\).*(no value available|#   0)' <<<"$IMPORT_DUMP"; then
+        pass "Patient Birth Date is present and empty, as Type 2 requires of an unknown value"
+    else
+        fail "Patient Birth Date is not present and empty: $(grep -F '(0010,0030)' <<<"$IMPORT_DUMP" || echo 'absent altogether')"
+    fi
+
+    IMPORT_STUDY_DATE="$(attribute_of "$IMPORTED_OBJECT" "0008,0020")"
+    IMPORT_CONTENT_DATE="$(attribute_of "$IMPORTED_OBJECT" "0008,0023")"
+
+    if [[ "$IMPORT_STUDY_DATE" =~ ^[0-9]{8}$ ]]; then
+        pass "Study Date is a valid DA value ($IMPORT_STUDY_DATE)"
+    else
+        fail "Study Date is '$IMPORT_STUDY_DATE', which is not a valid DA value"
+    fi
+
+    if [[ -z "$EXPECTED_STUDY_DATE" ]]; then
+        printf '  \033[33mSKIP\033[0m  %s\n' \
+            "this filesystem records no creation time, so the study date cannot be compared"
+    elif [[ "$IMPORT_STUDY_DATE" == "$EXPECTED_STUDY_DATE" ]]; then
+        pass "Study Date is the file's own creation date, not the moment of conversion"
+    else
+        fail "Study Date is '$IMPORT_STUDY_DATE' but the file was created on '$EXPECTED_STUDY_DATE'"
+    fi
+
+    # Both dates are written, and from different clocks. A future reader needs to be able
+    # to tell when the document was issued from when this object was made.
+    if [[ "$IMPORT_CONTENT_DATE" =~ ^[0-9]{8}$ ]]; then
+        pass "Content Date is recorded separately ($IMPORT_CONTENT_DATE), so neither fact is lost"
+    else
+        fail "Content Date is '$IMPORT_CONTENT_DATE', which is not a valid DA value"
+    fi
+
+    if declares_sop_class "$IMPORTED_OBJECT" "1.2.840.10008.5.1.4.1.1.104.1" \
+        || declares_sop_class "$IMPORTED_OBJECT" "EncapsulatedPDFStorage"; then
+        pass "the imported object is an Encapsulated PDF instance"
+    else
+        fail "the imported object does not declare the Encapsulated PDF SOP Class"
+    fi
+fi
+
+step "Confirming the source file cannot be imported twice"
+
+if [[ ! -f "$IMPORT_FILE" ]]; then
+    pass "the file is no longer in the watched folder"
+else
+    fail "the file is still in the watched folder and would be processed again"
+fi
+
+if [[ -f "$INBOX/Imported/$IMPORT_NAME" ]]; then
+    pass "it was moved into Imported/ rather than deleted"
+else
+    fail "the file is not in Imported/; it may have been deleted or left in place"
+fi
+
+if cmp -s "$SAMPLE_PDF" "$INBOX/Imported/$IMPORT_NAME"; then
+    pass "the moved file is byte for byte the original document"
+else
+    fail "the file in Imported/ differs from the document that was handed over"
+fi
+
+step "Confirming a file name that matches nothing is refused rather than guessed at"
+
+UNREADABLE="$INBOX/scan0001.pdf"
+cp "$SAMPLE_PDF" "$UNREADABLE"
+
+RECEIVED_BEFORE_REFUSAL="$(find "$RECEIVED_DIR" -type f | wc -l)"
+
+if dotnet "$CLI" send \
+    --config "$WORK_DIR/import.json" \
+    --pdf "$UNREADABLE" \
+    --from-filename > "$WORK_DIR/refused.log" 2>&1; then
+    fail "a file name matching no pattern was converted anyway"
+else
+    pass "the conversion was refused"
+fi
+
+sleep 1
+
+if (( $(find "$RECEIVED_DIR" -type f | wc -l) == RECEIVED_BEFORE_REFUSAL )); then
+    pass "nothing reached the archive, so no object was filed against a guessed patient"
+else
+    fail "an object reached the archive despite the file name being unreadable"
+fi
+
+if [[ -f "$INBOX/Failed/scan0001.pdf" ]]; then
+    pass "the refused file was moved to Failed/, where somebody will see it"
+else
+    fail "the refused file is not in Failed/; it would be silently retried or lost"
+fi
+
 # ------------------------------------------------------------------ Result
 
 step "Result"

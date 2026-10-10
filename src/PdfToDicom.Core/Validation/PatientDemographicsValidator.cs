@@ -40,15 +40,39 @@ public sealed class PatientDemographicsValidator
     /// True when the configured Specific Character Set is UTF-8. When false, a name
     /// containing characters outside Latin 1 is reported so it is not silently corrupted.
     /// </param>
-    public ValidationResult Validate(PatientDemographics demographics, bool characterSetSupportsUnicode = true)
+    /// <param name="requireDateOfBirth">
+    /// Whether a date of birth must be present.
+    /// </param>
+    /// <param name="requireAccessionNumber">
+    /// Whether an accession number must be present.
+    /// </param>
+    /// <remarks>
+    /// <para>
+    /// Both requirements default to true, which is the rule for anything an operator types:
+    /// a date of birth is the second check a clinician makes against a patient, and without
+    /// an accession number the archive cannot reconcile the document with the order.
+    /// </para>
+    /// <para>
+    /// They are relaxed for an unattended import, where the file name is all there is and
+    /// a document that cannot be imported at all is worse than one filed without a date of
+    /// birth. Both attributes are Type 2 in the IODs this produces, so an empty value is
+    /// conformant; what is not conformant, and not acceptable, is inventing one. When
+    /// relaxed, a value that IS present is still checked as strictly as ever.
+    /// </para>
+    /// </remarks>
+    public ValidationResult Validate(
+        PatientDemographics demographics,
+        bool characterSetSupportsUnicode = true,
+        bool requireDateOfBirth = true,
+        bool requireAccessionNumber = true)
     {
         ArgumentNullException.ThrowIfNull(demographics);
         var result = new ValidationResult();
 
         ValidatePatientId(demographics, result);
         ValidatePatientName(demographics, result, characterSetSupportsUnicode);
-        ValidateBirthDate(demographics, result);
-        ValidateAccessionNumber(demographics, result);
+        ValidateBirthDate(demographics, result, requireDateOfBirth);
+        ValidateAccessionNumber(demographics, result, requireAccessionNumber);
         ValidateOptionalFields(demographics, result);
 
         return result;
@@ -152,11 +176,16 @@ public sealed class PatientDemographicsValidator
         }
     }
 
-    private void ValidateBirthDate(PatientDemographics demographics, ValidationResult result)
+    private void ValidateBirthDate(
+        PatientDemographics demographics, ValidationResult result, bool required)
     {
         if (demographics.DateOfBirth is null)
         {
-            result.AddError(nameof(demographics.DateOfBirth), "Date of Birth is mandatory. Enter a valid date.");
+            if (required)
+            {
+                result.AddError(nameof(demographics.DateOfBirth), "Date of Birth is mandatory. Enter a valid date.");
+            }
+
             return;
         }
 
@@ -175,13 +204,18 @@ public sealed class PatientDemographicsValidator
         }
     }
 
-    private static void ValidateAccessionNumber(PatientDemographics demographics, ValidationResult result)
+    private static void ValidateAccessionNumber(
+        PatientDemographics demographics, ValidationResult result, bool required)
     {
         if (string.IsNullOrWhiteSpace(demographics.AccessionNumber))
         {
-            result.AddError(
-                nameof(demographics.AccessionNumber),
-                "Accession Number is mandatory. Without it the PACS cannot reconcile the document with the order.");
+            if (required)
+            {
+                result.AddError(
+                    nameof(demographics.AccessionNumber),
+                    "Accession Number is mandatory. Without it the PACS cannot reconcile the document with the order.");
+            }
+
             return;
         }
 

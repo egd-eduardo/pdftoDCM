@@ -11,6 +11,7 @@ using PdfToDicom.App.Infrastructure;
 using PdfToDicom.App.Views;
 using PdfToDicom.Core.Abstractions;
 using PdfToDicom.Core.Configuration;
+using PdfToDicom.Core.Importing;
 using PdfToDicom.Core.Models;
 using PdfToDicom.Core.Services;
 using PdfToDicom.Core.Validation;
@@ -78,6 +79,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private WorkflowState _state = WorkflowState.Ready;
     private string _statusMessage = string.Empty;
     private string _resultMessage = string.Empty;
+    /// <summary>
+    /// Study Date and Time taken from an imported file's creation time, or null.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately a field rather than a bound property. The study date is a fact about
+    /// the file, not something to offer an operator a box for; an editable one would invite
+    /// somebody to put a study on a date it did not happen.
+    /// </remarks>
+    private DateTime? _studyDateTimeFromFile;
+    private bool _cameFromMonitoredFolder;
+
     private bool _isBusy;
     private double _progressValue;
     private bool _isProgressIndeterminate;
@@ -534,6 +546,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             PdfPath = path;
             SourceKind = kind;
 
+            // A study date read from a previous file belongs to that file alone. Cleared on
+            // every selection so a document chosen by hand cannot inherit it; the monitored
+            // folder path sets it again straight after this, from the file it just picked up.
+            _studyDateTimeFromFile = null;
+
+            // Likewise: a file the operator browsed to is theirs, and moving it out from
+            // under them afterwards would be presumptuous. Only the monitored folder path
+            // turns this back on.
+            _cameFromMonitoredFolder = false;
+
             if (kind == SourceDocumentKind.Image)
             {
                 PdfInfo = null;
@@ -579,6 +601,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         PdfInfo = null;
         ImageInfo = null;
         SourceKind = SourceDocumentKind.Unsupported;
+        _cameFromMonitoredFolder = false;
+        _studyDateTimeFromFile = null;
     }
 
     private void BrowseForPdf()
@@ -661,6 +685,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ReferringPhysician = string.Empty;
         StudyInstanceUid = string.Empty;
         StudyId = string.Empty;
+        _studyDateTimeFromFile = null;
 
         PopulateDefaultsFromConfiguration();
 
@@ -687,7 +712,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         SeriesDescription = SeriesDescription.Trim(),
         DocumentTitle = DocumentTitle.Trim(),
         ExistingStudyInstanceUid = StudyInstanceUid.Trim(),
-        StudyId = StudyId.Trim()
+        StudyId = StudyId.Trim(),
+
+        // Set only when the document came from a file whose creation time was read. There
+        // is no field for it on the form: it is a property of the file rather than
+        // something an operator should be inventing.
+        StudyDateTime = _studyDateTimeFromFile
     };
 
     private async Task RunWorkflowAsync(bool transmit)
@@ -741,6 +771,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 _cancellation.Token);
 
             ApplyResult(result, transmit);
+            FileSourceDocument(result, transmit);
         }
         catch (OperationCanceledException)
         {
@@ -822,6 +853,81 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         RefreshCommands();
     }
+
+    /// <summary>
+    /// Moves or renames a document picked up from the monitored folder, once it has been
+    /// dealt with, so that it is not picked up a second time.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only for a document the monitor produced. A file the operator chose by hand is
+    /// theirs; moving it afterwards would be presumptuous and surprising.
+    /// </para>
+    /// <para>
+    /// Governed by the same settings as reading the name, and off whenever those are off,
+    /// so a site already using folder monitoring sees no change until it asks for one.
+    /// </para>
+    /// <para>
+    /// A document the operator typed the details for is filed just the same. What matters
+    /// is that it has been dealt with, not where its identifiers came from.
+    /// </para>
+    /// </remarks>
+    private void FileSourceDocument(ConversionResult result, bool transmit)
+    {
+        if (!_cameFromMonitoredFolder || PdfPath is null)
+        {
+            return;
+        }
+
+        FilenameImportConfiguration settings = _services.ConfigurationService.Current.FilenameImport;
+
+        if (!settings.IsEnabled)
+        {
+            return;
+        }
+
+        // Anything short of "it got where it was going" leaves the file to be dealt with
+        // rather than filed as done.
+        bool succeeded = result.DicomGenerated && (!transmit || result.AllTransmissionsSucceeded);
+
+        FiledSourceFile filed = new ImportedFileFiler(_services.Logger)
+            .File(PdfPath, settings, succeeded);
+
+        if (!filed.Moved)
+        {
+            if (filed.Message.Length > 0)
+            {
+                // Said out loud, because the alternative is the same document arriving
+                // again and nobody knowing why.
+                ResultMessage = Append(ResultMessage, Localize("Step1.SourceNotFiled"));
+            }
+
+            return;
+        }
+
+        // The document now lives somewhere else, and the window should say where rather
+        // than keep showing a path that no longer exists.
+        PdfPath = filed.NewPath;
+        _cameFromMonitoredFolder = false;
+        OnPropertyChanged(nameof(SourceDescription));
+
+        ResultMessage = Append(
+            ResultMessage,
+            _services.Localizer.Format("Step1.SourceFiled", DisplayLocationOf(filed.NewPath)));
+    }
+
+    /// <summary>The moved file's folder and name, which is all an operator needs to find it.</summary>
+    private static string DisplayLocationOf(string path)
+    {
+        string? folder = Path.GetDirectoryName(path);
+
+        return folder is null
+            ? Path.GetFileName(path)
+            : Path.Combine(Path.GetFileName(folder), Path.GetFileName(path));
+    }
+
+    private static string Append(string existing, string line) =>
+        existing.Length == 0 ? line : existing + Environment.NewLine + line;
 
     private void OnTransmissionProgress(TransmissionProgress progress)
     {
@@ -1249,8 +1355,103 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
 
             LoadPdf(path);
+
+            // Only when the file was actually accepted. LoadPdf clears the path again when
+            // it rejects the file, and filing something that was never converted would move
+            // it out of sight for no reason.
+            if (PdfPath is null)
+            {
+                return;
+            }
+
+            _cameFromMonitoredFolder = true;
             StatusMessage = Localize("Step1.MonitoredFolderPickup");
+
+            FillFromFilename(path);
         });
+    }
+
+    /// <summary>
+    /// Fills the patient fields from the file's own name, where a pattern reads it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The point of the whole feature: a document arriving from another system usually has
+    /// the identifiers in its name already, and retyping them is where a report ends up
+    /// against the wrong patient.
+    /// </para>
+    /// <para>
+    /// <b>It fills the form; it does not send.</b> Confirmation before sending is untouched,
+    /// so the operator still sees what is about to go and against whom. A file name is not
+    /// a trustworthy source of identity, since anybody can rename a file, and the one place
+    /// this application must not take a shortcut is the step that decides whose record a
+    /// document joins.
+    /// </para>
+    /// <para>
+    /// A name that matches nothing leaves the form exactly as it was, which is the
+    /// behaviour of every version before this one.
+    /// </para>
+    /// </remarks>
+    private void FillFromFilename(string path)
+    {
+        FilenameImportConfiguration settings = _services.ConfigurationService.Current.FilenameImport;
+
+        if (!settings.IsEnabled)
+        {
+            return;
+        }
+
+        var reader = new FilenameMetadataReader(settings);
+
+        DateTime? studyDateTime = null;
+
+        if (settings.UseFileDateAsStudyDate)
+        {
+            try
+            {
+                studyDateTime = File.GetCreationTime(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // The study date then stays as the moment of conversion, exactly as it was
+                // before this feature existed. Not worth refusing a document over.
+                _services.Logger.Warning(
+                    $"The creation time of '{path}' could not be read: {ex.Message}");
+            }
+        }
+
+        FilenameReadResult read = reader.Read(path, studyDateTime);
+
+        foreach (string note in read.Notes)
+        {
+            _services.Logger.Information($"Reading '{Path.GetFileName(path)}': {note}");
+        }
+
+        if (!read.IsMatch || read.Demographics is null)
+        {
+            return;
+        }
+
+        PatientDemographics d = read.Demographics;
+
+        PatientId = d.PatientId;
+        FamilyName = d.FamilyName;
+        GivenName = d.GivenName;
+        MiddleName = string.Empty;
+        DateOfBirth = d.DateOfBirth;
+        Sex = d.Sex;
+        AccessionNumber = d.AccessionNumber;
+        _studyDateTimeFromFile = d.StudyDateTime;
+
+        if (d.StudyDescription.Length > 0)
+        {
+            StudyDescription = d.StudyDescription;
+        }
+
+        _services.AuditLogger.PatientInformationReadFromFilename(
+            Path.GetFileName(path), read.Pattern);
+
+        StatusMessage = Localize("Step1.ReadFromFilename");
     }
 
     private void OnConfigurationChanged(object? sender, AppConfiguration configuration)

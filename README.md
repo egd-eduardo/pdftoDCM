@@ -33,11 +33,13 @@ buttons, and error messages written in plain language.
 
 1. **Select a PDF** — drag and drop, a Browse button, or automatic pickup from a monitored
    folder.
-2. **Take the patient from the modality worklist**, or enter the details — Patient ID,
-   name, date of birth and accession number are mandatory and validated as you type.
-   Barcode scanners work with no configuration. Where a worklist is configured, none of
-   it has to be typed, and the order's Study Instance UID files the document beside the
-   images rather than in a study of its own.
+2. **Take the patient from the modality worklist**, or from the file's own name, or enter
+   the details — Patient ID, name, date of birth and accession number are mandatory and
+   validated as you type. Barcode scanners work with no configuration. Where a worklist is
+   configured, none of it has to be typed, and the order's Study Instance UID files the
+   document beside the images rather than in a study of its own. Where documents arrive
+   from another system with the identifiers in the file name, a configurable naming layout
+   reads them, and the file's creation time becomes the study date.
 3. **Generate a DICOM object** — a standard conformant Encapsulated PDF instance, validated
    against its Information Object Definition before it is allowed anywhere near the network.
 4. **Send it to the PACS** — C-ECHO verification, then C-STORE, to one or several
@@ -82,7 +84,7 @@ cd pdftoDCM
 .\build\build.ps1                          # test, publish and build the installer (x64)
 .\build\build.ps1 -Runtime win-arm64       # native ARM64 build
 .\build\build.ps1 -Runtime win-x86         # 32 bit build
-.\build\build.ps1 -Task test               # run the 173 tests only
+.\build\build.ps1 -Task test               # run the 235 tests only
 ```
 
 The product is Windows only. The build tooling itself is not: `build/build.sh` cross
@@ -126,7 +128,7 @@ BUILD.bat                One click build, for anyone without a development setup
 src/PdfToDicom.Core/     All logic. net8.0, no presentation code, fully testable
 src/PdfToDicom.App/      WPF desktop application. net8.0-windows
 src/PdfToDicom.Cli/      Command line front end for scripted conversion
-tests/                   173 xUnit tests
+tests/                   235 xUnit tests
 tools/                   A Modality Worklist SCP for testing. Never packaged
 build/                   Build scripts, installer, interoperability verification
 dist/app/                The application, prebuilt for x86, x64 and ARM64
@@ -164,10 +166,11 @@ application and the CLI provably identical in behaviour.
 
 ## Verification status
 
-**173 unit and workflow tests pass**, covering validation rules, VR limits, UID uniqueness
+**235 unit and workflow tests pass**, covering validation rules, VR limits, UID uniqueness
 across 20,000 identifiers per strategy, every mandatory attribute, payload padding, UTF-8
 round trips, Person Name shortening, the worklist date ranges, the settings password
-verifier, configuration corruption recovery and the complete workflow.
+verifier, configuration corruption recovery, reading patient details out of a file name
+and the complete workflow.
 
 **All three architectures are verified as native builds.** CI checks the PE machine type
 of each published executable, so a build cannot silently fall back to the runner's own

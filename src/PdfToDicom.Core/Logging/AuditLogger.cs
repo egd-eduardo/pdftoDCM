@@ -87,6 +87,12 @@ public sealed class AuditLogger : IAuditLogger
     }
 
     /// <inheritdoc />
+    public void PatientInformationReadFromFilename(string fileName, string pattern) =>
+        Write(
+            "PATIENT_INFO_FROM_FILENAME",
+            $"file={fileName}; pattern={pattern}");
+
+    /// <inheritdoc />
     public void DicomGenerated(string studyUid, string seriesUid, string sopUid, string? filePath) =>
         Write(
             "DICOM_GENERATED",

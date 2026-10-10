@@ -16,6 +16,9 @@
   "Step1.ImageMultiPage": "It will become {0} DICOM images, one per page, all in one series.",
   "Step1.NoFileSelected": "No document selected",
   "Step1.MonitoredFolderPickup": "Picked up from the monitored folder",
+  "Step1.ReadFromFilename": "The patient fields were filled from the file name. Check them before sending.",
+  "Step1.SourceFiled": "The original file was moved to {0}, so it will not be picked up again.",
+  "Step1.SourceNotFiled": "The original file could not be moved out of the monitored folder, so it may be picked up again. Move it yourself, or ask your IT department to check the folder permissions.",
 
   "Step2.Header": "2. Patient information",
   "Step2.PatientId": "Patient ID",

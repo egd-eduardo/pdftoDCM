@@ -15,6 +15,7 @@
 7. [UID generation](#7-uid-generation)
 8. [DICOM networking](#8-dicom-networking)
 8a. [Modality Worklist](#8a-modality-worklist)
+8b. [Importing from the file name](#8b-importing-from-the-file-name)
 9. [Validation](#9-validation)
 10. [Configuration](#10-configuration)
 11. [Logging and audit](#11-logging-and-audit)
@@ -118,6 +119,7 @@ pdftoDCM/
 │   │   ├── Imaging/                 Image decoding and PDF page rendering
 │   │   ├── Logging/                 Serilog logger, audit trail, log export
 │   │   ├── Monitoring/              FileSystemWatcher based folder monitor
+│   │   ├── Importing/               Reads patient details out of a file name
 │   │   ├── Localization/            Localizer + embedded en-US.json, pt-PT.json
 │   │   └── Services/                ConversionWorkflowService, ApplicationServices
 │   │
@@ -131,7 +133,7 @@ pdftoDCM/
 │   │
 │   └── PdfToDicom.Cli/              Headless front end for scripted conversion
 │
-├── tests/PdfToDicom.Core.Tests/     173 xUnit tests
+├── tests/PdfToDicom.Core.Tests/     235 xUnit tests
 │
 ├── tools/
 │   └── PdfToDicom.TestWorklistServer/   A Modality Worklist SCP for testing only.
@@ -663,6 +665,150 @@ the folder, so it cannot be added by accident.
 
 ---
 
+## 8b. Importing from the file name
+
+A document arriving from another system almost always carries its identifiers in its own
+name. Retyping them is where a report ends up in the wrong record, so where a naming
+layout is agreed, the name is read instead.
+
+Three pieces, all in `PdfToDicom.Core.Importing`, none of which knows anything about a
+window:
+
+| Class | Responsibility |
+|---|---|
+| `FilenamePattern` | Compiles one token template into a `Regex` and matches a file name against it |
+| `FilenameMetadataReader` | Picks the pattern that reads the most, maps captures onto `PatientDemographics`, reports what it could not read |
+| `ImportedFileFiler` | Moves or renames the source file afterwards so it is not picked up twice |
+
+### Patterns
+
+A pattern is written the way the file names look, with the fields in braces:
+
+```
+{PatientId}_{Name}_{AccessionNumber}_{DateOfBirth}
+```
+
+Tokens: `{PatientId}`, `{Name}`, `{FamilyName}`, `{GivenName}`, `{AccessionNumber}`,
+`{DateOfBirth}`, `{StudyDescription}`, and `{*}` for a part to skip. Aliases are accepted
+case insensitively, `{MRN}`, `{Processo}`, `{Surname}`, `{DOB}`, `{Acession}` and others
+among them. The misspelling is deliberate: it is the one people type, and refusing it
+would teach nothing. Everything outside the braces is matched literally, after escaping.
+The extension is removed before matching, so a pattern never mentions it.
+
+Anything the token vocabulary cannot express is written as a regular expression with named
+groups, prefixed `regex:`. Both forms compile to the same thing, with a 250 ms match
+timeout against a pathological name.
+
+**Why tokens are bounded rather than lazy.** The obvious translation of `{Name}` is `.+?`,
+and it is wrong. With `{PatientId} {Name} {AccessionNumber}` against
+`77 MARIA DO CARMO SILVA ACC9`, lazy groups give `Name` = `MARIA` and `AccessionNumber` =
+`DO CARMO SILVA ACC9`: the wrong accession number on a real patient. So a token is
+compiled as "anything but the separator that follows", `[^_]+` for an underscore
+delimited pattern, and only `{Name}` and `{StudyDescription}` stay greedy enough to hold a
+separator, because a name genuinely contains spaces. This was found by a test, not by
+reading the code.
+
+**A malformed pattern never stops the application.** `Compile` throws `FormatException`
+with a message naming the problem, the reader catches it, keeps it in `PatternErrors`, and
+carries on with whatever patterns are usable. `pdftodicom config` prints those errors,
+because a rejected pattern would otherwise fail silently: the form would simply never fill
+in.
+
+### Choosing between patterns
+
+Patterns are tried in the configured order, but **the one that reads the most fields wins**,
+with the configured order only breaking a tie. A site that lists
+
+```
+{PatientId}_{Name}
+{PatientId}_{Name}_{AccessionNumber}
+```
+
+would otherwise lose every accession number, because the shorter pattern matches first and
+matches everything the longer one does.
+
+### What is filled in, and what is deliberately not
+
+- **Sex** is not in any naming scheme seen so far, so it is taken from `DefaultSex`,
+  `"O"` (Other) by default. An empty string leaves Patient Sex present and empty, which is
+  conformant for a Type 2 attribute.
+- **Date of birth** is parsed against an explicit, ordered format list rather than a
+  locale, because a locale makes `05-11-1970` ambiguous and silence is the worst answer. A
+  value that matches nothing is **left blank and noted**, never guessed at. No default
+  format contains `/`: a file name cannot hold a directory separator, so such a format
+  could never match, and a test asserts it.
+- **The name** is split on `^`, on a comma, or on spaces with the last word taken as the
+  family name. `SplitRunTogetherNames` additionally reads `JohnDoe` as `John Doe`; it is
+  **off** by default, because it is a guess and it is wrong for `McDonald` or `DaSilva`.
+- **Study date** is the file's creation time, written to Study Date and Study Time via
+  `PatientDemographics.StudyDateTime`. Content Date and Content Time remain the moment of
+  conversion, so both facts are preserved rather than conflated.
+
+### Validation is relaxed, not bypassed
+
+Date of Birth and Accession Number are mandatory for anything an operator types: the date
+of birth is the second check a clinician makes against a patient, and without an accession
+number the archive cannot reconcile the document with the order. On this path the file name
+is all there is, and a document that cannot be imported at all is worse than one filed
+without a date of birth. So `PatientDemographicsValidator.Validate` takes
+`requireDateOfBirth` and `requireAccessionNumber`, which `ConversionOptions.UnattendedImport`
+sets to false. Both attributes are Type 2 in the IODs this produces, so an empty value is
+conformant; inventing one is not. **A value that is present is still checked as strictly as
+ever.**
+
+### It fills the form; it does not send
+
+In the desktop application the fields are filled and the status bar says so. Confirmation
+before sending is untouched. Anybody can rename a file, and the one step this application
+must not short circuit is the one that decides whose record a document joins. A name that
+matches nothing leaves the form exactly as every previous version left it.
+
+The `--from-filename` path of the command line tool is the unattended one, and there it
+**refuses** rather than falling back to values given on the command line: the flag says
+where the identity comes from, and quietly converting with something else is how a document
+reaches the wrong patient.
+
+### Filing the source file
+
+Once a document has been dealt with, the original must stop looking like new work.
+`ImportedFileFiler` moves it into `Imported/` (the default), or appends `RenameSuffix`
+**after** the extension so `report.pdf` becomes `report.pdf.imported` and no longer matches
+`*.pdf`, or leaves it alone, which will cause it to be offered again.
+
+It runs for any document the monitored folder produced, including one whose name said
+nothing and whose details the operator typed in; what matters is that the document has been
+dealt with, not where its identifiers came from. A file the operator browsed to is left
+alone, because it is theirs. Filing is governed by the same `FilenameImport` settings as
+reading the name and is off whenever those are off, so a site already using folder
+monitoring sees no change until it asks for one.
+
+Four properties, each covered by a test:
+
+- **A failure is always moved** to `Failed/`, whatever the setting says, so a file that
+  needs looking at is not left in the inbox. A name that matched no pattern at all counts
+  as a failure for this purpose: it will not match on a later run either, so leaving it in
+  place means retrying it for ever and nobody ever seeing it.
+- **Nothing is ever deleted.** A collision appends ` (2)`, then a timestamp.
+- **Nothing is ever overwritten.**
+- **It never throws.** A file that has already been moved by somebody else is not an error.
+
+### Trying it before trusting it
+
+`pdftodicom check-names` compiles the patterns, prints which are usable and why the others
+are not, and shows what each name would produce, without converting anything or touching
+a PACS:
+
+```bash
+pdftodicom check-names --pattern '{PatientId}_{Name}_{AccessionNumber}' \
+                       --name 9999999999_JohnDoe_TEST123451.pdf
+ls inbox | pdftodicom check-names
+```
+
+A naming layout is agreed with another vendor and then discovered to be slightly different
+in practice. This is where that is discovered, rather than in the archive.
+
+---
+
 ## 9. Validation
 
 Three independent layers.
@@ -676,6 +822,10 @@ Three independent layers.
 The IOD layer is defence in depth. The builder is written to produce conformant output;
 the explicit check means a defect is caught locally with a precise message instead of
 arriving as an opaque status code from the archive.
+
+The input layer has two switches, `requireDateOfBirth` and `requireAccessionNumber`, both
+true for anything typed and both false for an unattended import from a file name. See
+section 8b for why, and for what stays strict regardless.
 
 ---
 
@@ -710,8 +860,14 @@ Timestamp  User  Machine  Event  Detail
 ```
 
 Events: `APPLICATION_START`, `APPLICATION_CLOSE`, `PDF_SELECTED`,
-`PATIENT_INFO_ENTERED`, `DICOM_GENERATED`, `TRANSMISSION_SUCCESS`,
-`TRANSMISSION_FAILURE`, `GENERATED_FILE_DELETED`, `CONFIGURATION_CHANGED`.
+`PATIENT_INFO_ENTERED`, `PATIENT_INFO_FROM_FILENAME`, `DICOM_GENERATED`,
+`TRANSMISSION_SUCCESS`, `TRANSMISSION_FAILURE`, `GENERATED_FILE_DELETED`,
+`CONFIGURATION_CHANGED`.
+
+`PATIENT_INFO_FROM_FILENAME` records the file name and the pattern that interpreted it.
+Where a document's identifiers came from is an audit question in its own right: if a report
+is later found against the wrong patient, the first thing to establish is whether a person
+read those identifiers off a wristband or whether a file name supplied them.
 
 The format is stable and opens directly in a spreadsheet, so an information governance team
 can review it without tooling. An audit write failure is reported to the diagnostic log but
@@ -863,11 +1019,12 @@ differ only in case.
 dotnet test tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj
 ```
 
-173 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
+235 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
 strategy), person name construction and shortening, the worklist date ranges, the
 settings password verifier, every mandatory attribute, payload integrity and odd length
-padding, UTF-8 round trips, configuration persistence and corruption recovery, and the
-full workflow with a stubbed network.
+padding, UTF-8 round trips, configuration persistence and corruption recovery, file name
+pattern compilation and matching, how the source file is filed afterwards, and the full
+workflow with a stubbed network.
 
 ### XAML binding verification
 
@@ -928,7 +1085,20 @@ rather than echoed as return keys.
 anything; without it the response is a bare `a700 Out of Resources` that says nothing
 about the cause. The script creates it.
 
-All checks pass as of this release.
+The last section covers the file name import, because that is the one path where nobody
+looks at the patient details before the object is created. A document called
+`9999999999_JohnDoe_TEST123451.pdf` is converted with `--from-filename` and nothing else,
+and the object the archive received is then read back: the Patient ID and Accession Number
+came from the name, `JohnDoe` became `Doe^John`, Patient Sex is `O`, Patient Birth Date is
+**present and empty** as Type 2 requires of an unknown value, and Study Date is the file's
+own creation date while Content Date is separately the moment of conversion. It then
+confirms the source file was moved into `Imported/` byte for byte rather than deleted, and
+that a file name matching no pattern is refused, reaches the archive as nothing at all, and
+ends up in `Failed/` where somebody will see it. The last of those checks failed the first
+time it ran: the refused file was being left in the watched folder, where it would have
+been retried for ever.
+
+82 checks, all passing as of this release.
 
 ---
 
@@ -950,6 +1120,9 @@ pdftodicom generate --pdf report.pdf ... --no-send
 pdftodicom inspect --pdf out/12345_ACC001_1234.dcm
 pdftodicom config
 pdftodicom worklist-password
+pdftodicom check-names --pattern '{PatientId}_{Name}_{AccessionNumber}' \
+                       --name 9999999999_JohnDoe_TEST123451.pdf
+pdftodicom send --pdf 9999999999_JohnDoe_TEST123451.pdf --from-filename
 ```
 
 `worklist` queries the configured worklist and prints what came back, including the name
@@ -962,6 +1135,11 @@ interoperability script drives.
 
 `worklist-password` is handled before any configuration, log folder or DICOM stack is set
 up, so it works on a machine where none of those exist yet. See section 8a.
+
+`check-names` and `--from-filename` read the patient details out of the file name. Neither
+is a convenience: `check-names` is how a naming layout is proved before anybody relies on
+it, and `--from-filename` refuses to convert a name it cannot read rather than falling back
+to the command line. See section 8b.
 
 **Exit codes:** `0` success · `1` invalid arguments or patient information ·
 `2` generation or validation failure · `3` generated but transmission failed.
@@ -1050,7 +1228,7 @@ networking, validation and workflow layers need no change.
 
 Stated plainly, because a hospital deploying this needs to know what it does not do.
 
-1. **The user interface is not covered by automated tests.** The 173 tests cover Core in
+1. **The user interface is not covered by automated tests.** The 235 tests cover Core in
    depth, but WPF cannot run on a build agent without a desktop session, so no test opens
    a window. `build/validate-xaml-bindings.py` catches the binding errors that stop the
    application starting, and is not a substitute for running it. **Launch the application
