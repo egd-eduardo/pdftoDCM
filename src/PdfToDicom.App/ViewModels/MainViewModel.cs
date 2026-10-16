@@ -130,6 +130,40 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         _services.FolderMonitor.PdfDetected += OnMonitoredPdfDetected;
         _services.ConfigurationService.ConfigurationChanged += OnConfigurationChanged;
+
+        ReportConfigurationProblem();
+    }
+
+    /// <summary>
+    /// Says so, on the window, when the configuration file could not be read.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A damaged file is set aside and defaults take over, so the application always
+    /// starts. It used to do that in silence, and the result is bewildering: every
+    /// destination and every worklist server is gone, nothing failed, and the only record
+    /// is a text file beside the quarantined one that nobody would think to look for.
+    /// </para>
+    /// <para>
+    /// Not a dialog. The operator may have a document to file and cannot do anything about
+    /// a configuration file anyway, so it goes to the status bar and the result area, where
+    /// it stays visible, and to the log and the audit trail for whoever can.
+    /// </para>
+    /// </remarks>
+    private void ReportConfigurationProblem()
+    {
+        string problem = _services.ConfigurationService.LoadProblem;
+
+        if (problem.Length == 0)
+        {
+            return;
+        }
+
+        SetState(WorkflowState.Error, Localize("Status.ConfigurationProblem"));
+        ResultMessage = problem;
+
+        _services.Logger.Error($"The configuration could not be loaded: {problem}", null);
+        _services.AuditLogger.ConfigurationChanged($"Configuration not loaded: {problem}");
     }
 
     // ---------------------------------------------------------------- Step 1: PDF
@@ -1142,7 +1176,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// offered at all. A button that always fails is worse than no button.
     /// </summary>
     public bool IsWorklistAvailable =>
-        _services.ConfigurationService.Current.Worklist.IsEnabled;
+        _services.ConfigurationService.Current.IsWorklistAvailable;
 
     /// <summary>
     /// Opens the worklist and, when an entry is chosen, fills the patient fields from it.

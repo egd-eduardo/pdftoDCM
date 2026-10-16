@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace PdfToDicom.Core.Configuration;
 
 /// <summary>
@@ -37,7 +39,27 @@ public enum WorklistDateRange
 /// </remarks>
 public sealed class WorklistConfiguration
 {
-    /// <summary>Whether the worklist is offered to the operator at all.</summary>
+    /// <summary>
+    /// Stable identifier, used to remember which server was last chosen.
+    /// </summary>
+    /// <remarks>
+    /// Separate from the name so a site can rename a server without the application
+    /// forgetting that it was the one in use. Generated when a server is added and never
+    /// shown to anybody.
+    /// </remarks>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// What this server is called in the picker, for example "Radiology" or "Cardiology".
+    /// </summary>
+    /// <remarks>
+    /// The operator chooses between servers by this name, so it should say what the
+    /// worklist holds rather than where it lives. An empty name is filled in from the AE
+    /// Title on load, because a nameless entry in a list cannot be chosen deliberately.
+    /// </remarks>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Whether this worklist is offered to the operator at all.</summary>
     public bool IsEnabled { get; set; }
 
     /// <summary>Application Entity Title of the worklist server.</summary>
@@ -101,6 +123,8 @@ public sealed class WorklistConfiguration
     /// <summary>Creates an independent copy, used so an editing dialog cannot write through.</summary>
     public WorklistConfiguration Clone() => new()
     {
+        Id = Id,
+        Name = Name,
         IsEnabled = IsEnabled,
         CalledAeTitle = CalledAeTitle,
         Host = Host,
@@ -116,6 +140,19 @@ public sealed class WorklistConfiguration
         AcceptAnyTlsCertificate = AcceptAnyTlsCertificate,
         MaximumResults = MaximumResults
     };
+
+    /// <summary>
+    /// The name to show, falling back to something recognisable when none was given.
+    /// </summary>
+    /// <remarks>
+    /// A picker entry with no text cannot be chosen on purpose, so there is always
+    /// something: the name, or the AE Title and host it points at.
+    /// </remarks>
+    [JsonIgnore]
+    public string DisplayName =>
+        !string.IsNullOrWhiteSpace(Name) ? Name.Trim()
+        : !string.IsNullOrWhiteSpace(CalledAeTitle) ? $"{CalledAeTitle.Trim()}@{Host.Trim()}"
+        : Host.Trim();
 
     /// <summary>
     /// Resolves the configured range to actual dates, or null when no date key should be

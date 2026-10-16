@@ -1,5 +1,83 @@
 # Changelog
 
+## 3.3.0
+
+**Several worklist servers, chosen when the worklist is opened; the destinations are now
+behind the same password as the worklist; and that password is `Odraude`.**
+
+### Several worklist servers
+
+A hospital does not have one worklist. Radiology and cardiology are usually different
+systems, and until now this application could be pointed at only one of them at a time.
+The Worklist page in Settings is now a list, like Destinations: add a server, give it a
+name the operator will recognise, configure it, test it.
+
+When the worklist is opened, a **Worklist to search** box appears at the top if there is
+more than one. The choice is remembered, so a department that always uses the same one
+never picks it again.
+
+- **Look a patient up by number.** Type the patient number, press Search, and a single
+  match is selected ready to use. Several scheduled procedures for the same patient all
+  appear so the right one can be chosen.
+- **"All worklists"** asks every enabled server at once, for when somebody has a document
+  in their hand and does not know which department scheduled the examination. An extra
+  **Worklist** column says which server each row came from, which is what tells two
+  departments' entries apart when the same patient appears in both.
+- **One server being down does not hide the others.** Each reports for itself, by name, so
+  a failure is visibly one department's server rather than "the worklist is down".
+- **`pdftodicom worklist --worklist <name>`** queries one named server. Without it every
+  configured server is queried, which is what commissioning a site wants.
+
+**Nothing has to be retyped when upgrading.** A configuration holding the old single
+`Worklist` object is migrated into the list the first time this version starts, keeping
+every setting, and the file is rewritten so it happens once. This is verified against
+DCMTK over a real association, because a worklist connection is agreed with another
+department and tested against a live server; losing it silently would mean somebody
+retyping an AE Title from memory, and a wrong AE Title offers the wrong patients.
+
+### The destinations are protected too, and the password is now Odraude
+
+The one password now guards **both** the Worklist and the Destinations pages. They are the
+same kind of setting: addresses and AE Titles that decide where patient data comes from and
+where it goes. A mistyped destination sends a report to the wrong archive, which is as bad
+as a mistyped worklist, and the same person is trusted with both.
+
+Unlocking either page opens the other, since whoever opened one can open the other and
+typing the password twice in one dialog would protect nothing. Closing Settings locks both
+again. Both outcomes of an unlock attempt now go to the audit trail: one wrong attempt is a
+typo, a run of them is somebody trying.
+
+`pdftodicom settings-password` generates the verifier, and the old name
+`pdftodicom worklist-password` still works. The password in effect is now pinned by a test
+as well as recorded in the comment beside the verifier; they have to agree, because a
+verifier that no longer matches the password everybody believes is set locks the copyright
+holder out of their own software with no way to debug it.
+
+### When the Worklist button does not appear
+
+The button is shown only when at least one server is **enabled**, which is deliberate: a
+button that always fails is worse than no button. The cost was that a site which configured
+a server and left it disabled saw nothing and had nothing to read. Two things now answer
+that outright:
+
+- **`pdftodicom config`** lists every configured worklist server with its enabled state and
+  then says in as many words whether the button is shown.
+- **A configuration file that could not be read now says so.** It is still set aside and
+  defaults still take over, because the application must always start, but the main window
+  now reports it and names the file that was kept. Before this, a file hand edited into
+  invalid JSON meant every destination and every worklist silently reverted to defaults,
+  with the only record a text file beside the quarantined one that nobody would think to
+  look for. If the worklist has ever vanished for no apparent reason, this is the first
+  thing to check.
+
+### Notes
+
+- 260 tests pass, up from 246. The interoperability script runs 94 checks against DCMTK, up
+  from 84.
+- The worklist servers and the destinations are stored as `Worklists` and `Destinations` in
+  the configuration file; `samples/config.sample.json` is annotated with both, including
+  what the migration does.
+
 ## 3.2.0
 
 **The file name settings now have a page of their own in the dialog, and a short patient

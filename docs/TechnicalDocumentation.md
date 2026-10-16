@@ -115,7 +115,7 @@ pdftoDCM/
 │   │   ├── Dicom/                   Builder, validator, UIDs, tag inspector, writer
 │   │   ├── Networking/              Verification, Storage and Worklist SCU
 │   │   ├── Pdf/                     PdfPig based inspection
-│   │   ├── Security/                Worklist settings password verifier
+│   │   ├── Security/                Password verifier for the protected settings
 │   │   ├── Imaging/                 Image decoding and PDF page rendering
 │   │   ├── Logging/                 Serilog logger, audit trail, log export
 │   │   ├── Monitoring/              FileSystemWatcher based folder monitor
@@ -133,7 +133,7 @@ pdftoDCM/
 │   │
 │   └── PdfToDicom.Cli/              Headless front end for scripted conversion
 │
-├── tests/PdfToDicom.Core.Tests/     246 xUnit tests
+├── tests/PdfToDicom.Core.Tests/     260 xUnit tests
 │
 ├── tools/
 │   └── PdfToDicom.TestWorklistServer/   A Modality Worklist SCP for testing only.
@@ -570,10 +570,99 @@ takes, so it overrides the configured study grouping exactly as that does.
 Selecting an entry **replaces every patient field**. Merging would risk a form holding one
 patient's identifier beside another's name, and no merge rule is worth that.
 
+### Several servers
+
+A hospital does not have one worklist. Radiology and cardiology are usually different
+systems, and until 3.3 this application could be pointed at only one of them at a time.
+`AppConfiguration.Worklists` is now a list, each entry carrying its own connection, match
+keys, date range and limits, plus an `Id` and a `Name`.
+
+| Concern | Where it is decided |
+|---|---|
+| Is the worklist offered at all | `AppConfiguration.IsWorklistAvailable`: true when **any** server is enabled |
+| Which server is offered first | `PreferredWorklist`: the one used last, else the first enabled |
+| Which servers a query asks | `WorklistViewModel.ServersToQuery`, resolved against the live configuration each time |
+
+The identifier exists so that renaming a server does not make the application forget it was
+the one in use; `LastUsedWorklistId` is written when the operator picks one. An identifier
+that no longer matches anything is ignored rather than repaired, and the first enabled
+server is used.
+
+**The operator chooses in the worklist window**, not in Settings, because the choice belongs
+to the document in their hand rather than to the workstation. The picker is hidden when only
+one server is enabled: a picker with a single entry is a decision that looks like a choice.
+
+**"All worklists"** appears once there is more than one. It is there for the way a patient
+number is actually looked up: somebody at a desk with a document does not necessarily know
+which department scheduled the examination, and making them try each server in turn turns
+one search into four. Each server reports for itself, by name, so one that is unreachable is
+visibly one server rather than "the worklist is down", and the results carry
+`WorklistEntry.SourceWorklistName` so two departments holding a step for the same patient
+can be told apart. That column is hidden when a single server was asked, where it would be
+noise.
+
+A `DataGridColumn` is not in the visual tree, so it has no DataContext and no ancestor to
+bind through; hiding that column needs the `BindingProxy` freezable in `Converters`. The
+obvious `RelativeSource AncestorType=Window` binding resolves to nothing there and WPF
+reports it only as a trace message, so the symptom would be a column that never hides and
+no error anywhere.
+
+### Migrating from a single server
+
+Versions up to 3.2 held one server under a `Worklist` key. That key is **no longer part of
+the model**, because two sources of truth for the same thing is how they come to disagree.
+`ConfigurationService.MigrateSingleWorklist` reads it straight out of the JSON on load, adds
+it to the list, and the file is written back at once so the migration happens once and the
+old key stops being carried.
+
+Three rules, each with a test:
+
+- **Only when the list is empty.** A file that already has `Worklists` was written by this
+  version or later, and a leftover `Worklist` key in it is stale; importing it would
+  resurrect a server somebody deleted.
+- **It never throws.** A malformed legacy node means the site has no worklist configured,
+  which is the state every site starts in.
+- **The migrated server is usable**: it gets an identifier and a name, without which it
+  could be neither remembered nor chosen from a list.
+
+This matters more than most migrations. A worklist connection is agreed with another
+department and tested against a live server; losing it silently means somebody retypes an AE
+Title from memory, and a wrong AE Title offers the wrong patients.
+
+### When the Worklist button does not appear
+
+The button is shown only when at least one server is **enabled**, on the principle that a
+button which always fails is worse than no button. The cost is that a site which configured
+a server and left it disabled sees nothing and has nothing to read, so two things now answer
+the question outright:
+
+- **`pdftodicom config`** lists every configured server with its enabled state and then says
+  in as many words whether the button is shown.
+- **A configuration file that could not be read says so.** It is still set aside and defaults
+  still take over, because the application must always start, but `IConfigurationService`
+  now carries a `LoadProblem` and the main window shows it. Before this, a file hand edited
+  into invalid JSON meant every destination and every worklist silently reverted to
+  defaults, with the only record a text file beside the quarantined one that nobody would
+  think to look for.
+
 ### Password protection
 
-`WorklistSettingsLock` guards the Worklist tab in Settings behind a password compiled
-into the binary.
+`ProtectedSettingsLock` guards **both** the Worklist and the Destinations tabs in Settings
+behind one password compiled into the binary.
+
+Both pages, because they are the same kind of setting: addresses and AE Titles that decide
+where patient data comes from and where it goes. A mistyped destination sends a report to
+the wrong archive and a mistyped worklist offers the wrong patients to choose from, and the
+same person is trusted with both. Unlocking either page opens the other, since whoever
+opened one can open the other and typing the password twice in one dialog would protect
+nothing. The unlock is not remembered between dialogs: closing Settings locks both again, so
+an unattended workstation does not sit there open.
+
+The password is never a bindable property. `PasswordBox` deliberately does not expose its
+value as one, because a bound password lives on the view model as a plain string for as long
+as the binding does; the button hands it over at the moment it is pressed and the box is
+cleared immediately afterwards, on success and on failure alike. Both outcomes are written
+to the audit trail: one wrong attempt is a typo, a run of them is somebody trying.
 
 It stores a **PBKDF2-HMAC-SHA256 verifier**, 210,000 iterations (the OWASP figure for
 that combination), with a 16 byte random salt, in the form
@@ -596,17 +685,26 @@ checks by itself.
 The password is set by the author and by nobody else:
 
 ```
-pdftodicom worklist-password
+pdftodicom settings-password
 ```
 
 reads it without echoing, derives the verifier locally, and prints the single line to
-paste into `WorklistSettingsLock.Verifier` before rebuilding. The password itself is
-never written to a file, a log, a commit or a message.
+paste into `ProtectedSettingsLock.Verifier` before rebuilding. The password itself is
+never written to a file, a log, a commit or a message. The old name
+`pdftodicom worklist-password` still works, because a note written down at a hospital six
+months ago says that.
 
-An empty `Verifier` constant means no password has been set, and the Worklist tab is then
-open. That is deliberate: shipping with a placeholder nobody knows would lock the author
-out of their own software, which is a worse failure than an unset lock. The interface
-reports the setting as unprotected rather than implying a protection that is not there.
+An empty `Verifier` constant means no password has been set, and both tabs are then open.
+That is deliberate: shipping with a placeholder nobody knows would lock the author out of
+their own software, which is a worse failure than an unset lock. The interface reports the
+setting as unprotected rather than implying a protection that is not there.
+
+**The password in effect is recorded in two places**, the comment on the `Verifier`
+constant and a test that asserts it. They have to agree. A verifier that no longer matches
+the password everybody believes is set locks the copyright holder out of their own software,
+the only symptom is an unlock that quietly refuses, and there is nothing to debug from
+because a verifier cannot be turned back into a password. The test fails until the two
+records agree, which is the point of having it.
 
 ### The test worklist server
 
@@ -1058,7 +1156,7 @@ differ only in case.
 dotnet test tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj
 ```
 
-246 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
+260 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
 strategy), person name construction and shortening, the worklist date ranges, the
 settings password verifier, every mandatory attribute, payload integrity and odd length
 padding, UTF-8 round trips, configuration persistence and corruption recovery, file name
@@ -1139,7 +1237,14 @@ see it. The last of those checks failed the first
 time it ran: the refused file was being left in the watched folder, where it would have
 been retried for ever.
 
-84 checks, all passing as of this release.
+The worklist section also covers what changes once there is more than one server: that
+each is named in the output so a department knows whose list it is reading, that a server
+which is down does not take a reachable server's results with it, that naming one server
+queries only that one, that an unknown name is refused rather than quietly querying
+everything, and that a single-server configuration from an older version still answers over
+a real association and is rewritten as a list.
+
+94 checks, all passing as of this release.
 
 ---
 
@@ -1153,6 +1258,7 @@ which is why it is kept free of any Windows only dependency.
 ```bash
 pdftodicom echo
 pdftodicom worklist
+pdftodicom worklist --worklist Radiology
 pdftodicom worklist --patient-id P0000004
 pdftodicom worklist --surname 'SILVA*'
 pdftodicom send --pdf report.pdf --patient-id 12345 --surname Silva \
@@ -1160,7 +1266,7 @@ pdftodicom send --pdf report.pdf --patient-id 12345 --surname Silva \
 pdftodicom generate --pdf report.pdf ... --no-send
 pdftodicom inspect --pdf out/12345_ACC001_1234.dcm
 pdftodicom config
-pdftodicom worklist-password
+pdftodicom settings-password
 pdftodicom check-names --pattern '{PatientId}_{Name}_{AccessionNumber}' \
                        --name 9999999999_JohnDoe_TEST123451.pdf
 pdftodicom send --pdf 9999999999_JohnDoe_TEST123451.pdf --from-filename
@@ -1174,8 +1280,9 @@ does it return what we expect?" over a real association, from a machine with not
 it but this one file, without touching the clinical interface. It is also what the
 interoperability script drives.
 
-`worklist-password` is handled before any configuration, log folder or DICOM stack is set
-up, so it works on a machine where none of those exist yet. See section 8a.
+`settings-password` is handled before any configuration, log folder or DICOM stack is set
+up, so it works on a machine where none of those exist yet. The older name
+`worklist-password` is still accepted. See section 8a.
 
 `check-names` and `--from-filename` read the patient details out of the file name. Neither
 is a convenience: `check-names` is how a naming layout is proved before anybody relies on
@@ -1269,7 +1376,7 @@ networking, validation and workflow layers need no change.
 
 Stated plainly, because a hospital deploying this needs to know what it does not do.
 
-1. **The user interface is not covered by automated tests.** The 246 tests cover Core in
+1. **The user interface is not covered by automated tests.** The 260 tests cover Core in
    depth, but WPF cannot run on a build agent without a desktop session, so no test opens
    a window. `build/validate-xaml-bindings.py` catches the binding errors that stop the
    application starting, and is not a substitute for running it. **Launch the application

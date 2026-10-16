@@ -817,17 +817,63 @@ worklist_config() {
   "Destinations": [],
   "LogFolder": "$WORK_DIR/logs",
   "OutputFolder": "$WORK_DIR/out",
-  "Worklist": {
-    "IsEnabled": true,
-    "CalledAeTitle": "$WORKLIST_AE",
-    "Host": "127.0.0.1",
-    "Port": $WORKLIST_PORT,
-    "DateRange": "$range",
-    "ExplicitFrom": $from,
-    "ExplicitTo": $to,
-    "TimeoutSeconds": 20,
-    "MaximumResults": 500
-  }
+  "Worklists": [
+    {
+      "Id": "reference",
+      "Name": "Reference",
+      "IsEnabled": true,
+      "CalledAeTitle": "$WORKLIST_AE",
+      "Host": "127.0.0.1",
+      "Port": $WORKLIST_PORT,
+      "DateRange": "$range",
+      "ExplicitFrom": $from,
+      "ExplicitTo": $to,
+      "TimeoutSeconds": 20,
+      "MaximumResults": 500
+    }
+  ]
+}
+JSON
+}
+
+# The same thing with a second server added, for the checks that only mean something with
+# more than one: that each is named in the output, and that one being unreachable does not
+# take the other's results with it.
+two_worklist_config() {
+    local path="$1"
+    local second_port="$2"
+
+    cat > "$path" <<JSON
+{
+  "ConfigurationVersion": 1,
+  "CallingAeTitle": "$CALLING_AE",
+  "Destinations": [],
+  "LogFolder": "$WORK_DIR/logs",
+  "OutputFolder": "$WORK_DIR/out",
+  "Worklists": [
+    {
+      "Id": "reference",
+      "Name": "Reference",
+      "IsEnabled": true,
+      "CalledAeTitle": "$WORKLIST_AE",
+      "Host": "127.0.0.1",
+      "Port": $WORKLIST_PORT,
+      "DateRange": "Today",
+      "TimeoutSeconds": 20,
+      "MaximumResults": 500
+    },
+    {
+      "Id": "second",
+      "Name": "Second",
+      "IsEnabled": true,
+      "CalledAeTitle": "$WORKLIST_AE",
+      "Host": "127.0.0.1",
+      "Port": $second_port,
+      "DateRange": "Today",
+      "TimeoutSeconds": 3,
+      "MaximumResults": 500
+    }
+  ]
 }
 JSON
 }
@@ -942,6 +988,119 @@ if [[ "$PAST" == *"no scheduled procedures"* ]]; then
     pass "a date range in the past returns nothing, so the range is really being matched"
 else
     fail "a date range in the past still returned the entry scheduled for today"
+fi
+
+# ------------------------------------------------------------------ Several worklists
+
+# A hospital does not have one worklist. These checks are about what changes once there is
+# more than one: that each server is named in the output, so a department reading it knows
+# whose list it is looking at, and that one server being down does not hide another's
+# answer. The second port deliberately has nothing listening on it.
+
+step "Querying more than one worklist server"
+
+DEAD_WORKLIST_PORT=$((WORKLIST_PORT + 7))
+TWO_CONFIG="$WORK_DIR/worklist-two.json"
+two_worklist_config "$TWO_CONFIG" "$DEAD_WORKLIST_PORT"
+
+TWO_OUT="$WORK_DIR/worklist-two.out"
+dotnet "$CLI" worklist --config "$TWO_CONFIG" > "$TWO_OUT" 2>&1 || true
+TWO_TEXT="$(cat "$TWO_OUT")"
+
+if [[ "$TWO_TEXT" == *"=== Reference"* && "$TWO_TEXT" == *"=== Second"* ]]; then
+    pass "both configured servers were queried and each was named"
+else
+    fail "the output does not name both servers; see $TWO_OUT"
+fi
+
+if [[ "$TWO_TEXT" == *"P0000042"* ]]; then
+    pass "the reachable server's entry still came back with the other one down"
+else
+    fail "a server that was down took the reachable server's results with it"
+    cat "$TWO_OUT"
+fi
+
+if [[ "$TWO_TEXT" == *"Second"* && "$TWO_TEXT" == *"failed"* ]]; then
+    pass "the unreachable server was reported by name rather than as 'the worklist'"
+else
+    fail "the unreachable server was not reported clearly"
+fi
+
+step "Choosing one worklist server by name"
+
+ONE_OUT="$WORK_DIR/worklist-one.out"
+
+if dotnet "$CLI" worklist --config "$TWO_CONFIG" --worklist Reference > "$ONE_OUT" 2>&1; then
+    pass "naming a server queried it and succeeded"
+else
+    fail "naming a reachable server did not succeed; see $ONE_OUT"
+    cat "$ONE_OUT"
+fi
+
+if [[ "$(cat "$ONE_OUT")" != *"Second"* ]]; then
+    pass "the server that was not named was not queried"
+else
+    fail "naming one server still queried the other"
+fi
+
+# The one case that must fail loudly rather than quietly querying everything: a name that
+# matches nothing. Silently falling back to all servers would mean a typo in a script
+# searched a department nobody asked about.
+if dotnet "$CLI" worklist --config "$TWO_CONFIG" --worklist Nonexistent > "$WORK_DIR/worklist-bad.out" 2>&1; then
+    fail "an unknown server name was accepted instead of being refused"
+else
+    pass "an unknown server name was refused"
+fi
+
+if grep -q "Reference" "$WORK_DIR/worklist-bad.out" && grep -q "Second" "$WORK_DIR/worklist-bad.out"; then
+    pass "the refusal lists the servers that ARE configured"
+else
+    fail "the refusal does not say which servers are configured"
+fi
+
+step "Confirming a single worklist from an older configuration still works"
+
+# What a site upgrading actually has on disk: one "Worklist" object, not a list. Losing it
+# would mean retyping an AE Title agreed with another department from memory.
+cat > "$WORK_DIR/worklist-legacy.json" <<JSON
+{
+  "ConfigurationVersion": 1,
+  "CallingAeTitle": "$CALLING_AE",
+  "Destinations": [],
+  "LogFolder": "$WORK_DIR/logs",
+  "OutputFolder": "$WORK_DIR/out",
+  "Worklist": {
+    "IsEnabled": true,
+    "CalledAeTitle": "$WORKLIST_AE",
+    "Host": "127.0.0.1",
+    "Port": $WORKLIST_PORT,
+    "DateRange": "Today",
+    "TimeoutSeconds": 20,
+    "MaximumResults": 500
+  }
+}
+JSON
+
+LEGACY_OUT="$WORK_DIR/worklist-legacy.out"
+
+if dotnet "$CLI" worklist --config "$WORK_DIR/worklist-legacy.json" > "$LEGACY_OUT" 2>&1; then
+    pass "the migrated server answered over a real association"
+else
+    fail "a configuration from an older version no longer queries; see $LEGACY_OUT"
+    cat "$LEGACY_OUT"
+fi
+
+if [[ "$(cat "$LEGACY_OUT")" == *"P0000042"* ]]; then
+    pass "it returned the same entry, so nothing was lost in the migration"
+else
+    fail "the migrated server did not return the scheduled entry"
+fi
+
+if grep -q '"Worklists"' "$WORK_DIR/worklist-legacy.json" &&
+   ! grep -q '"Worklist":' "$WORK_DIR/worklist-legacy.json"; then
+    pass "the file was rewritten as a list, so the migration happens once"
+else
+    fail "the configuration file still carries the old single-server key"
 fi
 
 # ------------------------------------------------------------------ Filename import

@@ -26,11 +26,35 @@ public sealed class WorklistViewModel : ObservableObject
     private string _patientIdFilter = string.Empty;
     private string _surnameFilter = string.Empty;
     private WorklistEntry? _selectedEntry;
+    private WorklistChoice? _selectedServer;
 
     /// <summary>Creates the view model.</summary>
     public WorklistViewModel(ApplicationServices services)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
+
+        AppConfiguration configuration = _services.ConfigurationService.Current;
+        IReadOnlyList<WorklistConfiguration> enabled = configuration.EnabledWorklists;
+
+        foreach (WorklistConfiguration server in enabled)
+        {
+            Servers.Add(new WorklistChoice(server, server.DisplayName));
+        }
+
+        // Offered only when there is more than one, because asking two servers where there
+        // is one is the same query twice and a pointless choice to put in front of somebody.
+        if (enabled.Count > 1)
+        {
+            Servers.Add(WorklistChoice.All(Localize("Worklist.AllServers")));
+        }
+
+        // The one used last, so a department that always asks the same server never picks
+        // it again. Falls back to the first, which is the order they are configured in.
+        WorklistConfiguration? preferred = configuration.PreferredWorklist;
+
+        _selectedServer =
+            Servers.FirstOrDefault(c => c.Server is not null && ReferenceEquals(c.Server, preferred))
+            ?? Servers.FirstOrDefault();
 
         SearchCommand = new RelayCommand(async _ => await SearchAsync(), _ => !IsBusy);
         ClearFiltersCommand = new RelayCommand(_ => ClearFilters(), _ => !IsBusy);
@@ -39,6 +63,42 @@ public sealed class WorklistViewModel : ObservableObject
         // asked for. A reception desk should see today's list immediately.
         _ = SearchAsync();
     }
+
+    /// <summary>The worklist servers that may be queried, plus "all" when there are several.</summary>
+    public ObservableCollection<WorklistChoice> Servers { get; } = new();
+
+    /// <summary>
+    /// Which server, or all of them, the next search will ask.
+    /// </summary>
+    /// <remarks>
+    /// Changing it searches again at once. The alternative is a picker that appears to do
+    /// nothing until a second button is pressed, which invites the operator to read a list
+    /// from one department as though it came from another.
+    /// </remarks>
+    public WorklistChoice? SelectedServer
+    {
+        get => _selectedServer;
+        set
+        {
+            if (!SetProperty(ref _selectedServer, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(ShowsSourceColumn));
+            RememberChoice();
+            _ = SearchAsync();
+        }
+    }
+
+    /// <summary>True when the picker is worth showing at all.</summary>
+    public bool HasSeveralServers => Servers.Count > 1;
+
+    /// <summary>
+    /// True when the results can have come from more than one server, so the list needs to
+    /// say which.
+    /// </summary>
+    public bool ShowsSourceColumn => SelectedServer?.IsAll == true;
 
     /// <summary>Entries currently shown.</summary>
     public ObservableCollection<WorklistEntry> Entries { get; } = new();
@@ -201,24 +261,50 @@ public sealed class WorklistViewModel : ObservableObject
         try
         {
             AppConfiguration configuration = _services.ConfigurationService.Current;
+            IReadOnlyList<WorklistConfiguration> servers = ServersToQuery(configuration);
 
-            WorklistQueryResult result = await _services.Worklist.QueryAsync(
-                configuration.Worklist,
-                configuration.CallingAeTitle,
-                PatientIdFilter,
-                SurnameFilter).ConfigureAwait(true);
-
-            foreach (WorklistEntry entry in result.Entries)
+            if (servers.Count == 0)
             {
-                Entries.Add(entry);
+                Status = Localize("Worklist.NoServers");
+                return;
             }
 
-            Status = result.WasTruncated
-                ? $"{result.Message} {Localize("Worklist.Truncated")}"
-                : result.Message;
+            bool several = servers.Count > 1;
+            var messages = new List<string>();
+            bool truncated = false;
+
+            foreach (WorklistConfiguration server in servers)
+            {
+                WorklistQueryResult result = await _services.Worklist.QueryAsync(
+                    server,
+                    configuration.CallingAeTitle,
+                    PatientIdFilter,
+                    SurnameFilter).ConfigureAwait(true);
+
+                foreach (WorklistEntry entry in result.Entries)
+                {
+                    // Stamped only when several servers were asked. With one, the column is
+                    // hidden and the text would be noise.
+                    Entries.Add(several
+                        ? entry with { SourceWorklistName = server.DisplayName }
+                        : entry);
+                }
+
+                truncated |= result.WasTruncated;
+
+                // Each server reports for itself, named, so one that is unreachable is
+                // visibly one server rather than "the worklist is down". A department
+                // whose own server answered should not be told otherwise.
+                messages.Add(several ? $"{server.DisplayName}: {result.Message}" : result.Message);
+            }
+
+            Status = truncated
+                ? $"{string.Join("  ", messages)} {Localize("Worklist.Truncated")}"
+                : string.Join("  ", messages);
 
             // One result is almost always the one wanted, and selecting it saves a click
-            // at a busy desk.
+            // at a busy desk. It is the whole of the "type a patient number and get the
+            // patient" flow: one match selects itself and the form can be filled at once.
             if (Entries.Count == 1)
             {
                 SelectedEntry = Entries[0];
@@ -242,5 +328,94 @@ public sealed class WorklistViewModel : ObservableObject
         _ = SearchAsync();
     }
 
+    /// <summary>
+    /// The servers the next query will ask.
+    /// </summary>
+    /// <remarks>
+    /// Resolved against the live configuration each time rather than held from the
+    /// constructor, so a server disabled in Settings while this window is open is not
+    /// queried by a list that no longer reflects what is configured.
+    /// </remarks>
+    private IReadOnlyList<WorklistConfiguration> ServersToQuery(AppConfiguration configuration)
+    {
+        IReadOnlyList<WorklistConfiguration> enabled = configuration.EnabledWorklists;
+
+        if (SelectedServer is null || SelectedServer.IsAll)
+        {
+            return enabled;
+        }
+
+        return enabled
+            .Where(w => string.Equals(w.Id, SelectedServer.Server!.Id, StringComparison.Ordinal))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Records which server was chosen, so the next window opens on it.
+    /// </summary>
+    /// <remarks>
+    /// Saved at once rather than when the window closes, because the choice is worth
+    /// keeping whether or not the operator goes on to pick a patient. "All" is not
+    /// recorded: it is a way of finding out where a patient is, not a server to return to.
+    /// </remarks>
+    private void RememberChoice()
+    {
+        if (SelectedServer?.Server is null)
+        {
+            return;
+        }
+
+        AppConfiguration configuration = _services.ConfigurationService.Current;
+
+        if (string.Equals(configuration.LastUsedWorklistId, SelectedServer.Server.Id, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            configuration.LastUsedWorklistId = SelectedServer.Server.Id;
+            _services.ConfigurationService.Save(configuration);
+        }
+        catch (Exception ex)
+        {
+            // A preference that could not be written must not break a clinical search.
+            _services.Logger.Warning($"The chosen worklist server could not be remembered: {ex.Message}");
+        }
+    }
+
     private string Localize(string key) => _services.Localizer.Get(key);
+}
+
+/// <summary>
+/// One entry in the worklist server picker: a configured server, or all of them.
+/// </summary>
+/// <remarks>
+/// "All" exists because of how a patient number is looked up. With several departments
+/// each holding their own worklist, somebody at a desk with a document in their hand does
+/// not necessarily know which department scheduled the examination, and making them guess
+/// turns one search into four.
+/// </remarks>
+public sealed class WorklistChoice
+{
+    /// <summary>Creates a choice for one configured server, or for all of them.</summary>
+    /// <param name="server">The server, or null to mean every enabled server.</param>
+    /// <param name="display">What the picker shows.</param>
+    public WorklistChoice(WorklistConfiguration? server, string display)
+    {
+        Server = server;
+        Display = display;
+    }
+
+    /// <summary>Creates the choice that queries every enabled server.</summary>
+    public static WorklistChoice All(string display) => new(null, display);
+
+    /// <summary>The server, or null for the "all" choice.</summary>
+    public WorklistConfiguration? Server { get; }
+
+    /// <summary>What the picker shows.</summary>
+    public string Display { get; }
+
+    /// <summary>True for the choice that queries every enabled server.</summary>
+    public bool IsAll => Server is null;
 }

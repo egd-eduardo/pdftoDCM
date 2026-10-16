@@ -11,6 +11,10 @@
 
     <Window.Resources>
         <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+        <!-- A DataGridColumn is not in the visual tree, so it has no DataContext and no
+             ancestor to bind through. A resource it can reach does the job. -->
+        <conv:BindingProxy x:Key="ViewModelProxy" Data="{Binding}" />
     </Window.Resources>
 
     <Grid Margin="20">
@@ -30,7 +34,22 @@
 
         <!-- Filters -->
         <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,14">
-            <Grid>
+            <StackPanel>
+
+                <!-- Which server to ask. Shown only when there is more than one, because a
+                     picker with a single entry is a decision that looks like a choice. -->
+                <StackPanel Margin="0,0,0,12"
+                            Visibility="{Binding HasSeveralServers, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="{loc:Localize Worklist.Server}" Style="{StaticResource FieldLabelTextStyle}" />
+                    <ComboBox ItemsSource="{Binding Servers}"
+                              SelectedItem="{Binding SelectedServer}"
+                              DisplayMemberPath="Display"
+                              Style="{StaticResource InputComboBoxStyle}"
+                              IsEnabled="{Binding IsNotBusy}"
+                              HorizontalAlignment="Left" MinWidth="260" />
+                </StackPanel>
+
+                <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
@@ -66,7 +85,12 @@
                         Command="{Binding ClearFiltersCommand}"
                         MinWidth="110" MinHeight="36"
                         VerticalAlignment="Bottom" />
-            </Grid>
+                </Grid>
+
+                <TextBlock Text="{loc:Localize Worklist.PatientIdHint}"
+                           Style="{StaticResource CaptionTextStyle}"
+                           TextWrapping="Wrap" Margin="0,10,0,0" />
+            </StackPanel>
         </Border>
 
         <!-- Results -->
@@ -97,6 +121,14 @@
                                         Binding="{Binding DisplayProcedure}" Width="220" />
                     <DataGridTextColumn Header="{loc:Localize Worklist.Column.Scheduled}"
                                         Binding="{Binding DisplayScheduled}" Width="140" />
+                    <!-- Which server the row came from. Two departments can hold a step for
+                         the same patient, and the operator has to see which one they are
+                         about to file against. Collapsed when only one server was asked. -->
+                    <DataGridTextColumn Header="{loc:Localize Worklist.Column.Source}"
+                                        Binding="{Binding SourceWorklistName}" Width="150"
+                                        Visibility="{Binding Data.ShowsSourceColumn,
+                                                     Source={StaticResource ViewModelProxy},
+                                                     Converter={StaticResource BoolToVisibility}}" />
                 </DataGrid.Columns>
             </DataGrid>
         </Border>

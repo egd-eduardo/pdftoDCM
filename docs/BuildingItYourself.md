@@ -101,7 +101,7 @@ Nothing hidden, and nothing that touches your system outside this folder:
    Store, and anything that merely checks the name is fooled by them.
 4. Runs `build\build.ps1`, which restores, builds, validates, tests, publishes, assembles
    the handover package and builds the installer.
-5. **Refuses to continue if any of the 246 tests fails.** A build that fails its tests is
+5. **Refuses to continue if any of the 260 tests fails.** A build that fails its tests is
    not one to hand to a hospital.
 6. Offers to sign the files if a code signing certificate exists, and tells you how to
    create one if not.
@@ -121,8 +121,8 @@ Two things appear under `artifacts\`:
 
 ```
 artifacts\
-  PdfToDicom-3.2.0-win-x64\        <- the folder to hand over
-  PdfToDicom-3.2.0-win-x64.zip     <- the same, ready to email
+  PdfToDicom-3.3.0-win-x64\        <- the folder to hand over
+  PdfToDicom-3.3.0-win-x64.zip     <- the same, ready to email
 ```
 
 The folder contains everything a site needs and nothing it should not have:
@@ -198,21 +198,24 @@ folder that `prune` removes.
 
 ---
 
-## Setting the worklist settings password
+## Setting the protected settings password
 
-The Worklist tab in Settings is locked behind a password compiled into the executable.
+The **Worklist** and **Destinations** tabs in Settings are both locked behind one password
+compiled into the executable. They are the settings that decide where patient data comes
+from and where it goes, and the same person is trusted with both; unlocking either page
+opens the other.
 
 **The password currently set is recorded in the clear** in the comment on the `Verifier`
-constant in `src\PdfToDicom.Core\Security\WorklistSettingsLock.cs`, so that it cannot be
-forgotten. That is deliberate, and that comment is the **only** record of it in the
-repository: it is written down in exactly one place on purpose, because two copies are
-how two copies come to disagree. The reasoning, and what to do if this repository is ever
-shared or made public, are recorded there rather than repeated here.
+constant in `src\PdfToDicom.Core\Security\ProtectedSettingsLock.cs`, so that it cannot be
+forgotten. That comment, and a test that asserts the same password, are the only records of
+it in the repository, and they have to agree: the test fails until they do. The reasoning,
+and what to do if this repository is ever shared or made public, are recorded beside the
+constant rather than repeated here.
 
 To change it, run from the repository:
 
 ```powershell
-dotnet run --project src\PdfToDicom.Cli -- worklist-password
+dotnet run --project src\PdfToDicom.Cli -- settings-password
 ```
 
 It asks for the password twice without showing what you type, and prints one line:
@@ -222,8 +225,11 @@ It asks for the password twice without showing what you type, and prints one lin
 ```
 
 Paste that line over the `Verifier` constant in
-`src\PdfToDicom.Core\Security\WorklistSettingsLock.cs`, **update the comment above it to
-name the new password**, and rebuild. That is the whole procedure.
+`src\PdfToDicom.Core\Security\ProtectedSettingsLock.cs`, **update the comment above it to
+name the new password**, and **update the password in
+`tests\PdfToDicom.Core.Tests\WorklistTests.cs`** so the test that pins it agrees. Then
+rebuild. That is the whole procedure, and the test is what stops the first two steps being
+done without the third.
 
 **What is stored is not the password.** It is a PBKDF2-HMAC-SHA256 hash with a random
 salt and 210,000 iterations. It can answer whether a password offered to it is correct,

@@ -123,3 +123,43 @@ public sealed class TransmissionOutcomeToTextConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException("This converter is one way.");
 }
+
+/// <summary>
+/// Carries a data context to somewhere that cannot reach one.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A <see cref="System.Windows.Controls.DataGridColumn"/> is not part of the visual tree.
+/// It has no inherited DataContext and no ancestor to walk up to, so the obvious
+/// <c>RelativeSource AncestorType=Window</c> binding on a column's Visibility resolves to
+/// nothing. WPF reports that only as a trace message, so the symptom is a column that
+/// never hides and no error anywhere.
+/// </para>
+/// <para>
+/// Declaring one of these as a resource gives the column something it CAN bind to: a
+/// resource lookup works from a column, and this object's own DataContext is inherited
+/// normally because it is a <see cref="Freezable"/>, which takes part in that inheritance
+/// even though it is not a visual.
+/// </para>
+/// <para>
+/// This is the established WPF answer to the problem rather than a trick of ours, and it
+/// is the reason the source column on the worklist window can be hidden when only one
+/// server was queried.
+/// </para>
+/// </remarks>
+public sealed class BindingProxy : Freezable
+{
+    /// <summary>The object bindings are routed through, normally the view model.</summary>
+    public static readonly DependencyProperty DataProperty =
+        DependencyProperty.Register(nameof(Data), typeof(object), typeof(BindingProxy));
+
+    /// <summary>The object bindings are routed through, normally the view model.</summary>
+    public object? Data
+    {
+        get => GetValue(DataProperty);
+        set => SetValue(DataProperty, value);
+    }
+
+    /// <inheritdoc />
+    protected override Freezable CreateInstanceCore() => new BindingProxy();
+}

@@ -102,12 +102,6 @@
   "Settings.Tab.Appearance": "Aspeto",
 
   "Settings.Tab.Worklist": "Lista de trabalho",
-  "Settings.Worklist.Locked": "Estas definições estão protegidas",
-  "Settings.Worklist.LockedCaption": "A lista de trabalho pode ser consultada sem palavra-passe. Alterar o servidor a que se liga exige uma, para que uma ligação que funciona não seja alterada por engano.",
-  "Settings.Worklist.Password": "Palavra-passe",
-  "Settings.Worklist.Unlock": "Desbloquear",
-  "Settings.Worklist.WrongPassword": "Essa palavra-passe não foi aceite.",
-  "Settings.Worklist.Unprotected": "Não foi definida nenhuma palavra-passe nesta compilação, pelo que estas definições estão acessíveis a qualquer pessoa que abra esta janela. Execute \"pdftodicom worklist-password\" e volte a compilar para definir uma.",
   "Settings.Worklist.Enabled": "Disponibilizar a lista de trabalho ao introduzir os dados do doente",
   "Settings.Worklist.CalledAeTitle": "AE Title da lista de trabalho",
   "Settings.Worklist.Host": "Nome ou endereço do servidor",
@@ -273,5 +267,25 @@
   "Settings.Import.Test.Button": "Ler",
   "Settings.Import.Test.Empty": "Escreva um nome de ficheiro acima e prima Ler.",
   "Settings.Import.Test.Matched": "Lido com o formato {0}",
-  "Settings.Import.Test.Blank": "(vazio)"
+  "Settings.Import.Test.Blank": "(vazio)",
+
+  "Settings.Lock.Locked": "Estas definições estão protegidas",
+  "Settings.Lock.LockedCaption.Worklist": "A lista de trabalho pode ser consultada sem palavra-passe. Alterar os servidores a que se liga exige uma, para que uma ligação que funciona não seja alterada por engano. A mesma palavra-passe abre a página Destinos.",
+  "Settings.Lock.LockedCaption.Destinations": "Os documentos podem ser enviados sem palavra-passe. Alterar o destino exige uma: um endereço ou um AE Title mal escrito coloca o relatório de um doente no arquivo errado. A mesma palavra-passe abre a página Lista de trabalho.",
+  "Settings.Lock.Password": "Palavra-passe",
+  "Settings.Lock.Unlock": "Desbloquear",
+  "Settings.Lock.WrongPassword": "Essa palavra-passe não foi aceite.",
+  "Settings.Lock.Unprotected": "Não foi definida nenhuma palavra-passe nesta compilação, pelo que estas definições estão acessíveis a qualquer pessoa que abra esta janela. Execute \"pdftodicom settings-password\" e volte a compilar para definir uma.",
+
+  "Settings.AddWorklist": "Adicionar",
+  "Settings.RemoveWorklist": "Remover",
+  "Settings.Worklist.Name": "Nome apresentado ao operador",
+  "Settings.Worklist.Name.Caption": "Como esta lista de trabalho é identificada quando o operador escolhe entre várias, por exemplo \"Radiologia\" ou \"Cardiologia\". Indique o que a lista contém e não onde está alojada.",
+  "Settings.Worklist.NewName": "Nova lista de trabalho",
+  "Worklist.Server": "Lista de trabalho a consultar",
+  "Worklist.AllServers": "Todas as listas de trabalho",
+  "Worklist.NoServers": "Não há nenhuma lista de trabalho ativa. Adicione uma na página Lista de trabalho, em Definições.",
+  "Worklist.PatientIdHint": "Introduza um número de processo para obter esse doente. Se houver uma única correspondência, é selecionada automaticamente; se houver várias, escolha a correta na lista. Deixe ambos os campos vazios para ver a lista completa.",
+  "Worklist.Column.Source": "Lista de trabalho",
+  "Status.ConfigurationProblem": "Não foi possível ler as definições"
 }

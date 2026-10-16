@@ -705,13 +705,15 @@ public sealed class ConfigurationCloneTests
         copy.FilenameImport.PadPatientIdTo = 4;
         copy.FilenameImport.Patterns.Add("{PatientId}");
         copy.Destinations[0].Host = "10.0.0.1";
-        copy.Worklist.Host = "10.0.0.2";
+        copy.Worklists[0].Host = "10.0.0.2";
+        copy.Worklists.Add(new WorklistConfiguration { Name = "Added" });
         copy.Templates[0].Name = "changed";
 
         Assert.Equal(8, original.FilenameImport.PadPatientIdTo);
         Assert.Single(original.FilenameImport.Patterns);
         Assert.Equal("192.168.0.1", original.Destinations[0].Host);
-        Assert.Equal("192.168.0.2", original.Worklist.Host);
+        Assert.Equal("192.168.0.2", original.Worklists[0].Host);
+        Assert.Single(original.Worklists);
         Assert.Equal("Template", original.Templates[0].Name);
     }
 
@@ -776,6 +778,7 @@ public sealed class ConfigurationCloneTests
             ShowAdvancedFields = true,
             ConfirmBeforeSending = false,
             ConfigurationVersion = 1,
+            LastUsedWorklistId = "wl-one",
             FilenameImport = new FilenameImportConfiguration
             {
                 IsEnabled = true,
@@ -801,7 +804,16 @@ public sealed class ConfigurationCloneTests
             Port = 104
         });
 
-        configuration.Worklist.Host = "192.168.0.2";
+        configuration.Worklists.Add(new WorklistConfiguration
+        {
+            Id = "wl-one",
+            Name = "Radiology",
+            IsEnabled = true,
+            CalledAeTitle = "RADWL",
+            Host = "192.168.0.2",
+            Port = 1041
+        });
+
         configuration.Templates.Add(new PatientTemplate { Name = "Template" });
 
         return configuration;
@@ -826,7 +838,8 @@ public sealed class ConfigurationCloneTests
             $"{f.IsEnabled};{Describe(f.Patterns)};{Describe(f.DateFormats)};" +
             $"{f.UseFileDateAsStudyDate};{f.DefaultSex};{f.SplitRunTogetherNames};" +
             $"{f.PadPatientIdTo};{f.AfterImport};{f.ImportedSubfolder};{f.FailedSubfolder};{f.RenameSuffix}",
-        WorklistConfiguration w => $"{w.IsEnabled};{w.CalledAeTitle};{w.Host};{w.Port};{w.DateRange}",
+        WorklistConfiguration w =>
+            $"{w.Id};{w.Name};{w.IsEnabled};{w.CalledAeTitle};{w.Host};{w.Port};{w.DateRange};{w.MaximumResults}",
         PacsDestination d => $"{d.Id};{d.Name};{d.CalledAeTitle};{d.Host};{d.Port};{d.IsEnabled}",
         PatientTemplate t => $"{t.Name};{t.StudyDescription};{t.SeriesDescription};{t.DocumentTitle}",
         _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty

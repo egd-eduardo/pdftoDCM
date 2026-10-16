@@ -19,6 +19,7 @@ this application.
    - [Patient details read from the file name](#patient-details-read-from-the-file-name)
 4. [Step 2 — Enter the patient information](#4-step-2--enter-the-patient-information)
    - [Taking the patient from the worklist](#taking-the-patient-from-the-worklist)
+   - [Choosing which worklist](#choosing-which-worklist)
 5. [Step 3 — Check the destination](#5-step-3--check-the-destination)
 6. [Sending the document](#6-sending-the-document)
 7. [What to do when something goes wrong](#7-what-to-do-when-something-goes-wrong)
@@ -214,9 +215,13 @@ this is the part where a mistake reaches the patient's record.
 is the single likeliest way a document ends up in the wrong patient's record, and the
 worklist removes that step completely.
 
-Press **From worklist...** above the patient fields. The button only appears when your IT
-department has configured a worklist; if you cannot see it, there is nothing to connect
-to and you should fill the form in as usual.
+Press **From worklist...** above the patient fields.
+
+> **If you cannot see that button**, no worklist has been switched on yet. It appears as
+> soon as your IT department has configured one and ticked **Enabled** on the Worklist page
+> in Settings; a worklist that is configured but not enabled shows no button at all. Ask
+> them to run `pdftodicom config`, which says outright whether the button should be there
+> and lists the servers it knows about. Until then, fill the form in as usual.
 
 A window opens showing the procedures scheduled for today:
 
@@ -224,6 +229,9 @@ A window opens showing the procedures scheduled for today:
 ┌────────────────────────────────────────────────────────────────────────────┐
 │  Modality Worklist                                                         │
 │  Choose the scheduled procedure this document belongs to.                  │
+│                                                                            │
+│  Worklist to search                                                        │
+│  [ Radiology              ▾ ]                                              │
 │                                                                            │
 │  Patient ID contains      Surname contains                                 │
 │  [________________]       [________________]   [Search]   [Show all]       │
@@ -243,6 +251,30 @@ A window opens showing the procedures scheduled for today:
 - Double click a row, or select it and press **Use this patient**.
 - The patient fields are then filled in for you, and the accession number comes from the
   order rather than from the paperwork on the desk.
+
+**Looking a patient up by number.** Type the patient number into **Patient ID contains**
+and press **Search**. If exactly one scheduled procedure matches, it is selected for you
+and all you have to do is press **Use this patient**. If the patient has several
+procedures scheduled, they all appear and you pick the right one.
+
+### Choosing which worklist
+
+**If your hospital has more than one worklist**, for example one for radiology and one for
+cardiology, a **Worklist to search** box appears at the top of the window. Pick the
+department whose list you want; the search runs again straight away.
+
+The one you choose is remembered, so if you always use the same department you will not
+have to pick it again.
+
+There is also an **All worklists** choice. Use it when you have a document in your hand
+and do not know which department scheduled the examination: it asks every worklist at once
+and an extra **Worklist** column tells you which department each row came from. That column
+matters when the same patient is scheduled in two departments, because it is how you can
+tell which of the two the document belongs to.
+
+If one department's worklist is down, the others still answer. The line under the list
+names the one that failed, so you know it is that department's server rather than all of
+them.
 
 **Check the "Will be used" line before pressing the button.** It shows exactly what will
 go into the patient's record. Usually it matches the row above it. Occasionally it is
@@ -426,9 +458,9 @@ Click **Settings** in the header. Most of these are set once by your IT departme
 | Tab | Contains |
 |---|---|
 | **Institution** | Hospital and department name, and this workstation's AE Title. |
-| **Destinations** | The PACS systems to send to, with a per destination **Test connection**. |
+| **Destinations** | The PACS systems to send to, with a per destination **Test connection**. Locked with the same password as the Worklist page: a mistyped address here would send a report to the wrong archive. |
 | **DICOM** | Character set, identifier generation, modality, default descriptions. Leave these alone unless your PACS administrator asks. |
-| **Worklist** | The modality worklist server. Usually locked with a password held by whoever installed the application; pointing it at the wrong server would put the wrong patients in front of you. |
+| **Worklist** | The modality worklist servers, as many as the hospital has. Locked with a password held by whoever installed the application; pointing one at the wrong server would put the wrong patients in front of you. |
 | **Folders** | Where files and logs are kept, and folder monitoring. |
 | **File names** | The naming layout used to read the patient details out of a file name, and a box that tries a name and shows what it would read. See section 3. |
 | **Appearance** | Language, dark mode, and whether to confirm before sending. |
