@@ -34,9 +34,13 @@ if (options.Command is "help" or "--help" or "h" or "?")
 
 // Handled before anything else is set up. It needs no configuration, no log folder and
 // no DICOM stack, and it must work on a machine where none of those are in place yet.
-if (string.Equals(options.Command, "worklist-password", StringComparison.OrdinalIgnoreCase))
+// Both spellings. The command was named for the worklist when that was all the password
+// guarded; it now guards the destinations too, but a note written down at a hospital six
+// months ago still says the old name and must keep working.
+if (string.Equals(options.Command, "settings-password", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(options.Command, "worklist-password", StringComparison.OrdinalIgnoreCase))
 {
-    return RunWorklistPassword();
+    return RunSettingsPassword();
 }
 
 using var services = new ApplicationServices(options.ConfigurationPath, options.Verbose);
@@ -73,7 +77,7 @@ finally
 // ---------------------------------------------------------------------- Commands
 
 /// <summary>
-/// Turns a password into the verifier that guards the worklist settings.
+/// Turns a password into the verifier that guards the worklist and destination settings.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -84,16 +88,17 @@ finally
 /// </para>
 /// <para>
 /// The output goes to standard output as a single line, intended to be pasted into
-/// WorklistSettingsLock.Verifier and compiled in.
+/// ProtectedSettingsLock.Verifier and compiled in.
 /// </para>
 /// </remarks>
-static int RunWorklistPassword()
+static int RunSettingsPassword()
 {
     Console.WriteLine();
-    Console.WriteLine("  Worklist settings password");
-    Console.WriteLine("  ==========================");
+    Console.WriteLine("  Protected settings password");
+    Console.WriteLine("  ===========================");
     Console.WriteLine();
-    Console.WriteLine("  This produces the line to paste into WorklistSettingsLock.Verifier.");
+    Console.WriteLine("  This one password guards the worklist servers and the destinations.");
+    Console.WriteLine("  This produces the line to paste into ProtectedSettingsLock.Verifier.");
     Console.WriteLine("  The password itself is never stored, printed or sent anywhere.");
     Console.WriteLine();
 
@@ -121,10 +126,10 @@ static int RunWorklistPassword()
         Console.WriteLine("  meaningfully harder to guess, and this one is typed rarely.");
     }
 
-    string verifier = WorklistSettingsLock.CreateVerifier(first);
+    string verifier = ProtectedSettingsLock.CreateVerifier(first);
 
     Console.WriteLine();
-    Console.WriteLine("  Paste this into src/PdfToDicom.Core/Security/WorklistSettingsLock.cs,");
+    Console.WriteLine("  Paste this into src/PdfToDicom.Core/Security/ProtectedSettingsLock.cs,");
     Console.WriteLine("  replacing the empty Verifier constant, then rebuild:");
     Console.WriteLine();
     Console.WriteLine($"    private const string Verifier = \"{verifier}\";");
@@ -482,12 +487,88 @@ static async Task<int> RunEchoAsync(ApplicationServices services, CommandLineOpt
 static async Task<int> RunWorklistAsync(ApplicationServices services, CommandLineOptions options)
 {
     AppConfiguration configuration = services.ConfigurationService.Current;
-    WorklistConfiguration worklist = configuration.Worklist;
 
+    if (configuration.Worklists.Count == 0)
+    {
+        Console.Error.WriteLine(
+            "error: no worklist server is configured. Add one on the Worklist page in Settings, " +
+            "or in the Worklists section of the configuration file.");
+        return ExitCodes.InvalidArguments;
+    }
+
+    IReadOnlyList<WorklistConfiguration> chosen = SelectWorklists(configuration, options.WorklistName);
+
+    if (chosen.Count == 0)
+    {
+        Console.Error.WriteLine($"error: no configured worklist is called '{options.WorklistName}'. Configured:");
+
+        foreach (WorklistConfiguration candidate in configuration.Worklists)
+        {
+            Console.Error.WriteLine($"  {candidate.DisplayName}");
+        }
+
+        return ExitCodes.InvalidArguments;
+    }
+
+    // Every chosen server is queried, and the worst outcome decides the exit code. A
+    // commissioning run against four servers should say which of them answered rather than
+    // stopping at the first that did not.
+    int failures = 0;
+
+    foreach (WorklistConfiguration worklist in chosen)
+    {
+        if (chosen.Count > 1)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"=== {worklist.DisplayName}");
+        }
+
+        if (!await QueryOneWorklistAsync(services, configuration, worklist, options).ConfigureAwait(false))
+        {
+            failures++;
+        }
+    }
+
+    return failures == 0 ? ExitCodes.Success : ExitCodes.TransmissionFailed;
+}
+
+/// <summary>
+/// The servers a run should query: the one named, or every configured one.
+/// </summary>
+/// <remarks>
+/// Matched on the name and then on the identifier, both ignoring case, because the name is
+/// what a person reads off the Settings page and the identifier is what a script would
+/// have. Every server is queried when none is named, since this command exists to answer
+/// "which of these work?".
+/// </remarks>
+static IReadOnlyList<WorklistConfiguration> SelectWorklists(AppConfiguration configuration, string? name)
+{
+    if (string.IsNullOrWhiteSpace(name))
+    {
+        return configuration.Worklists;
+    }
+
+    string wanted = name.Trim();
+
+    return configuration.Worklists
+        .Where(w =>
+            string.Equals(w.Name.Trim(), wanted, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(w.DisplayName, wanted, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(w.Id, wanted, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+}
+
+/// <summary>Queries one server and prints what came back. True when it answered.</summary>
+static async Task<bool> QueryOneWorklistAsync(
+    ApplicationServices services,
+    AppConfiguration configuration,
+    WorklistConfiguration worklist,
+    CommandLineOptions options)
+{
     if (string.IsNullOrWhiteSpace(worklist.Host))
     {
-        Console.Error.WriteLine("error: no worklist server is configured. See the Worklist section of the configuration file.");
-        return ExitCodes.InvalidArguments;
+        Console.Error.WriteLine($"error: '{worklist.DisplayName}' has no host configured.");
+        return false;
     }
 
     // Said rather than refused. Querying a server that the application will not offer to
@@ -495,7 +576,7 @@ static async Task<int> RunWorklistAsync(ApplicationServices services, CommandLin
     // the command useless for the one job it has.
     if (!worklist.IsEnabled)
     {
-        Console.WriteLine("note: the worklist is configured but not enabled, so the application will not offer it yet.");
+        Console.WriteLine($"note: '{worklist.DisplayName}' is configured but not enabled, so the application will not offer it yet.");
         Console.WriteLine();
     }
 
@@ -505,13 +586,13 @@ static async Task<int> RunWorklistAsync(ApplicationServices services, CommandLin
         worklist,
         configuration.CallingAeTitle,
         options.Demographics.PatientId,
-        options.Demographics.FamilyName);
+        options.Demographics.FamilyName).ConfigureAwait(false);
 
     Console.WriteLine(result.Message);
 
     if (!result.IsSuccess)
     {
-        return ExitCodes.TransmissionFailed;
+        return false;
     }
 
     foreach (WorklistEntry entry in result.Entries)
@@ -546,7 +627,7 @@ static async Task<int> RunWorklistAsync(ApplicationServices services, CommandLin
         Console.WriteLine($"note: the server had more to return than the configured maximum of {worklist.MaximumResults}.");
     }
 
-    return ExitCodes.Success;
+    return true;
 }
 
 /// <summary>The AE Title the worklist query will present, for the line printed before it runs.</summary>
@@ -869,6 +950,15 @@ static int RunShowConfiguration(ApplicationServices services)
     AppConfiguration configuration = services.ConfigurationService.Current;
 
     Console.WriteLine($"Configuration file : {services.ConfigurationService.ConfigurationFilePath}");
+
+    if (services.ConfigurationService.LoadProblem.Length > 0)
+    {
+        // First, and to stderr, because everything printed after it is a default rather
+        // than what the site configured.
+        Console.Error.WriteLine();
+        Console.Error.WriteLine($"WARNING: {services.ConfigurationService.LoadProblem}");
+        Console.Error.WriteLine();
+    }
     Console.WriteLine($"Log folder         : {configuration.LogFolder}");
     Console.WriteLine($"Output folder      : {configuration.OutputFolder}");
     Console.WriteLine($"Institution        : {configuration.InstitutionName}");
@@ -887,6 +977,30 @@ static int RunShowConfiguration(ApplicationServices services)
             $"(verify={destination.VerifyBeforeSend}, timeout={destination.TimeoutSeconds}s, " +
             $"retries={destination.RetryCount})");
     }
+
+    // Printed because "the worklist option does not appear" is answered here and nowhere
+    // else. The button is shown only when a server is enabled, so a site that configured
+    // one and did not tick Enabled sees nothing and has nothing to read.
+    Console.WriteLine();
+    Console.WriteLine($"Worklist servers ({configuration.Worklists.Count}):");
+
+    if (configuration.Worklists.Count == 0)
+    {
+        Console.WriteLine("  none configured, so the Worklist button is not shown.");
+    }
+
+    foreach (WorklistConfiguration worklist in configuration.Worklists)
+    {
+        Console.WriteLine(
+            $"  [{(worklist.IsEnabled ? "on " : "off")}] {worklist.DisplayName}: " +
+            $"{worklist.CalledAeTitle}@{worklist.Host}:{worklist.Port} " +
+            $"(modality={Shown(worklist.Modality)}, dates={worklist.DateRange}, " +
+            $"timeout={worklist.TimeoutSeconds}s, max={worklist.MaximumResults})");
+    }
+
+    Console.WriteLine(configuration.IsWorklistAvailable
+        ? "  The Worklist button IS shown on the main window."
+        : "  The Worklist button is NOT shown: no server above is enabled.");
 
     // Printed because a pattern that was rejected would otherwise fail silently: the form
     // would simply never fill in, and nothing on screen would say why.

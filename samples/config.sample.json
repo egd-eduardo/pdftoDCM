@@ -47,36 +47,67 @@
   ],
   "RecentDestinationLimit": 8,
 
-  "//Worklist": "Modality Worklist. When IsEnabled is true, a \"Worklist\" button appears on the main window and the operator picks a scheduled procedure step instead of typing the patient details, which is where the costly mistakes happen. The worklist server is usually a different system from the archive, which is why it is configured here and not as a destination. The settings below can be protected by a password compiled into the software; see the Worklist Setup document supplied with the application.",
-  "Worklist": {
-    "//IsEnabled": "False hides the Worklist button entirely. Nothing is queried and no association is attempted.",
-    "IsEnabled": false,
+  "//Worklists": "Modality Worklist servers. A list, because a hospital does not have one worklist: radiology and cardiology are usually different systems, and the operator chooses which to search when they open the worklist window. The Worklist button appears on the main window as soon as ONE of these has IsEnabled true; with none enabled there is no button, which is the first thing to check if it seems to be missing. Run \"pdftodicom config\" and it says outright whether the button is shown. A worklist server is usually a different system from the archive, which is why these are not destinations. These settings, and the destinations above, are protected by the one password compiled into the software; see the Worklist Setup document supplied with the application.",
+  "//WorklistsMigration": "A configuration written by version 3.2 or earlier held a single \"Worklist\" object here instead. It is moved into this list automatically the first time this version starts, keeping every setting, and the old key is then removed from the file. Nothing has to be retyped.",
+  "Worklists": [
+    {
+      "//Id": "Generated when a server is added, and never shown. It is how the application remembers which server was chosen last, so renaming a server does not make it forget.",
+      "Id": "radiology",
 
-    "//Connection": "CalledAeTitle, Host and Port identify the worklist SCP. Your worklist administrator must register the Calling AE Title of this workstation before a query will be answered. CallingAeTitleOverride is normally left empty, so the application's own CallingAeTitle above is used.",
-    "CalledAeTitle": "WORKLIST",
-    "Host": "192.168.10.40",
-    "Port": 104,
-    "CallingAeTitleOverride": "",
+      "//Name": "What the operator sees in the picker. Say what the worklist holds rather than where it lives.",
+      "Name": "Radiology",
 
-    "//Matching": "Modality and ScheduledStationAeTitle are match keys. Leave either empty to match everything, which is what DICOM calls universal matching and is a legitimate and common choice: a department filing documents for several modalities wants the whole list.",
-    "Modality": "",
-    "ScheduledStationAeTitle": "",
+      "//IsEnabled": "False hides this server from the picker. With no server enabled at all, the Worklist button does not appear and nothing is queried.",
+      "IsEnabled": false,
 
-    "//DateRange": "Which scheduled dates to ask for. Today, YesterdayAndToday, LastSevenDays, AnyDate or Explicit. Today is the default and is what a reception desk wants almost always. AnyDate sends no date key at all, so a busy department may get thousands of entries back.",
-    "DateRange": "Today",
+      "//Connection": "CalledAeTitle, Host and Port identify the worklist SCP. Your worklist administrator must register the Calling AE Title of this workstation before a query will be answered. CallingAeTitleOverride is normally left empty, so the application's own CallingAeTitle above is used.",
+      "CalledAeTitle": "WORKLIST",
+      "Host": "192.168.10.40",
+      "Port": 104,
+      "CallingAeTitleOverride": "",
 
-    "//ExplicitDates": "Used only when DateRange is Explicit. ISO dates, for example 2026-10-01. Either may be left null, in which case today is used for that end, and a range entered backwards is put the right way round rather than refused.",
-    "ExplicitFrom": null,
-    "ExplicitTo": null,
+      "//Matching": "Modality and ScheduledStationAeTitle are match keys. Leave either empty to match everything, which is what DICOM calls universal matching and is a legitimate and common choice: a department filing documents for several modalities wants the whole list.",
+      "Modality": "",
+      "ScheduledStationAeTitle": "",
 
-    "//Limits": "TimeoutSeconds covers the association and the response. MaximumResults stops a mistyped query returning an entire schedule and freezing the window; the list says so when it has been cut short.",
-    "TimeoutSeconds": 30,
-    "MaximumResults": 500,
+      "//DateRange": "Which scheduled dates to ask for. Today, YesterdayAndToday, LastSevenDays, AnyDate or Explicit. Today is the default and is what a reception desk wants almost always. AnyDate sends no date key at all, so a busy department may get thousands of entries back.",
+      "DateRange": "Today",
 
-    "//Tls": "AcceptAnyTlsCertificate is convenient on a closed hospital network with a self signed certificate, and a hole anywhere else.",
-    "UseTls": false,
-    "AcceptAnyTlsCertificate": false
-  },
+      "//ExplicitDates": "Used only when DateRange is Explicit. ISO dates, for example 2026-10-01. Either may be left null, in which case today is used for that end, and a range entered backwards is put the right way round rather than refused.",
+      "ExplicitFrom": null,
+      "ExplicitTo": null,
+
+      "//Limits": "TimeoutSeconds covers the association and the response. MaximumResults stops a mistyped query returning an entire schedule and freezing the window; the list says so when it has been cut short.",
+      "TimeoutSeconds": 30,
+      "MaximumResults": 500,
+
+      "//Tls": "AcceptAnyTlsCertificate is convenient on a closed hospital network with a self signed certificate, and a hole anywhere else.",
+      "UseTls": false,
+      "AcceptAnyTlsCertificate": false
+    },
+    {
+      "//": "A second department's worklist. Delete this entry if there is only one. With more than one enabled, the worklist window offers a picker and an \"All worklists\" choice, which is how a patient number is looked up when nobody knows which department scheduled the examination.",
+      "Id": "cardiology",
+      "Name": "Cardiology",
+      "IsEnabled": false,
+      "CalledAeTitle": "CARDWL",
+      "Host": "192.168.10.41",
+      "Port": 104,
+      "CallingAeTitleOverride": "",
+      "Modality": "",
+      "ScheduledStationAeTitle": "",
+      "DateRange": "Today",
+      "ExplicitFrom": null,
+      "ExplicitTo": null,
+      "TimeoutSeconds": 30,
+      "MaximumResults": 500,
+      "UseTls": false,
+      "AcceptAnyTlsCertificate": false
+    }
+  ],
+
+  "//LastUsedWorklistId": "Written by the application, not by hand. The server the operator chose last, so it is offered first next time. An identifier that no longer matches any server is ignored.",
+  "LastUsedWorklistId": "",
 
   "//CharacterSet": "Utf8 writes Specific Character Set as ISO_IR 192 and represents any accented or non Latin name correctly. Change to Latin1 only if your archive is known to reject UTF-8.",
   "CharacterSet": "Utf8",

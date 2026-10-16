@@ -46,6 +46,9 @@ public sealed class SettingsViewModel : ObservableObject
         Destinations = new ObservableCollection<PacsDestination>(Working.Destinations);
         SelectedDestination = Destinations.FirstOrDefault();
 
+        Worklists = new ObservableCollection<WorklistConfiguration>(Working.Worklists);
+        SelectedWorklist = Worklists.FirstOrDefault();
+
         Languages = services.Localizer.AvailableLanguages;
         SelectedLanguage = Languages.FirstOrDefault(l =>
             string.Equals(l.CultureName, Working.Language, StringComparison.OrdinalIgnoreCase))
@@ -54,8 +57,11 @@ public sealed class SettingsViewModel : ObservableObject
         AddDestinationCommand = new RelayCommand(AddDestination);
         RemoveDestinationCommand = new RelayCommand(RemoveDestination, () => SelectedDestination is not null);
         TestDestinationCommand = new AsyncRelayCommand(TestDestinationAsync, () => SelectedDestination is not null && !IsTesting);
-        UnlockWorklistCommand = new RelayCommand(UnlockWorklist);
-        TestWorklistCommand = new AsyncRelayCommand(TestWorklistAsync);
+        TestWorklistCommand = new AsyncRelayCommand(
+            TestWorklistAsync, () => SelectedWorklist is not null);
+
+        AddWorklistCommand = new RelayCommand(AddWorklist);
+        RemoveWorklistCommand = new RelayCommand(RemoveWorklist, () => SelectedWorklist is not null);
         TestFilenameCommand = new RelayCommand(TestFilename);
         BrowseLogFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.LogFolder = f, Working.LogFolder));
         BrowseOutputFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.OutputFolder = f, Working.OutputFolder));
@@ -68,6 +74,38 @@ public sealed class SettingsViewModel : ObservableObject
 
     /// <summary>Destinations being edited.</summary>
     public ObservableCollection<PacsDestination> Destinations { get; }
+
+    /// <summary>Worklist servers being edited.</summary>
+    public ObservableCollection<WorklistConfiguration> Worklists { get; }
+
+    /// <summary>The worklist server whose settings are shown, or null when none is selected.</summary>
+    public WorklistConfiguration? SelectedWorklist
+    {
+        get => _selectedWorklist;
+        set
+        {
+            if (SetProperty(ref _selectedWorklist, value))
+            {
+                OnPropertyChanged(nameof(HasSelectedWorklist));
+
+                // The last server's result would otherwise sit under a different server's
+                // settings and read as though it belonged to them.
+                WorklistTestResult = string.Empty;
+
+                TestWorklistCommand.RaiseCanExecuteChanged();
+                RemoveWorklistCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>True when a worklist server is selected, so its settings can be shown.</summary>
+    public bool HasSelectedWorklist => SelectedWorklist is not null;
+
+    /// <summary>Adds a worklist server.</summary>
+    public RelayCommand AddWorklistCommand { get; }
+
+    /// <summary>Removes the selected worklist server.</summary>
+    public RelayCommand RemoveWorklistCommand { get; }
 
     /// <summary>Languages available in the interface.</summary>
     public IReadOnlyList<LanguageOption> Languages { get; }
@@ -93,51 +131,56 @@ public sealed class SettingsViewModel : ObservableObject
     /// </remarks>
     public string RegisteredUidRootForDisplay => UidGenerator.RegisteredUidRootForDisplay;
 
-    // ---------------------------------------------------------------- Worklist
+    // ---------------------------------------------------------------- Protected settings
 
-    private bool _isWorklistUnlocked = !WorklistSettingsLock.IsProtected;
-    private string _worklistPasswordAttempt = string.Empty;
-    private string _worklistLockMessage = string.Empty;
+    private bool _areProtectedSettingsUnlocked = !ProtectedSettingsLock.IsProtected;
+    private string _lockMessage = string.Empty;
     private string _worklistTestResult = string.Empty;
+    private WorklistConfiguration? _selectedWorklist;
 
     /// <summary>
-    /// Whether the worklist settings are readable and editable in this dialog.
+    /// Whether the protected settings, the worklist servers and the destinations, are
+    /// readable and editable in this dialog.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// One flag for both pages, because it is one password. Having to type it twice in the
+    /// same dialog would teach nothing and protect nothing: whoever opened one page can
+    /// open the other, and pretending otherwise would only be tedious.
+    /// </para>
+    /// <para>
     /// Starts unlocked when no password has been compiled in, because a lock nobody can
     /// open is not a protection, it is a defect. The dialog says plainly which of the two
     /// states it is in rather than implying a protection that is not there.
+    /// </para>
+    /// <para>
+    /// It is not remembered between dialogs. Closing Settings locks both pages again, so
+    /// an unattended workstation does not sit there unlocked.
+    /// </para>
     /// </remarks>
-    public bool IsWorklistUnlocked
+    public bool AreProtectedSettingsUnlocked
     {
-        get => _isWorklistUnlocked;
+        get => _areProtectedSettingsUnlocked;
         private set
         {
-            if (SetProperty(ref _isWorklistUnlocked, value))
+            if (SetProperty(ref _areProtectedSettingsUnlocked, value))
             {
-                OnPropertyChanged(nameof(IsWorklistLocked));
+                OnPropertyChanged(nameof(AreProtectedSettingsLocked));
             }
         }
     }
 
-    /// <summary>Inverse of <see cref="IsWorklistUnlocked"/>, for binding.</summary>
-    public bool IsWorklistLocked => !IsWorklistUnlocked;
+    /// <summary>Inverse of <see cref="AreProtectedSettingsUnlocked"/>, for binding.</summary>
+    public bool AreProtectedSettingsLocked => !AreProtectedSettingsUnlocked;
 
     /// <summary>True when a password was compiled into this build.</summary>
-    public bool IsWorklistPasswordSet => WorklistSettingsLock.IsProtected;
-
-    /// <summary>The password being offered. Never stored and never written anywhere.</summary>
-    public string WorklistPasswordAttempt
-    {
-        get => _worklistPasswordAttempt;
-        set => SetProperty(ref _worklistPasswordAttempt, value);
-    }
+    public bool IsSettingsPasswordSet => ProtectedSettingsLock.IsProtected;
 
     /// <summary>Why the last unlock attempt failed, when it did.</summary>
-    public string WorklistLockMessage
+    public string LockMessage
     {
-        get => _worklistLockMessage;
-        private set => SetProperty(ref _worklistLockMessage, value);
+        get => _lockMessage;
+        private set => SetProperty(ref _lockMessage, value);
     }
 
     /// <summary>Result of the last worklist connection test.</summary>
@@ -303,8 +346,6 @@ public sealed class SettingsViewModel : ObservableObject
         new EnumOption<WorklistDateRange>(WorklistDateRange.Explicit, "Settings.Worklist.Range.Explicit")
     };
 
-    /// <summary>Checks the offered password and unlocks on success.</summary>
-    public RelayCommand UnlockWorklistCommand { get; }
 
     /// <summary>Confirms the worklist server answers.</summary>
     /// <remarks>
@@ -315,33 +356,99 @@ public sealed class SettingsViewModel : ObservableObject
     /// </remarks>
     public AsyncRelayCommand TestWorklistCommand { get; }
 
-    private void UnlockWorklist()
+    /// <summary>
+    /// Checks a password and, if it is right, opens both protected pages.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Takes the password as an argument rather than exposing it as a bindable property.
+    /// A bound password is a plain string living on the view model for as long as the
+    /// binding does; passed across and used here, it is unreachable the moment this
+    /// returns, and the view clears the box.
+    /// </para>
+    /// <para>
+    /// Called from either page's unlock button. Both open together, because it is one
+    /// password and whoever opened one page can open the other.
+    /// </para>
+    /// </remarks>
+    public void TryUnlock(string? password)
     {
-        if (WorklistSettingsLock.Verify(WorklistPasswordAttempt))
+        if (ProtectedSettingsLock.Verify(password))
         {
-            IsWorklistUnlocked = true;
-            WorklistLockMessage = string.Empty;
-            _services.Logger.Information("The worklist settings were unlocked.");
+            AreProtectedSettingsUnlocked = true;
+            LockMessage = string.Empty;
+
+            // Audited, not merely logged. Who opened the pages that decide where patient
+            // data comes from and goes to is a governance question, and a wrong
+            // destination configured at 3am is something an audit trail should be able to
+            // place.
+            _services.Logger.Information("The protected settings were unlocked.");
+            _services.AuditLogger.ConfigurationChanged("Protected settings unlocked.");
         }
         else
         {
-            WorklistLockMessage = _services.Localizer.Get("Settings.Worklist.WrongPassword");
-            _services.Logger.Warning("An incorrect password was offered for the worklist settings.");
+            LockMessage = _services.Localizer.Get("Settings.Lock.WrongPassword");
+
+            // Also audited. One wrong attempt is a typo; a run of them is somebody trying.
+            _services.Logger.Warning("An incorrect password was offered for the protected settings.");
+            _services.AuditLogger.ConfigurationChanged("Protected settings unlock refused: wrong password.");
         }
 
-        // Cleared either way, so it is not left sitting in memory or on screen.
-        WorklistPasswordAttempt = string.Empty;
     }
 
     private async Task TestWorklistAsync()
     {
+        if (SelectedWorklist is null)
+        {
+            return;
+        }
+
         WorklistTestResult = _services.Localizer.Get("Settings.Worklist.Testing");
 
+        // The server as it is being edited, not as it was saved. Testing a connection and
+        // then having to save before the test means anything would make the button useless
+        // for the one job it has.
         (bool _, string message) = await _services.Worklist
-            .TestConnectionAsync(Working.Worklist, Working.CallingAeTitle)
+            .TestConnectionAsync(SelectedWorklist, Working.CallingAeTitle)
             .ConfigureAwait(true);
 
         WorklistTestResult = message;
+    }
+
+    /// <summary>
+    /// Adds a worklist server, already enabled and selected.
+    /// </summary>
+    /// <remarks>
+    /// Enabled on creation, because somebody who presses Add wants a worklist. Leaving it
+    /// disabled is how a site configures a server correctly, tests it successfully, and
+    /// then finds the button still absent.
+    /// </remarks>
+    private void AddWorklist()
+    {
+        var server = new WorklistConfiguration
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = _services.Localizer.Get("Settings.Worklist.NewName"),
+            IsEnabled = true
+        };
+
+        Worklists.Add(server);
+        SelectedWorklist = server;
+    }
+
+    private void RemoveWorklist()
+    {
+        if (SelectedWorklist is null)
+        {
+            return;
+        }
+
+        int index = Worklists.IndexOf(SelectedWorklist);
+        Worklists.Remove(SelectedWorklist);
+
+        SelectedWorklist = Worklists.Count == 0
+            ? null
+            : Worklists[Math.Min(index, Worklists.Count - 1)];
     }
 
     public IReadOnlyList<EnumOption<UidGenerationStrategy>> UidStrategies { get; } = new[]
@@ -465,6 +572,14 @@ public sealed class SettingsViewModel : ObservableObject
     public bool Save()
     {
         Working.Destinations = Destinations.ToList();
+        Working.Worklists = Worklists.ToList();
+
+        // A server that no longer exists must not be remembered as the one last chosen, or
+        // the worklist window would open on nothing.
+        if (Working.Worklists.All(w => !string.Equals(w.Id, Working.LastUsedWorklistId, StringComparison.Ordinal)))
+        {
+            Working.LastUsedWorklistId = string.Empty;
+        }
 
         if (SelectedLanguage is not null)
         {

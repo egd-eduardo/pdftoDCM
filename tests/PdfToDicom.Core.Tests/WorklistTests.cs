@@ -222,14 +222,52 @@ public sealed class ReferringPhysicianRoundTripTests
 /// <summary>
 /// Covers the password that guards the worklist settings.
 /// </summary>
-public sealed class WorklistSettingsLockTests
+public sealed class ProtectedSettingsLockTests
 {
+    /// <summary>
+    /// The password actually compiled into this build.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Written down in two places, the comment on the verifier constant and here, and they
+    /// have to agree. A verifier that no longer matches the password everyone believes is
+    /// set locks the copyright holder out of the worklist and destination settings in their
+    /// own software, and the only symptom is an unlock that quietly refuses. There is
+    /// nothing to debug from, because a verifier cannot be turned back into a password.
+    /// </para>
+    /// <para>
+    /// So it is pinned. Changing the password means changing this line too, which is the
+    /// point: the test fails until the two records of it agree.
+    /// </para>
+    /// <para>
+    /// This does not weaken the lock any further than the comment on the constant already
+    /// does. Both live in the source, the source is not part of what a site receives, and
+    /// anybody holding the source can delete the check outright.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheShippedPasswordIsTheOneThatIsWrittenDown()
+    {
+        Assert.True(ProtectedSettingsLock.IsProtected);
+        Assert.True(ProtectedSettingsLock.Verify("Odraude"));
+    }
+
+    [Fact]
+    public void TheShippedLockRefusesTheObviousNearMisses()
+    {
+        Assert.False(ProtectedSettingsLock.Verify("odraude"));
+        Assert.False(ProtectedSettingsLock.Verify("Odraude "));
+        Assert.False(ProtectedSettingsLock.Verify("NeverWinterNights"));
+        Assert.False(ProtectedSettingsLock.Verify(string.Empty));
+        Assert.False(ProtectedSettingsLock.Verify(null));
+    }
+
     [Fact]
     public void TheCorrectPasswordIsAccepted()
     {
-        string verifier = WorklistSettingsLock.CreateVerifier("a well chosen passphrase");
+        string verifier = ProtectedSettingsLock.CreateVerifier("a well chosen passphrase");
 
-        Assert.True(WorklistSettingsLock.VerifyAgainst("a well chosen passphrase", verifier));
+        Assert.True(ProtectedSettingsLock.VerifyAgainst("a well chosen passphrase", verifier));
     }
 
     [Theory]
@@ -239,9 +277,9 @@ public sealed class WorklistSettingsLockTests
     [InlineData(null)]
     public void AnythingElseIsRejected(string? attempt)
     {
-        string verifier = WorklistSettingsLock.CreateVerifier("a well chosen passphrase");
+        string verifier = ProtectedSettingsLock.CreateVerifier("a well chosen passphrase");
 
-        Assert.False(WorklistSettingsLock.VerifyAgainst(attempt, verifier));
+        Assert.False(ProtectedSettingsLock.VerifyAgainst(attempt, verifier));
     }
 
     [Fact]
@@ -250,7 +288,7 @@ public sealed class WorklistSettingsLockTests
         // The whole point of storing a hash rather than something encrypted: the stored
         // value cannot be turned back into the password.
         const string password = "Sardinha2026";
-        string verifier = WorklistSettingsLock.CreateVerifier(password);
+        string verifier = ProtectedSettingsLock.CreateVerifier(password);
 
         Assert.DoesNotContain(password, verifier, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(
@@ -264,12 +302,12 @@ public sealed class WorklistSettingsLockTests
     {
         // A fresh salt every time, so two installations sharing a password do not share a
         // stored value, and nothing can be learned by comparing them.
-        string first = WorklistSettingsLock.CreateVerifier("Sardinha2026");
-        string second = WorklistSettingsLock.CreateVerifier("Sardinha2026");
+        string first = ProtectedSettingsLock.CreateVerifier("Sardinha2026");
+        string second = ProtectedSettingsLock.CreateVerifier("Sardinha2026");
 
         Assert.NotEqual(first, second);
-        Assert.True(WorklistSettingsLock.VerifyAgainst("Sardinha2026", first));
-        Assert.True(WorklistSettingsLock.VerifyAgainst("Sardinha2026", second));
+        Assert.True(ProtectedSettingsLock.VerifyAgainst("Sardinha2026", first));
+        Assert.True(ProtectedSettingsLock.VerifyAgainst("Sardinha2026", second));
     }
 
     [Fact]
@@ -278,14 +316,14 @@ public sealed class WorklistSettingsLockTests
         // Shipping with a placeholder nobody knows would lock the author out of their own
         // software. An unset lock is open, and the interface says so rather than implying
         // a protection that is not there.
-        Assert.True(WorklistSettingsLock.VerifyAgainst("anything at all", string.Empty));
+        Assert.True(ProtectedSettingsLock.VerifyAgainst("anything at all", string.Empty));
     }
 
     [Fact]
     public void AMalformedVerifierIsTreatedAsABuildFaultNotAWrongPassword()
     {
         Assert.Throws<InvalidOperationException>(
-            () => WorklistSettingsLock.VerifyAgainst("anything", "not-a-valid-verifier"));
+            () => ProtectedSettingsLock.VerifyAgainst("anything", "not-a-valid-verifier"));
     }
 
     [Fact]
@@ -293,7 +331,7 @@ public sealed class WorklistSettingsLockTests
     {
         // Verification uses the count stored in the verifier rather than today's constant,
         // so raising the constant later cannot invalidate a password already set.
-        string verifier = WorklistSettingsLock.CreateVerifier("Sardinha2026");
+        string verifier = ProtectedSettingsLock.CreateVerifier("Sardinha2026");
         string[] parts = verifier.Split('$');
 
         Assert.Equal(4, parts.Length);

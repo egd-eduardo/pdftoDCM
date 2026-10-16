@@ -102,12 +102,6 @@
   "Settings.Tab.Appearance": "Appearance",
 
   "Settings.Tab.Worklist": "Worklist",
-  "Settings.Worklist.Locked": "These settings are protected",
-  "Settings.Worklist.LockedCaption": "The worklist can be searched without a password. Changing which server it talks to needs one, so a connection that works is not altered by accident.",
-  "Settings.Worklist.Password": "Password",
-  "Settings.Worklist.Unlock": "Unlock",
-  "Settings.Worklist.WrongPassword": "That password was not accepted.",
-  "Settings.Worklist.Unprotected": "No password has been set in this build, so these settings are open to anyone who opens this dialog. Run \"pdftodicom worklist-password\" and rebuild to set one.",
   "Settings.Worklist.Enabled": "Offer the worklist when entering patient details",
   "Settings.Worklist.CalledAeTitle": "Worklist AE Title",
   "Settings.Worklist.Host": "Host name or address",
@@ -273,5 +267,25 @@
   "Settings.Import.Test.Button": "Read it",
   "Settings.Import.Test.Empty": "Type a file name above, then press Read it.",
   "Settings.Import.Test.Matched": "Read using the layout {0}",
-  "Settings.Import.Test.Blank": "(empty)"
+  "Settings.Import.Test.Blank": "(empty)",
+
+  "Settings.Lock.Locked": "These settings are protected",
+  "Settings.Lock.LockedCaption.Worklist": "The worklist can be searched without a password. Changing which servers it talks to needs one, so a connection that works is not altered by accident. The same password opens the Destinations page.",
+  "Settings.Lock.LockedCaption.Destinations": "Documents can be sent without a password. Changing where they are sent needs one: a mistyped address or AE Title puts a patient's report in the wrong archive. The same password opens the Worklist page.",
+  "Settings.Lock.Password": "Password",
+  "Settings.Lock.Unlock": "Unlock",
+  "Settings.Lock.WrongPassword": "That password was not accepted.",
+  "Settings.Lock.Unprotected": "No password has been set in this build, so these settings are open to anyone who opens this dialog. Run \"pdftodicom settings-password\" and rebuild to set one.",
+
+  "Settings.AddWorklist": "Add",
+  "Settings.RemoveWorklist": "Remove",
+  "Settings.Worklist.Name": "Name shown to the operator",
+  "Settings.Worklist.Name.Caption": "What this worklist is called when the operator chooses between them, for example \"Radiology\" or \"Cardiology\". Say what the worklist holds rather than where it lives.",
+  "Settings.Worklist.NewName": "New worklist",
+  "Worklist.Server": "Worklist to search",
+  "Worklist.AllServers": "All worklists",
+  "Worklist.NoServers": "No worklist server is enabled. Add one on the Worklist page in Settings.",
+  "Worklist.PatientIdHint": "Enter a patient number to fetch that patient. A single match is selected for you; where there are several, pick the right one from the list. Leave both boxes empty for the whole scheduled list.",
+  "Worklist.Column.Source": "Worklist",
+  "Status.ConfigurationProblem": "The settings could not be read"
 }

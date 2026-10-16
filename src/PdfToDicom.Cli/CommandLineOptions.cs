@@ -74,6 +74,11 @@ public sealed class CommandLineOptions
     /// </summary>
     public int? PadPatientIdTo { get; private set; }
 
+    /// <summary>
+    /// Which configured worklist server to query. Empty queries every one of them.
+    /// </summary>
+    public string WorklistName { get; private set; } = string.Empty;
+
     /// <summary>Generate and save the object without transmitting it.</summary>
     public bool NoSend { get; private set; }
 
@@ -225,6 +230,9 @@ public sealed class CommandLineOptions
             case "pattern":
                 Patterns.Add(value);
                 break;
+            case "worklist":
+                WorklistName = value;
+                break;
             case "pad-patient-id":
                 if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int padWidth) &&
                     padWidth >= 0 && padWidth <= DicomValueRules.MaxLongStringLength)
@@ -275,11 +283,15 @@ public sealed class CommandLineOptions
           send        Convert a file and transmit it to the configured destination(s).
           generate    Convert a file and save it locally, without transmitting.
           echo        Send a C-ECHO verification to the configured destination(s).
-          worklist    Query the configured Modality Worklist and print the result.
+          worklist    Query the configured Modality Worklist(s) and print the result.
           check-names Try the file name patterns against names, converting nothing.
           inspect     Print the DICOM tags of an existing .dcm file.
           extract     Recover the original PDF from a .dcm file, byte for byte.
           config      Show the effective configuration and where it is stored.
+          settings-password
+                      Turn a password into the verifier that guards the worklist and
+                      destination settings, to be compiled into a build. The password
+                      itself is never stored or printed.
           help        Show this text.
 
         FILE NAME IMPORT OPTIONS
@@ -305,6 +317,10 @@ public sealed class CommandLineOptions
                                        never shortened.
 
         WORKLIST OPTIONS
+          --worklist <name>            Which configured worklist server to query, by the
+                                       name shown on the Worklist page in Settings. Every
+                                       configured server is queried when this is omitted,
+                                       which is what commissioning a site wants.
           --patient-id <value>         Narrow the query to this Patient ID. Wildcards are
                                        allowed: * matches any run of characters and ?
                                        matches one. Omit it to match every patient.
@@ -351,6 +367,7 @@ public sealed class CommandLineOptions
                                  --name "012345_Ana Silva_ACC001_19700521.pdf"
           ls *.pdf | pdftodicom check-names
           pdftodicom send --pdf "012345_Ana Silva_ACC001_19700521.pdf" --from-filename
+          pdftodicom worklist --worklist Radiology
           pdftodicom worklist --patient-id P0000004
           pdftodicom worklist --surname 'SILVA*'
           pdftodicom generate --pdf report.pdf --patient-id 12345 --surname Silva \

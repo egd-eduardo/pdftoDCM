@@ -212,14 +212,37 @@ public sealed class AppConfiguration
     public FilenameImportConfiguration FilenameImport { get; set; } = new();
 
     /// <summary>
-    /// Connection and query settings for the Modality Worklist.
+    /// The Modality Worklist servers that may be queried, in the order they are offered.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Typing a patient identifier by hand is the likeliest way to file a document against
     /// the wrong patient. Taking it from the worklist that scheduled the examination
     /// removes the step entirely, which is why this is here.
+    /// </para>
+    /// <para>
+    /// A list rather than one server, because a hospital does not have one worklist. A
+    /// department converting documents for radiology and for cardiology queries two
+    /// different systems, and before this it could be pointed at only one of them at a
+    /// time. The operator chooses which to ask when they open the worklist.
+    /// </para>
+    /// <para>
+    /// A configuration written by an earlier version holds a single <c>Worklist</c> object
+    /// instead. It is migrated into this list on load, keeping its settings, so nobody has
+    /// to retype a connection that already worked.
+    /// </para>
     /// </remarks>
-    public WorklistConfiguration Worklist { get; set; } = new();
+    public List<WorklistConfiguration> Worklists { get; set; } = new();
+
+    /// <summary>
+    /// Identifier of the worklist server chosen last, so it is offered first next time.
+    /// </summary>
+    /// <remarks>
+    /// A department that always queries the same one should not have to pick it every
+    /// time, and a department that alternates loses nothing. An identifier that no longer
+    /// exists is ignored rather than repaired, and the first enabled server is used.
+    /// </remarks>
+    public string LastUsedWorklistId { get; set; } = string.Empty;
 
     /// <summary>
     /// Resolution used when rendering PDF pages to images.
@@ -323,6 +346,36 @@ public sealed class AppConfiguration
     /// <summary>True when the configured character set can represent any Unicode text.</summary>
     [JsonIgnore]
     public bool CharacterSetSupportsUnicode => CharacterSet == DicomCharacterSet.Utf8;
+
+    /// <summary>Worklist servers that are enabled, and therefore offered to the operator.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<WorklistConfiguration> EnabledWorklists =>
+        Worklists.Where(w => w.IsEnabled).ToList();
+
+    /// <summary>
+    /// True when at least one worklist server is enabled, which is what decides whether
+    /// the worklist is offered on the main window at all.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsWorklistAvailable => Worklists.Any(w => w.IsEnabled);
+
+    /// <summary>
+    /// The worklist server to offer first: the one used last where it is still enabled,
+    /// otherwise the first enabled one, otherwise none at all.
+    /// </summary>
+    [JsonIgnore]
+    public WorklistConfiguration? PreferredWorklist
+    {
+        get
+        {
+            IReadOnlyList<WorklistConfiguration> enabled = EnabledWorklists;
+
+            return enabled.FirstOrDefault(w =>
+                       !string.IsNullOrEmpty(LastUsedWorklistId) &&
+                       string.Equals(w.Id, LastUsedWorklistId, StringComparison.Ordinal))
+                   ?? enabled.FirstOrDefault();
+        }
+    }
 
     // ---------------------------------------------------------------- Copying
 

@@ -17,6 +17,17 @@ public sealed record WorklistEntry
     public string PatientId { get; init; } = string.Empty;
 
     /// <summary>
+    /// Name of the worklist server this entry came from.
+    /// </summary>
+    /// <remarks>
+    /// Not from the response; set by whatever ran the query. It matters when several
+    /// servers are asked at once, because two departments can hold a step for the same
+    /// patient and the operator needs to see which one they are about to file against.
+    /// Empty when only one server was asked, where saying it would be noise.
+    /// </remarks>
+    public string SourceWorklistName { get; init; } = string.Empty;
+
+    /// <summary>
     /// Family name, the first component of Patient's Name (0010,0010).
     /// </summary>
     public string FamilyName { get; init; } = string.Empty;

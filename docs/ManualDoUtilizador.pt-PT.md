@@ -19,6 +19,7 @@ utilizar esta aplicação.
    - [Dados do doente lidos do nome do ficheiro](#dados-do-doente-lidos-do-nome-do-ficheiro)
 4. [Passo 2 — Introduzir os dados do doente](#4-passo-2--introduzir-os-dados-do-doente)
    - [Obter o doente a partir da lista de trabalho](#obter-o-doente-a-partir-da-lista-de-trabalho)
+   - [Escolher a lista de trabalho](#escolher-a-lista-de-trabalho)
 5. [Passo 3 — Confirmar o destino](#5-passo-3--confirmar-o-destino)
 6. [Enviar o documento](#6-enviar-o-documento)
 7. [O que fazer quando algo corre mal](#7-o-que-fazer-quando-algo-corre-mal)
@@ -219,9 +220,14 @@ um erro chega ao registo do doente.
 número de processo à mão é a forma mais provável de um documento acabar no registo do
 doente errado, e a lista de trabalho elimina esse passo por completo.
 
-Prima **Da lista de trabalho...**, por cima dos campos do doente. O botão só aparece
-quando o departamento de informática tiver configurado uma lista de trabalho; se não o vir,
-não existe nada a que ligar e deve preencher o formulário como habitualmente.
+Prima **Da lista de trabalho...**, por cima dos campos do doente.
+
+> **Se não conseguir ver esse botão**, ainda não foi ativada nenhuma lista de trabalho. O
+> botão aparece assim que o departamento de informática tiver configurado uma e assinalado
+> **Ativada** na página Lista de trabalho, em Definições; uma lista configurada mas não
+> ativada não mostra botão nenhum. Peça-lhes que executem `pdftodicom config`, que indica
+> claramente se o botão deve estar visível e enumera os servidores conhecidos. Até lá,
+> preencha o formulário como habitualmente.
 
 Abre-se uma janela com os procedimentos agendados para hoje:
 
@@ -229,6 +235,9 @@ Abre-se uma janela com os procedimentos agendados para hoje:
 ┌────────────────────────────────────────────────────────────────────────────┐
 │  Lista de Trabalho de Modalidade                                           │
 │  Escolha o procedimento agendado a que este documento pertence.            │
+│                                                                            │
+│  Lista de trabalho a consultar                                             │
+│  [ Radiologia             ▾ ]                                              │
 │                                                                            │
 │  ID do doente contém      Apelido contém                                   │
 │  [________________]       [________________]  [Procurar] [Mostrar tudo]    │
@@ -248,6 +257,29 @@ Abre-se uma janela com os procedimentos agendados para hoje:
 - Faça duplo clique numa linha, ou selecione-a e prima **Utilizar este doente**.
 - Os campos do doente são preenchidos automaticamente, e o número de acesso passa a vir
   do pedido e não dos papéis que estão em cima da secretária.
+
+**Procurar um doente pelo número de processo.** Escreva o número de processo em **Nº de
+processo contém** e prima **Procurar**. Se houver exatamente um procedimento agendado que
+corresponda, é selecionado automaticamente e basta premir **Utilizar este doente**. Se o
+doente tiver vários procedimentos agendados, aparecem todos e escolhe o correto.
+
+### Escolher a lista de trabalho
+
+**Se o hospital tiver mais do que uma lista de trabalho**, por exemplo uma para radiologia
+e outra para cardiologia, aparece uma caixa **Lista de trabalho a consultar** no topo da
+janela. Escolha o serviço cuja lista pretende; a pesquisa é repetida imediatamente.
+
+A escolha é memorizada, pelo que se utilizar sempre o mesmo serviço não terá de a repetir.
+
+Existe também a opção **Todas as listas de trabalho**. Utilize-a quando tiver um documento
+em mãos e não souber que serviço agendou o exame: consulta todas as listas ao mesmo tempo e
+uma coluna adicional, **Lista de trabalho**, indica de que serviço vem cada linha. Essa
+coluna é importante quando o mesmo doente está agendado em dois serviços, porque é assim
+que distingue a qual dos dois o documento pertence.
+
+Se a lista de trabalho de um serviço estiver indisponível, as restantes continuam a
+responder. A linha por baixo da lista identifica a que falhou, para que saiba que se trata
+do servidor desse serviço e não de todos.
 
 **Confirme a linha "Será utilizado" antes de premir o botão.** Mostra exatamente o que vai
 ficar no registo do doente. Normalmente coincide com a linha acima. Ocasionalmente é mais
@@ -433,9 +465,9 @@ pelo departamento de informática.
 | Separador | Conteúdo |
 |---|---|
 | **Instituição** | Nome do hospital e do serviço, e o AE Title desta estação. |
-| **Destinos** | Os sistemas PACS de destino, com **Testar ligação** por destino. |
+| **Destinos** | Os sistemas PACS de destino, com **Testar ligação** por destino. Protegido pela mesma palavra-passe da página Lista de trabalho: um endereço mal escrito aqui enviaria um relatório para o arquivo errado. |
 | **DICOM** | Conjunto de carateres, geração de identificadores, modalidade, descrições por omissão. Não altere sem indicação do administrador do PACS. |
-| **Lista de trabalho** | O servidor da lista de trabalho de modalidade. Normalmente protegido por uma palavra-passe na posse de quem instalou a aplicação; apontá-lo para o servidor errado colocaria à sua frente os doentes errados. |
+| **Lista de trabalho** | Os servidores de listas de trabalho de modalidade, tantos quantos o hospital tiver. Protegido por uma palavra-passe na posse de quem instalou a aplicação; apontar um deles para o servidor errado colocaria à sua frente os doentes errados. |
 | **Pastas** | Onde são guardados os ficheiros e os registos, e a monitorização de pastas. |
 | **Nomes de ficheiros** | O formato utilizado para ler os dados do doente a partir do nome do ficheiro, e uma caixa que experimenta um nome e mostra o que seria lido. Ver a secção 3. |
 | **Aspeto** | Idioma, modo escuro e confirmação antes de enviar. |

@@ -24,6 +24,16 @@ public sealed class ConfigurationService : IConfigurationService
         AllowTrailingCommas = true
     };
 
+    /// <summary>
+    /// Reading options for the one-off look at an older file, matching what the serializer
+    /// tolerates so a file it would accept is not rejected here.
+    /// </summary>
+    private static readonly JsonDocumentOptions LegacyDocumentOptions = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
+    };
+
     private readonly object _saveLock = new();
     private readonly string _configurationFilePath;
     private AppConfiguration _current = new();
@@ -49,6 +59,9 @@ public sealed class ConfigurationService : IConfigurationService
     public string ConfigurationFilePath => _configurationFilePath;
 
     /// <inheritdoc />
+    public string LoadProblem { get; private set; } = string.Empty;
+
+    /// <inheritdoc />
     public event EventHandler<AppConfiguration>? ConfigurationChanged;
 
     /// <inheritdoc />
@@ -71,17 +84,40 @@ public sealed class ConfigurationService : IConfigurationService
                 return _current;
             }
 
+            LoadProblem = string.Empty;
+
             string json = File.ReadAllText(_configurationFilePath);
             AppConfiguration? loaded = JsonSerializer.Deserialize<AppConfiguration>(json, SerializerOptions);
 
             _current = loaded ?? CreateDefaults();
+
+            // Before the fallbacks, because migrating brings a server INTO the list and the
+            // fallbacks are what give it an identifier and a name.
+            bool migrated = MigrateSingleWorklist(_current, json);
+
             ApplyFallbacks(_current);
+
+            if (migrated)
+            {
+                // Written back at once, so the file stops carrying a key this version does
+                // not use and the migration is not repeated on every start.
+                TrySaveQuietly(_current);
+            }
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             // A damaged file must never prevent the application from starting. The bad
             // file is kept for investigation and a working default takes its place.
-            QuarantineCorruptFile(ex);
+            string quarantined = QuarantineCorruptFile(ex);
+
+            // Said out loud, because every setting has just gone back to its default and
+            // the operator is about to wonder where the worklist went.
+            LoadProblem =
+                $"The configuration file could not be read ({ex.Message}) so default settings " +
+                "are in use. Every configured destination and worklist server is gone until it " +
+                "is repaired or entered again." +
+                (quarantined.Length > 0 ? $" The damaged file was kept as '{quarantined}'." : string.Empty);
+
             _current = CreateDefaults();
             TrySaveQuietly(_current);
         }
@@ -149,6 +185,76 @@ public sealed class ConfigurationService : IConfigurationService
 
         ApplyFallbacks(configuration);
         return configuration;
+    }
+
+    /// <summary>
+    /// Brings a single <c>Worklist</c> object written by an earlier version into the
+    /// <see cref="AppConfiguration.Worklists"/> list.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Versions up to 3.2 held exactly one worklist server, under a <c>Worklist</c> key.
+    /// That key is no longer part of the model, because two sources of truth for the same
+    /// thing is how they come to disagree, so the old value is read straight out of the
+    /// JSON and added to the list.
+    /// </para>
+    /// <para>
+    /// Only when the list is empty. A file that already has <c>Worklists</c> has been
+    /// written by this version or later, and a leftover <c>Worklist</c> key in it is stale;
+    /// importing it would resurrect a server somebody deleted.
+    /// </para>
+    /// <para>
+    /// It never throws. A malformed legacy node means the site has no worklist configured,
+    /// which is the state every site starts in, and refusing to start over it would be
+    /// absurd.
+    /// </para>
+    /// </remarks>
+    internal static bool MigrateSingleWorklist(AppConfiguration configuration, string json)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        configuration.Worklists ??= new List<WorklistConfiguration>();
+
+        if (configuration.Worklists.Count > 0 || string.IsNullOrWhiteSpace(json))
+        {
+            return false;
+        }
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(json, LegacyDocumentOptions);
+
+            if (document.RootElement.ValueKind != JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty("Worklist", out JsonElement legacy) ||
+                legacy.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            WorklistConfiguration? server =
+                legacy.Deserialize<WorklistConfiguration>(SerializerOptions);
+
+            if (server is null)
+            {
+                return false;
+            }
+
+            // Named so the migration is visible in the picker rather than silent. A site
+            // that had one server did not need to name it; now that there can be several,
+            // it does.
+            if (string.IsNullOrWhiteSpace(server.Name))
+            {
+                server.Name = "Worklist";
+            }
+
+            configuration.Worklists.Add(server);
+            configuration.LastUsedWorklistId = string.Empty;
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -220,19 +326,54 @@ public sealed class ConfigurationService : IConfigurationService
             destination.RetryCount = Math.Clamp(destination.RetryCount, 0, 10);
             destination.RetryDelaySeconds = Math.Clamp(destination.RetryDelaySeconds, 0, 120);
         }
+
+        configuration.Worklists ??= new List<WorklistConfiguration>();
+
+        foreach (WorklistConfiguration worklist in configuration.Worklists)
+        {
+            if (string.IsNullOrWhiteSpace(worklist.Id))
+            {
+                worklist.Id = Guid.NewGuid().ToString("N");
+            }
+
+            if (string.IsNullOrWhiteSpace(worklist.Name))
+            {
+                // An entry with no name cannot be chosen deliberately from a list, so it
+                // is given the only name that is certainly accurate.
+                worklist.Name = worklist.DisplayName;
+            }
+
+            worklist.Port = Math.Clamp(worklist.Port, 1, 65535);
+            worklist.TimeoutSeconds = Math.Clamp(worklist.TimeoutSeconds, 1, 600);
+            worklist.MaximumResults = Math.Clamp(worklist.MaximumResults, 1, 5_000);
+        }
+
+        // Two servers sharing an identifier would make "the one used last" ambiguous, and
+        // the only way that happens is a hand edited file or a copied block.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (WorklistConfiguration worklist in configuration.Worklists)
+        {
+            if (!seen.Add(worklist.Id))
+            {
+                worklist.Id = Guid.NewGuid().ToString("N");
+                seen.Add(worklist.Id);
+            }
+        }
     }
 
     /// <summary>
     /// Renames a configuration file that could not be parsed so that it is available for
     /// investigation without blocking startup.
     /// </summary>
-    private void QuarantineCorruptFile(Exception cause)
+    /// <returns>The path the damaged file was kept at, or empty if it could not be kept.</returns>
+    private string QuarantineCorruptFile(Exception cause)
     {
         try
         {
             if (!File.Exists(_configurationFilePath))
             {
-                return;
+                return string.Empty;
             }
 
             string quarantinePath =
@@ -245,10 +386,13 @@ public sealed class ConfigurationService : IConfigurationService
                 quarantinePath + ".txt",
                 $"The configuration file could not be read and was replaced with defaults.{Environment.NewLine}" +
                 $"Reason: {cause.GetType().Name}: {cause.Message}{Environment.NewLine}");
+
+            return Path.GetFileName(quarantinePath);
         }
         catch
         {
             // Quarantining is best effort. Failing to rename must not prevent startup.
+            return string.Empty;
         }
     }
 

@@ -14,6 +14,19 @@ public interface IConfigurationService
     string ConfigurationFilePath { get; }
 
     /// <summary>
+    /// What went wrong with the configuration file on load, or empty when nothing did.
+    /// </summary>
+    /// <remarks>
+    /// A damaged file is set aside and defaults take over, which is the right behaviour:
+    /// the application always starts. But it used to do so in silence, and a site whose
+    /// file had been hand edited into invalid JSON would find every setting back at its
+    /// default with nothing anywhere to say why. The worklist would be gone, the
+    /// destinations would be gone, and the only record was a text file beside the
+    /// quarantined one that nobody would think to look for.
+    /// </remarks>
+    string LoadProblem { get; }
+
+    /// <summary>
     /// Raised after the configuration has been reloaded or saved, so that the user
     /// interface can react to changes such as a theme or language switch.
     /// </summary>

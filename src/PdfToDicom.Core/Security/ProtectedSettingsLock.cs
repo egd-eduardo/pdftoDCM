@@ -5,13 +5,22 @@ using System.Text;
 namespace PdfToDicom.Core.Security;
 
 /// <summary>
-/// Guards the worklist settings behind a password that is compiled into the software.
+/// Guards the settings that decide where patient data comes from and goes to, behind a
+/// password compiled into the software.
 /// </summary>
 /// <remarks>
 /// <para>
+/// <b>What it covers.</b> The worklist servers, which decide which patients are offered,
+/// and the destinations, which decide where documents are sent. Both are addresses and AE
+/// Titles, and both put patient data somewhere: a mistyped destination sends a report to
+/// the wrong archive, and a mistyped worklist offers the wrong patients to choose from.
+/// One password opens both, because they are the same kind of setting and the same person
+/// is trusted with them.
+/// </para>
+/// <para>
 /// <b>What this protects against, and what it does not.</b> It stops a curious member of
-/// staff wandering into the worklist configuration and changing an address or an AE Title,
-/// which is the realistic risk on a shared clinical workstation. It does not stop someone
+/// staff wandering into those pages and changing an address or an AE Title, which is the
+/// realistic risk on a shared clinical workstation. It does not stop someone
 /// determined: the check runs on the user's own machine, and anyone able to decompile or
 /// patch the executable can remove it. That is true of every password a desktop
 /// application checks by itself, and saying otherwise would be dishonest.
@@ -31,7 +40,7 @@ namespace PdfToDicom.Core.Security;
 /// </para>
 /// <para>
 /// <b>The tool that sets it never records the password.</b>
-/// <c>pdftodicom worklist-password</c> reads it without echoing, derives the verifier on
+/// <c>pdftodicom settings-password</c> reads it without echoing, derives the verifier on
 /// the spot and prints only the line to paste in. Nothing that could be turned back into
 /// the password leaves that process.
 /// </para>
@@ -43,7 +52,7 @@ namespace PdfToDicom.Core.Security;
 /// it takes to stop the password being recoverable from this repository.
 /// </para>
 /// </remarks>
-public static class WorklistSettingsLock
+public static class ProtectedSettingsLock
 {
     /// <summary>
     /// The stored verifier, in the form <c>PBKDF2-SHA256$iterations$salt$hash</c>, with
@@ -51,13 +60,13 @@ public static class WorklistSettingsLock
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Empty means no password has been set, and the worklist settings are then open. That
+    /// Empty means no password has been set, and the protected settings are then open. That
     /// is deliberate: shipping with a placeholder password nobody knows would lock the
     /// author out of their own software, which is a worse failure than an unset lock. The
     /// application reports the setting as unprotected so it cannot be forgotten.
     /// </para>
     /// <para>
-    /// <b>The password currently compiled in is NeverWinterNights.</b> It is written here
+    /// <b>The password currently compiled in is Odraude.</b> It is written here
     /// in the clear at the copyright holder's request, so that it cannot be forgotten and
     /// can be changed or removed later. The verifier below cannot be turned back into it,
     /// so this comment is the only record of it in the repository: change the two
@@ -66,8 +75,9 @@ public static class WorklistSettingsLock
     /// <para>
     /// This weakens the lock only against somebody who already has the source, and such a
     /// person can delete the check outright, so it costs very little against the risk the
-    /// lock is actually for: a member of staff wandering into the worklist configuration
-    /// on a shared clinical workstation, who has the executable and not this file. The
+    /// lock is actually for: a member of staff wandering into the worklist or destination
+    /// configuration on a shared clinical workstation, who has the executable and not this
+    /// file. The
     /// source is not part of what a site receives.
     /// </para>
     /// <para>
@@ -76,16 +86,16 @@ public static class WorklistSettingsLock
     /// published, and a published password is no password.
     /// </para>
     /// <para>
-    /// <b>To change it.</b> Run <c>pdftodicom worklist-password</c>, paste the single line
+    /// <b>To change it.</b> Run <c>pdftodicom settings-password</c>, paste the single line
     /// it prints over the constant below, update the comment above to match, and rebuild.
     /// </para>
     /// <para>
-    /// <b>To remove it.</b> Set the constant to an empty string. The worklist settings are
+    /// <b>To remove it.</b> Set the constant to an empty string. The protected settings are
     /// then open to anyone and the dialog says so plainly, which is the honest behaviour
     /// for a lock that is not set rather than one that pretends otherwise.
     /// </para>
     /// </remarks>
-    private const string Verifier = "PBKDF2-SHA256$210000$KxLec2uxU5q9zFHxleeLeg==$dn8UaNAIilJtHCaDingXvwRi2LW0IIsT2e9PtbHDtYo=";
+    private const string Verifier = "PBKDF2-SHA256$210000$WD4eR31ApewdTMAQLuw0/w==$DYRQ73Fs9FKnMYvYp5hTSq1sjcd2RGPIqGnOsqd5QZg=";
 
     /// <summary>The algorithm label written into, and expected in, a verifier.</summary>
     private const string Algorithm = "PBKDF2-SHA256";
@@ -103,7 +113,7 @@ public static class WorklistSettingsLock
     private const int KeyLength = 32;
 
     /// <summary>
-    /// True when a password has been compiled in. False means the worklist settings are
+    /// True when a password has been compiled in. False means the protected settings are
     /// open to anyone, which the user interface says plainly rather than implying a
     /// protection that is not there.
     /// </summary>

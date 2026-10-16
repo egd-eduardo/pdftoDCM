@@ -12,20 +12,37 @@ public partial class SettingsWindow : Window
     public SettingsWindow() => InitializeComponent();
 
     /// <summary>
-    /// Carries the typed password to the view model.
+    /// Offers the typed password, then clears the box whatever the answer was.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// PasswordBox deliberately does not expose its value as a bindable dependency
     /// property, because a bound password sits in memory as a plain string for as long as
-    /// the binding lives. Passing it across explicitly, and clearing the box once it has
-    /// been checked, keeps that window short.
+    /// the binding lives. Handing it over here, at the moment the button is pressed, and
+    /// clearing the box immediately afterwards keeps that window as short as the framework
+    /// allows.
+    /// </para>
+    /// <para>
+    /// Cleared on success and on failure alike. A wrong password left in the box invites
+    /// the same wrong password to be submitted again, and a right one left in the box is a
+    /// credential sitting on screen on a shared workstation.
+    /// </para>
+    /// <para>
+    /// One handler serves both protected pages. The button names the box through its
+    /// <c>Tag</c>, so the two pages share this code rather than each having a copy of it.
+    /// </para>
     /// </remarks>
-    private void OnWorklistPasswordChanged(object sender, RoutedEventArgs e)
+    private void OnUnlockSettings(object sender, RoutedEventArgs e)
     {
-        if (DataContext is SettingsViewModel viewModel && sender is System.Windows.Controls.PasswordBox box)
+        if (DataContext is not SettingsViewModel viewModel ||
+            sender is not FrameworkElement source ||
+            source.Tag is not System.Windows.Controls.PasswordBox box)
         {
-            viewModel.WorklistPasswordAttempt = box.Password;
+            return;
         }
+
+        viewModel.TryUnlock(box.Password);
+        box.Clear();
     }
 
     /// <summary>
