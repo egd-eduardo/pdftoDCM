@@ -42,6 +42,29 @@ reason since it was written. The new one was added without it. That is the whole
   binding validator that exists for the same class of fault: code that compiles cleanly and
   fails when a window opens.
 
+### Also: the application now says when it changes your settings file
+
+Asked for after this incident, and worth having regardless. Three things, and one of them
+is deliberately *not* what was asked for.
+
+- **An upgraded file says so.** When the settings were written by an earlier version they
+  are upgraded in place, and the window and `pdftodicom config` now say that happened and
+  that the worklist server was kept. Nothing is lost; the file on disk has simply changed
+  shape, and somebody who knows what was in it should see that rather than find out later.
+- **A file from a NEWER version is a warning, and is not written over.** This is the
+  direction that genuinely loses settings: an older build cannot model what a newer one
+  added, so saving would write the file back without it. It now says so plainly and leaves
+  the file alone on load, so there is something to go back to.
+- **It does not say the file is "incompatible".** It is not. An older settings file is
+  upgraded correctly and always was; what failed in 3.3.0 was the dialog, not the file.
+  Telling people to recreate a working configuration would cost them a worklist connection
+  and a set of destinations for no reason.
+
+**If the Settings dialog cannot be opened at all**, the message now names the settings file
+and says to rename rather than delete it, so the values can be copied back. That is the
+message this release would have shown instead of "Object reference not set to an instance
+of an object".
+
 ### Note
 
 The view models have no automated test coverage, because WPF cannot run on a build agent
@@ -122,7 +145,7 @@ that outright:
 
 ### Notes
 
-- 260 tests pass, up from 246. The interoperability script runs 94 checks against DCMTK, up
+- 265 tests pass. The interoperability script runs 94 checks against DCMTK, up
   from 84.
 - The worklist servers and the destinations are stored as `Worklists` and `Destinations` in
   the configuration file; `samples/config.sample.json` is annotated with both, including

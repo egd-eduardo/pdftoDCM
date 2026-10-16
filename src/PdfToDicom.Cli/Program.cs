@@ -959,6 +959,18 @@ static int RunShowConfiguration(ApplicationServices services)
         Console.Error.WriteLine($"WARNING: {services.ConfigurationService.LoadProblem}");
         Console.Error.WriteLine();
     }
+
+    if (services.ConfigurationService.LoadNotice.Length > 0)
+    {
+        Console.WriteLine();
+        Console.WriteLine($"NOTE: {services.ConfigurationService.LoadNotice}");
+        Console.WriteLine();
+    }
+
+    Console.WriteLine($"Settings version   : {configuration.ConfigurationVersion}" +
+                      (configuration.ConfigurationVersion == AppConfiguration.CurrentVersion
+                          ? " (current)"
+                          : $" (this build writes {AppConfiguration.CurrentVersion})"));
     Console.WriteLine($"Log folder         : {configuration.LogFolder}");
     Console.WriteLine($"Output folder      : {configuration.OutputFolder}");
     Console.WriteLine($"Institution        : {configuration.InstitutionName}");

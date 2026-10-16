@@ -133,7 +133,7 @@ pdftoDCM/
 │   │
 │   └── PdfToDicom.Cli/              Headless front end for scripted conversion
 │
-├── tests/PdfToDicom.Core.Tests/     260 xUnit tests
+├── tests/PdfToDicom.Core.Tests/     265 xUnit tests
 │
 ├── tools/
 │   └── PdfToDicom.TestWorklistServer/   A Modality Worklist SCP for testing only.
@@ -628,6 +628,30 @@ Three rules, each with a test:
 This matters more than most migrations. A worklist connection is agreed with another
 department and tested against a live server; losing it silently means somebody retypes an AE
 Title from memory, and a wrong AE Title offers the wrong patients.
+
+### Saying when the settings file changes
+
+`AppConfiguration.CurrentVersion` is the schema version this build writes, and
+`ConfigurationVersion` is the one the file was read with. Comparing them on load gives
+three outcomes, and the distinction between them matters more than it looks:
+
+| File | Outcome |
+|---|---|
+| Older | Upgraded in place, `LoadNotice` says so, the file is rewritten and stamped |
+| Current | Nothing said |
+| **Newer** | `IsFromNewerVersion`, `LoadProblem` warns, **and the file is not written** |
+
+The newer case is the only genuine incompatibility. This build cannot model what a later
+one added, so saving writes the file back without it; the warning is worthless if loading
+has already destroyed what it warns about, so load leaves it alone.
+
+An older file is **not** incompatible and must never be described that way. It is upgraded
+correctly, and telling a site to recreate it would cost them a worklist connection agreed
+with another department and a set of destinations, for nothing. The notice exists so the
+rewrite is visible, not to suggest anything is wrong.
+
+Bump `CurrentVersion` only for a change an older build would get *wrong*, not for every
+added setting: an unknown setting is ignored and the default stands, which is harmless.
 
 ### When the Worklist button does not appear
 
@@ -1156,7 +1180,7 @@ differ only in case.
 dotnet test tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj
 ```
 
-260 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
+265 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
 strategy), person name construction and shortening, the worklist date ranges, the
 settings password verifier, every mandatory attribute, payload integrity and odd length
 padding, UTF-8 round trips, configuration persistence and corruption recovery, file name
@@ -1399,7 +1423,7 @@ networking, validation and workflow layers need no change.
 
 Stated plainly, because a hospital deploying this needs to know what it does not do.
 
-1. **The user interface is not covered by automated tests.** The 260 tests cover Core in
+1. **The user interface is not covered by automated tests.** The 265 tests cover Core in
    depth, but WPF cannot run on a build agent without a desktop session, so no test opens
    a window. `build/validate-xaml-bindings.py` and
    `build/validate-viewmodel-commands.py` catch the two classes of fault that have

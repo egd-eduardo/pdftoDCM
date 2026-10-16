@@ -101,7 +101,7 @@ Nothing hidden, and nothing that touches your system outside this folder:
    Store, and anything that merely checks the name is fooled by them.
 4. Runs `build\build.ps1`, which restores, builds, validates, tests, publishes, assembles
    the handover package and builds the installer.
-5. **Refuses to continue if any of the 260 tests fails.** A build that fails its tests is
+5. **Refuses to continue if any of the 265 tests fails.** A build that fails its tests is
    not one to hand to a hospital.
 6. Offers to sign the files if a code signing certificate exists, and tells you how to
    create one if not.
