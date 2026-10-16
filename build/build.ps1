@@ -256,6 +256,13 @@ To run it here, install Python from https://www.python.org/downloads/ and tick
     # Only reached with a working Python, so a non zero code now means the validator
     # genuinely found a problem rather than that Python could not start.
     if ($LASTEXITCODE -ne 0) { throw 'The XAML bindings did not pass validation.' }
+
+    # A command refreshed before it has been created throws in the view model's
+    # constructor, so the window never opens. It compiles cleanly, and it only shows at a
+    # site that has the feature configured.
+    & $python (Join-Path $RepoRoot 'build\validate-viewmodel-commands.py')
+
+    if ($LASTEXITCODE -ne 0) { throw 'The view model command refreshes did not pass validation.' }
 }
 
 function Invoke-Test {

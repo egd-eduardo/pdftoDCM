@@ -153,17 +153,29 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void ReportConfigurationProblem()
     {
         string problem = _services.ConfigurationService.LoadProblem;
+        string notice = _services.ConfigurationService.LoadNotice;
 
-        if (problem.Length == 0)
+        if (problem.Length > 0)
         {
+            SetState(WorkflowState.Error, Localize("Status.ConfigurationProblem"));
+            ResultMessage = problem;
+
+            _services.Logger.Error($"The configuration could not be loaded: {problem}", null);
+            _services.AuditLogger.ConfigurationChanged($"Configuration not loaded: {problem}");
             return;
         }
 
-        SetState(WorkflowState.Error, Localize("Status.ConfigurationProblem"));
-        ResultMessage = problem;
+        if (notice.Length > 0)
+        {
+            // Not an error, so the state is left alone and the operator can carry straight
+            // on. It still gets said: the settings file on disk has just been rewritten in
+            // a new shape, and somebody who knows what was in it should see that happened
+            // rather than discover it weeks later.
+            ResultMessage = notice;
 
-        _services.Logger.Error($"The configuration could not be loaded: {problem}", null);
-        _services.AuditLogger.ConfigurationChanged($"Configuration not loaded: {problem}");
+            _services.Logger.Information($"The configuration was upgraded: {notice}");
+            _services.AuditLogger.ConfigurationChanged($"Configuration upgraded: {notice}");
+        }
     }
 
     // ---------------------------------------------------------------- Step 1: PDF
@@ -1227,9 +1239,47 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             $"accession '{chosen.AccessionNumber}'.");
     }
 
+    /// <summary>
+    /// Opens the settings dialog, and says something useful if it cannot be opened.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// There is a global handler that catches anything reaching the interface thread, but
+    /// what it can say is "Object reference not set to an instance of an object", which
+    /// tells an operator nothing and tells them nothing about what to do.
+    /// </para>
+    /// <para>
+    /// This dialog is worth a case of its own because it is the one whose failure locks
+    /// the operator out of every other setting, including the ones they would need to
+    /// change to fix it. A build of 3.3.0 did exactly that to a site that had a worklist
+    /// configured, and the only way out was to work out for themselves that deleting the
+    /// settings file would help. The message now names the file and says that.
+    /// </para>
+    /// </remarks>
     private void OpenSettings()
     {
-        var viewModel = new SettingsViewModel(_services);
+        SettingsViewModel viewModel;
+
+        try
+        {
+            viewModel = new SettingsViewModel(_services);
+        }
+        catch (Exception ex)
+        {
+            _services.Logger.Error("The settings dialog could not be prepared.", ex);
+
+            MessageBox.Show(
+                _services.Localizer.Format(
+                    "Settings.CouldNotOpen",
+                    _services.ConfigurationService.ConfigurationFilePath,
+                    ex.Message),
+                Localize("App.Title"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+
+            return;
+        }
+
         var window = new SettingsWindow
         {
             Owner = Application.Current.MainWindow,
@@ -1591,18 +1641,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(CanRun));
 
-        BrowseCommand.RaiseCanExecuteChanged();
-        ClearPdfCommand.RaiseCanExecuteChanged();
-        ClearFormCommand.RaiseCanExecuteChanged();
-        GenerateAndSendCommand.RaiseCanExecuteChanged();
-        GenerateOnlyCommand.RaiseCanExecuteChanged();
-        CancelCommand.RaiseCanExecuteChanged();
-        RetryCommand.RaiseCanExecuteChanged();
-        TestConnectionCommand.RaiseCanExecuteChanged();
-        ViewTagsCommand.RaiseCanExecuteChanged();
-        OpenSettingsCommand.RaiseCanExecuteChanged();
-        ExportLogsCommand.RaiseCanExecuteChanged();
-        SaveTemplateCommand.RaiseCanExecuteChanged();
+        BrowseCommand?.RaiseCanExecuteChanged();
+        ClearPdfCommand?.RaiseCanExecuteChanged();
+        ClearFormCommand?.RaiseCanExecuteChanged();
+        GenerateAndSendCommand?.RaiseCanExecuteChanged();
+        GenerateOnlyCommand?.RaiseCanExecuteChanged();
+        CancelCommand?.RaiseCanExecuteChanged();
+        RetryCommand?.RaiseCanExecuteChanged();
+        TestConnectionCommand?.RaiseCanExecuteChanged();
+        ViewTagsCommand?.RaiseCanExecuteChanged();
+        OpenSettingsCommand?.RaiseCanExecuteChanged();
+        ExportLogsCommand?.RaiseCanExecuteChanged();
+        SaveTemplateCommand?.RaiseCanExecuteChanged();
     }
 
     private string Localize(string key) => _services.Localizer.Get(key);

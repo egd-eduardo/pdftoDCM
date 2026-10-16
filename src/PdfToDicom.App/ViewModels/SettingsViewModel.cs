@@ -43,23 +43,15 @@ public sealed class SettingsViewModel : ObservableObject
 
         Working = _original.Clone();
 
-        Destinations = new ObservableCollection<PacsDestination>(Working.Destinations);
-        SelectedDestination = Destinations.FirstOrDefault();
-
-        Worklists = new ObservableCollection<WorklistConfiguration>(Working.Worklists);
-        SelectedWorklist = Worklists.FirstOrDefault();
-
-        Languages = services.Localizer.AvailableLanguages;
-        SelectedLanguage = Languages.FirstOrDefault(l =>
-            string.Equals(l.CultureName, Working.Language, StringComparison.OrdinalIgnoreCase))
-            ?? Languages.FirstOrDefault();
-
+        // Commands first, before any property is assigned. Several of the setters below
+        // refresh a command's enabled state, so a command that does not exist yet is a
+        // crash in this constructor and a dialog that will not open. The setters guard
+        // against it as well; this ordering means they do not have to be the only thing
+        // that does.
         AddDestinationCommand = new RelayCommand(AddDestination);
         RemoveDestinationCommand = new RelayCommand(RemoveDestination, () => SelectedDestination is not null);
         TestDestinationCommand = new AsyncRelayCommand(TestDestinationAsync, () => SelectedDestination is not null && !IsTesting);
-        TestWorklistCommand = new AsyncRelayCommand(
-            TestWorklistAsync, () => SelectedWorklist is not null);
-
+        TestWorklistCommand = new AsyncRelayCommand(TestWorklistAsync, () => SelectedWorklist is not null);
         AddWorklistCommand = new RelayCommand(AddWorklist);
         RemoveWorklistCommand = new RelayCommand(RemoveWorklist, () => SelectedWorklist is not null);
         TestFilenameCommand = new RelayCommand(TestFilename);
@@ -67,6 +59,17 @@ public sealed class SettingsViewModel : ObservableObject
         BrowseOutputFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.OutputFolder = f, Working.OutputFolder));
         BrowsePdfFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.DefaultPdfFolder = f, Working.DefaultPdfFolder));
         BrowseMonitoredFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.MonitoredFolder = f, Working.MonitoredFolder));
+
+        Destinations = new ObservableCollection<PacsDestination>(Working.Destinations);
+        SelectedDestination = Destinations.FirstOrDefault();
+
+        Worklists = new ObservableCollection<WorklistConfiguration>(Working.Worklists ?? new List<WorklistConfiguration>());
+        SelectedWorklist = Worklists.FirstOrDefault();
+
+        Languages = services.Localizer.AvailableLanguages;
+        SelectedLanguage = Languages.FirstOrDefault(l =>
+            string.Equals(l.CultureName, Working.Language, StringComparison.OrdinalIgnoreCase))
+            ?? Languages.FirstOrDefault();
     }
 
     /// <summary>The working copy being edited.</summary>
@@ -92,8 +95,13 @@ public sealed class SettingsViewModel : ObservableObject
                 // settings and read as though it belonged to them.
                 WorklistTestResult = string.Empty;
 
-                TestWorklistCommand.RaiseCanExecuteChanged();
-                RemoveWorklistCommand.RaiseCanExecuteChanged();
+                // Null conditional because this setter runs from the constructor, before
+                // the commands exist. Without the question marks, opening Settings threw a
+                // NullReferenceException for anybody who had a worklist server configured,
+                // and the dialog would not open at all. SelectedDestination below has
+                // carried the same guard, for the same reason, since it was written.
+                TestWorklistCommand?.RaiseCanExecuteChanged();
+                RemoveWorklistCommand?.RaiseCanExecuteChanged();
             }
         }
     }

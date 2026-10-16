@@ -287,5 +287,6 @@
   "Worklist.NoServers": "Não há nenhuma lista de trabalho ativa. Adicione uma na página Lista de trabalho, em Definições.",
   "Worklist.PatientIdHint": "Introduza um número de processo para obter esse doente. Se houver uma única correspondência, é selecionada automaticamente; se houver várias, escolha a correta na lista. Deixe ambos os campos vazios para ver a lista completa.",
   "Worklist.Column.Source": "Lista de trabalho",
-  "Status.ConfigurationProblem": "Não foi possível ler as definições"
+  "Status.ConfigurationProblem": "Não foi possível ler as definições",
+  "Settings.CouldNotOpen": "Não foi possível abrir as definições.\n\n{1}\n\nO seu ficheiro de definições é:\n{0}\n\nSe isto continuar a acontecer, feche a aplicação, mude o nome desse ficheiro (não o apague, para que nada se perca) e volte a iniciar. A aplicação arranca com as definições predefinidas e poderá copiar os seus valores a partir do ficheiro renomeado."
 }

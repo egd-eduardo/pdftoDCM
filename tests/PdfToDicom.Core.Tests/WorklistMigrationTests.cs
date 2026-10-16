@@ -226,5 +226,95 @@ public sealed class WorklistMigrationTests : IDisposable
         Assert.Empty(service.LoadProblem);
     }
 
+    // ------------------------------------------------------------- Version reporting
+    //
+    // The file is not "incompatible" when it comes from an older version: it is upgraded,
+    // and nothing is lost. It IS a problem the other way round, and these pin which is
+    // which, because getting that backwards would have people throwing away working
+    // configurations.
+
+    [Fact]
+    public void AnUpgradedFileSaysSoWithoutCallingItAProblem()
+    {
+        GivenConfiguration("""
+        {
+          "ConfigurationVersion": 1,
+          "Worklist": { "IsEnabled": true, "CalledAeTitle": "RADWL", "Host": "10.0.0.5" }
+        }
+        """);
+
+        var service = new ConfigurationService(ConfigPath);
+        service.Load();
+
+        Assert.Empty(service.LoadProblem);
+        Assert.NotEmpty(service.LoadNotice);
+        Assert.False(service.IsFromNewerVersion);
+        Assert.Contains("worklist", service.LoadNotice, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AnUpgradedFileIsStampedWithTheNewVersionAndNotReAnnounced()
+    {
+        GivenConfiguration("""
+        { "ConfigurationVersion": 1, "Worklist": { "IsEnabled": true, "Host": "10.0.0.5" } }
+        """);
+
+        new ConfigurationService(ConfigPath).Load();
+
+        var second = new ConfigurationService(ConfigPath);
+        AppConfiguration loaded = second.Load();
+
+        Assert.Equal(AppConfiguration.CurrentVersion, loaded.ConfigurationVersion);
+        Assert.Empty(second.LoadNotice);
+    }
+
+    [Fact]
+    public void AFileFromANewerVersionIsReportedAsAProblem()
+    {
+        // The one direction that genuinely loses settings: this build cannot model what a
+        // newer one added, so saving would write the file back without it.
+        GivenConfiguration("""
+        { "ConfigurationVersion": 99, "CallingAeTitle": "PDF2DCM" }
+        """);
+
+        var service = new ConfigurationService(ConfigPath);
+        service.Load();
+
+        Assert.True(service.IsFromNewerVersion);
+        Assert.NotEmpty(service.LoadProblem);
+        Assert.Empty(service.LoadNotice);
+    }
+
+    [Fact]
+    public void AFileFromANewerVersionIsNotWrittenBackOverOnLoad()
+    {
+        // Loading must not be what destroys it. The warning is only useful if the file is
+        // still there to go back to.
+        GivenConfiguration("""
+        { "ConfigurationVersion": 99, "SomethingThisBuildHasNeverHeardOf": true }
+        """);
+
+        new ConfigurationService(ConfigPath).Load();
+
+        Assert.Contains(
+            "SomethingThisBuildHasNeverHeardOf",
+            File.ReadAllText(ConfigPath),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFileAlreadyAtTheCurrentVersionSaysNothingAtAll()
+    {
+        GivenConfiguration(
+            "{ \"ConfigurationVersion\": " + AppConfiguration.CurrentVersion + ", \"Worklists\": [] }");
+
+        var service = new ConfigurationService(ConfigPath);
+        service.Load();
+
+        Assert.Empty(service.LoadProblem);
+        Assert.Empty(service.LoadNotice);
+        Assert.False(service.IsFromNewerVersion);
+    }
+
     private void GivenConfiguration(string json) => File.WriteAllText(ConfigPath, json);
 }

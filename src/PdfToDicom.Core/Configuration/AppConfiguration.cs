@@ -73,8 +73,35 @@ public enum UidGenerationStrategy
 /// </remarks>
 public sealed class AppConfiguration
 {
-    /// <summary>Schema version of the configuration file, used for future migrations.</summary>
-    public int ConfigurationVersion { get; set; } = 1;
+    /// <summary>
+    /// Schema version this build of the application writes and understands.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Raised when the shape of the file changes in a way an older build cannot read back.
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><description><b>1</b> — up to 3.2: a single <c>Worklist</c> object.</description></item>
+    ///   <item><description><b>2</b> — 3.3 onwards: a <c>Worklists</c> list.</description></item>
+    /// </list>
+    /// <para>
+    /// Only bump this for a change an older build would get <i>wrong</i>, not for every
+    /// added setting. An older build ignores a setting it does not know and leaves the
+    /// defaults in place, which is harmless; what is not harmless is a setting it reads
+    /// under a name that now means something else, or one it would drop on saving.
+    /// </para>
+    /// </remarks>
+    public const int CurrentVersion = 2;
+
+    /// <summary>
+    /// Schema version of the file this configuration was read from.
+    /// </summary>
+    /// <remarks>
+    /// Compared with <see cref="CurrentVersion"/> on load, so the application can say that
+    /// a file was upgraded from an older version, and refuse to quietly trample a file
+    /// written by a newer one.
+    /// </remarks>
+    public int ConfigurationVersion { get; set; } = CurrentVersion;
 
     // ---------------------------------------------------------------- Institution
 

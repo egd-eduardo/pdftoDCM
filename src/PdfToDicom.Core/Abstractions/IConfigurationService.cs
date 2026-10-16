@@ -27,6 +27,27 @@ public interface IConfigurationService
     string LoadProblem { get; }
 
     /// <summary>
+    /// Something worth telling the operator about the load that is not a problem, or empty.
+    /// </summary>
+    /// <remarks>
+    /// Used when the file was written by an older version and has been upgraded in place.
+    /// Nothing is lost and nothing needs doing, but the file on disk has just changed
+    /// shape, and somebody who knows what was in it should be able to see that happened
+    /// rather than find out later.
+    /// </remarks>
+    string LoadNotice { get; }
+
+    /// <summary>
+    /// True when the file was written by a NEWER version than this build understands.
+    /// </summary>
+    /// <remarks>
+    /// The one direction that genuinely loses settings. This build does not model what the
+    /// newer one added, so saving writes the file back without it. Callers should treat
+    /// saving as destructive while this is true.
+    /// </remarks>
+    bool IsFromNewerVersion { get; }
+
+    /// <summary>
     /// Raised after the configuration has been reloaded or saved, so that the user
     /// interface can react to changes such as a theme or language switch.
     /// </summary>

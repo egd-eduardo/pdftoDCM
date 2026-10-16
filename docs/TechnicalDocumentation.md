@@ -133,7 +133,7 @@ pdftoDCM/
 │   │
 │   └── PdfToDicom.Cli/              Headless front end for scripted conversion
 │
-├── tests/PdfToDicom.Core.Tests/     260 xUnit tests
+├── tests/PdfToDicom.Core.Tests/     265 xUnit tests
 │
 ├── tools/
 │   └── PdfToDicom.TestWorklistServer/   A Modality Worklist SCP for testing only.
@@ -628,6 +628,30 @@ Three rules, each with a test:
 This matters more than most migrations. A worklist connection is agreed with another
 department and tested against a live server; losing it silently means somebody retypes an AE
 Title from memory, and a wrong AE Title offers the wrong patients.
+
+### Saying when the settings file changes
+
+`AppConfiguration.CurrentVersion` is the schema version this build writes, and
+`ConfigurationVersion` is the one the file was read with. Comparing them on load gives
+three outcomes, and the distinction between them matters more than it looks:
+
+| File | Outcome |
+|---|---|
+| Older | Upgraded in place, `LoadNotice` says so, the file is rewritten and stamped |
+| Current | Nothing said |
+| **Newer** | `IsFromNewerVersion`, `LoadProblem` warns, **and the file is not written** |
+
+The newer case is the only genuine incompatibility. This build cannot model what a later
+one added, so saving writes the file back without it; the warning is worthless if loading
+has already destroyed what it warns about, so load leaves it alone.
+
+An older file is **not** incompatible and must never be described that way. It is upgraded
+correctly, and telling a site to recreate it would cost them a worklist connection agreed
+with another department and a set of destinations, for nothing. The notice exists so the
+rewrite is visible, not to suggest anything is wrong.
+
+Bump `CurrentVersion` only for a change an older build would get *wrong*, not for every
+added setting: an unknown setting is ignored and the default stands, which is harmless.
 
 ### When the Worklist button does not appear
 
@@ -1156,7 +1180,7 @@ differ only in case.
 dotnet test tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj
 ```
 
-260 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
+265 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
 strategy), person name construction and shortening, the worklist date ranges, the
 settings password verifier, every mandatory attribute, payload integrity and odd length
 padding, UTF-8 round trips, configuration persistence and corruption recovery, file name
@@ -1186,6 +1210,29 @@ launching it. It reports:
 > a property with a private setter, and because `RangeBase.Value` binds two way by
 > default, the main window failed to load on a Windows ARM64 machine. The build was clean
 > and every test of the day passed. Only running the application would have revealed it.
+
+### View model command verification
+
+```bash
+python3 build/validate-viewmodel-commands.py
+```
+
+Fails the build on any `RaiseCanExecuteChanged()` in a view model that is not null
+conditional.
+
+These view models assign a selection in the constructor, and those setters refresh the
+commands whose enabled state depends on the selection. The commands are created in the same
+constructor, so a refresh that runs before they exist throws a `NullReferenceException` and
+the window cannot be opened. Written `Command?.RaiseCanExecuteChanged()` the call is
+harmless whenever it runs, and the ordering stops being something anybody has to reason
+about. The cost is one character per call site.
+
+> This check also exists because exactly that defect shipped, in 3.3.0. The new worklist
+> selection refreshed two commands without the question marks, and Settings would not open
+> for anybody who had a worklist server configured. **With none configured it worked
+> perfectly**, because `FirstOrDefault()` returns null, the setter short circuits and
+> nothing runs, which is why every check passed and the fault reached a release. The
+> destination selection beside it had carried the guard since it was written.
 
 ### Interoperability verification
 
@@ -1376,11 +1423,14 @@ networking, validation and workflow layers need no change.
 
 Stated plainly, because a hospital deploying this needs to know what it does not do.
 
-1. **The user interface is not covered by automated tests.** The 260 tests cover Core in
+1. **The user interface is not covered by automated tests.** The 265 tests cover Core in
    depth, but WPF cannot run on a build agent without a desktop session, so no test opens
-   a window. `build/validate-xaml-bindings.py` catches the binding errors that stop the
-   application starting, and is not a substitute for running it. **Launch the application
-   once on a real Windows machine before releasing any build.**
+   a window. `build/validate-xaml-bindings.py` and
+   `build/validate-viewmodel-commands.py` catch the two classes of fault that have
+   actually stopped a window opening, and neither is a substitute for running it.
+   **Launch the application once on a real Windows machine, and open every window,
+   before releasing any build.** Two defects of this shape have reached releases, one in
+   2.x and one in 3.3.0; both compiled cleanly and passed every test.
 2. **No document preview in the window.** Pages are rendered for transmission, but the
    interface still shows a document icon and metadata rather than a thumbnail.
 3. **A Person Name longer than 64 characters cannot be sent whole.** The limit is the

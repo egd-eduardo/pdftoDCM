@@ -62,6 +62,12 @@ public sealed class ConfigurationService : IConfigurationService
     public string LoadProblem { get; private set; } = string.Empty;
 
     /// <inheritdoc />
+    public string LoadNotice { get; private set; } = string.Empty;
+
+    /// <inheritdoc />
+    public bool IsFromNewerVersion { get; private set; }
+
+    /// <inheritdoc />
     public event EventHandler<AppConfiguration>? ConfigurationChanged;
 
     /// <inheritdoc />
@@ -85,11 +91,15 @@ public sealed class ConfigurationService : IConfigurationService
             }
 
             LoadProblem = string.Empty;
+            LoadNotice = string.Empty;
+            IsFromNewerVersion = false;
 
             string json = File.ReadAllText(_configurationFilePath);
             AppConfiguration? loaded = JsonSerializer.Deserialize<AppConfiguration>(json, SerializerOptions);
 
             _current = loaded ?? CreateDefaults();
+
+            int fileVersion = _current.ConfigurationVersion;
 
             // Before the fallbacks, because migrating brings a server INTO the list and the
             // fallbacks are what give it an identifier and a name.
@@ -97,10 +107,34 @@ public sealed class ConfigurationService : IConfigurationService
 
             ApplyFallbacks(_current);
 
-            if (migrated)
+            if (fileVersion > AppConfiguration.CurrentVersion)
             {
-                // Written back at once, so the file stops carrying a key this version does
-                // not use and the migration is not repeated on every start.
+                // A file from a NEWER build. This is the one direction that genuinely loses
+                // settings: this build does not model what that one added, so saving would
+                // write the file back without it. Said plainly, and nothing is written.
+                IsFromNewerVersion = true;
+                LoadProblem =
+                    $"These settings were written by a newer version of the application " +
+                    $"(file version {fileVersion}, this build understands " +
+                    $"{AppConfiguration.CurrentVersion}). Anything it added that this version does not " +
+                    $"know about is not shown here, and saving from this version would remove it. " +
+                    $"Install the newer version again, or keep a copy of the file before saving.";
+            }
+            else if (fileVersion < AppConfiguration.CurrentVersion || migrated)
+            {
+                // Upgraded, not broken. Worth saying out loud all the same: the file on disk
+                // has just been rewritten in a new shape, and somebody who knows what was in
+                // it should be able to see that happened rather than discover it later.
+                LoadNotice = migrated
+                    ? "Your settings were upgraded from an earlier version. The worklist server " +
+                      "you had configured was kept and now appears in the list of worklists."
+                    : "Your settings were upgraded from an earlier version. Everything configured " +
+                      "before has been kept.";
+
+                _current.ConfigurationVersion = AppConfiguration.CurrentVersion;
+
+                // Written back at once, so the file stops carrying a shape this version does
+                // not use and the upgrade is not repeated on every start.
                 TrySaveQuietly(_current);
             }
         }
