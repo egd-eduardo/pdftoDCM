@@ -1,5 +1,55 @@
 # Changelog
 
+## 3.3.1
+
+**Fixes a crash in 3.3.0: Settings would not open at all for anybody with a worklist
+server configured.**
+
+Upgrade from 3.3.0 immediately. 3.3.0 should not be used.
+
+### What happened
+
+The Worklist page in Settings became a list in 3.3.0, and the view model assigns the
+initial selection in its constructor:
+
+```csharp
+Worklists = new ObservableCollection<WorklistConfiguration>(Working.Worklists);
+SelectedWorklist = Worklists.FirstOrDefault();
+```
+
+That setter refreshes the commands whose enabled state depends on the selection. The
+commands were created further down the same constructor, so the refresh ran against a
+command that did not exist yet and threw a `NullReferenceException`. The dialog could not
+be opened.
+
+**It only broke where the feature was configured.** With no worklist servers,
+`FirstOrDefault()` returns null, the setter short circuits and nothing happens, which is
+why every automated check and every local run passed. The same code with one server
+configured throws every time.
+
+The existing destination selection has carried a null conditional call for exactly this
+reason since it was written. The new one was added without it. That is the whole defect.
+
+### What stops it happening again
+
+- The call sites are null conditional, so the ordering inside a constructor is no longer
+  something anybody has to reason about.
+- The commands are now created before any property is assigned, so the guard is not the
+  only thing standing in the way.
+- **A new build check, `build/validate-viewmodel-commands.py`**, fails the build on any
+  `RaiseCanExecuteChanged()` in a view model that is not null conditional. It was confirmed
+  to catch this exact line. It runs in CI and in both build scripts, alongside the XAML
+  binding validator that exists for the same class of fault: code that compiles cleanly and
+  fails when a window opens.
+
+### Note
+
+The view models have no automated test coverage, because WPF cannot run on a build agent
+without a desktop session. These static checks stand in for that, and this is the second
+defect of this shape to reach a release. **Opening every window once on a real Windows
+machine remains a release step that cannot be skipped**, and this release is the reason to
+take that seriously rather than as advice.
+
 ## 3.3.0
 
 **Several worklist servers, chosen when the worklist is opened; the destinations are now

@@ -1591,18 +1591,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(CanRun));
 
-        BrowseCommand.RaiseCanExecuteChanged();
-        ClearPdfCommand.RaiseCanExecuteChanged();
-        ClearFormCommand.RaiseCanExecuteChanged();
-        GenerateAndSendCommand.RaiseCanExecuteChanged();
-        GenerateOnlyCommand.RaiseCanExecuteChanged();
-        CancelCommand.RaiseCanExecuteChanged();
-        RetryCommand.RaiseCanExecuteChanged();
-        TestConnectionCommand.RaiseCanExecuteChanged();
-        ViewTagsCommand.RaiseCanExecuteChanged();
-        OpenSettingsCommand.RaiseCanExecuteChanged();
-        ExportLogsCommand.RaiseCanExecuteChanged();
-        SaveTemplateCommand.RaiseCanExecuteChanged();
+        BrowseCommand?.RaiseCanExecuteChanged();
+        ClearPdfCommand?.RaiseCanExecuteChanged();
+        ClearFormCommand?.RaiseCanExecuteChanged();
+        GenerateAndSendCommand?.RaiseCanExecuteChanged();
+        GenerateOnlyCommand?.RaiseCanExecuteChanged();
+        CancelCommand?.RaiseCanExecuteChanged();
+        RetryCommand?.RaiseCanExecuteChanged();
+        TestConnectionCommand?.RaiseCanExecuteChanged();
+        ViewTagsCommand?.RaiseCanExecuteChanged();
+        OpenSettingsCommand?.RaiseCanExecuteChanged();
+        ExportLogsCommand?.RaiseCanExecuteChanged();
+        SaveTemplateCommand?.RaiseCanExecuteChanged();
     }
 
     private string Localize(string key) => _services.Localizer.Get(key);

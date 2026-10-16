@@ -216,9 +216,11 @@ Stated openly; the full list is in the
 [technical documentation](docs/TechnicalDocumentation.md#18-known-limitations).
 
 - **The user interface has no automated test coverage.** WPF cannot run on a build agent,
-  so `build/validate-xaml-bindings.py` catches the binding errors that stop the
-  application starting, and nothing else does. Launch any build once on real Windows
-  before releasing it.
+  so `build/validate-xaml-bindings.py` and `build/validate-viewmodel-commands.py` catch
+  the two classes of fault that have actually stopped a window opening, and nothing else
+  does. **Launch any build once on real Windows, and open every window, before releasing
+  it.** Two such defects have reached releases; both compiled cleanly and passed every
+  test.
 - **No Modality Performed Procedure Step.** The worklist is read; an order is never marked
   started or completed. A site that closes orders through MPPS must keep doing so from the
   acquiring modality.

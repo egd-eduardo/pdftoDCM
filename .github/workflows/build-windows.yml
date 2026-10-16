@@ -66,6 +66,12 @@ jobs:
         # on Linux, so these checks stand in for launching it.
         run: python3 build/validate-xaml-bindings.py
 
+      - name: Validate the view model command refreshes
+        # A command refreshed before it has been created throws in the constructor, so the
+        # window will not open. It compiles cleanly, and it only shows at a site that has
+        # the feature configured. This shipped once; it does not get to ship twice.
+        run: python3 build/validate-viewmodel-commands.py
+
       - name: Parse check the PowerShell scripts
         # These only run on the Windows job, so a syntax error in one would otherwise
         # cost a full Windows build to discover. PowerShell is present on the Linux

@@ -208,6 +208,7 @@ MESSAGE
     fi
 
     "$python" "$REPO_ROOT/build/validate-xaml-bindings.py"
+    "$python" "$REPO_ROOT/build/validate-viewmodel-commands.py"
     "$python" "$REPO_ROOT/build/validate-installer-script.py"
 }
 

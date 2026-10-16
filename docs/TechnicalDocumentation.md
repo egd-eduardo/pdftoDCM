@@ -1187,6 +1187,29 @@ launching it. It reports:
 > default, the main window failed to load on a Windows ARM64 machine. The build was clean
 > and every test of the day passed. Only running the application would have revealed it.
 
+### View model command verification
+
+```bash
+python3 build/validate-viewmodel-commands.py
+```
+
+Fails the build on any `RaiseCanExecuteChanged()` in a view model that is not null
+conditional.
+
+These view models assign a selection in the constructor, and those setters refresh the
+commands whose enabled state depends on the selection. The commands are created in the same
+constructor, so a refresh that runs before they exist throws a `NullReferenceException` and
+the window cannot be opened. Written `Command?.RaiseCanExecuteChanged()` the call is
+harmless whenever it runs, and the ordering stops being something anybody has to reason
+about. The cost is one character per call site.
+
+> This check also exists because exactly that defect shipped, in 3.3.0. The new worklist
+> selection refreshed two commands without the question marks, and Settings would not open
+> for anybody who had a worklist server configured. **With none configured it worked
+> perfectly**, because `FirstOrDefault()` returns null, the setter short circuits and
+> nothing runs, which is why every check passed and the fault reached a release. The
+> destination selection beside it had carried the guard since it was written.
+
 ### Interoperability verification
 
 ```bash
@@ -1378,9 +1401,12 @@ Stated plainly, because a hospital deploying this needs to know what it does not
 
 1. **The user interface is not covered by automated tests.** The 260 tests cover Core in
    depth, but WPF cannot run on a build agent without a desktop session, so no test opens
-   a window. `build/validate-xaml-bindings.py` catches the binding errors that stop the
-   application starting, and is not a substitute for running it. **Launch the application
-   once on a real Windows machine before releasing any build.**
+   a window. `build/validate-xaml-bindings.py` and
+   `build/validate-viewmodel-commands.py` catch the two classes of fault that have
+   actually stopped a window opening, and neither is a substitute for running it.
+   **Launch the application once on a real Windows machine, and open every window,
+   before releasing any build.** Two defects of this shape have reached releases, one in
+   2.x and one in 3.3.0; both compiled cleanly and passed every test.
 2. **No document preview in the window.** Pages are rendered for transmission, but the
    interface still shows a document icon and metadata rather than a thumbnail.
 3. **A Person Name longer than 64 characters cannot be sent whole.** The limit is the
