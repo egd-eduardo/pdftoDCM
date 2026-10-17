@@ -701,6 +701,47 @@ write_back_in_place() {
     rm -f "$from"
 }
 
+# Copies a password file, turning what an editor wrote into what a tool can read.
+#
+# A password file written on Windows is usually NOT plain ASCII. PowerShell's "> file"
+# writes UTF-16 with a byte order mark, and Notepad's "Unicode" does the same, so handing
+# those bytes to osslsigncode offers it a password that begins with 0xFF 0xFE and contains
+# a NUL between every character. It answers "invalid password", which sends somebody
+# looking for a wrong password rather than a wrong encoding. That happened with a real
+# file, which is why this exists.
+#
+# Trailing newlines go too: a file saved by an editor ends with one and it is not part of
+# the password.
+normalise_password_file() {
+    local from=$1
+    local to=$2
+
+    # The first two bytes say whether this is UTF-16. "od" is in POSIX and is on macOS;
+    # "file" and "hexdump" are not guaranteed to agree between the two.
+    local marker
+    marker="$(od -An -N2 -tx1 "$from" 2>/dev/null | tr -d ' \n')"
+
+    case "$marker" in
+        fffe|feff)
+            if command -v iconv >/dev/null 2>&1; then
+                iconv -f UTF-16 -t UTF-8 "$from" 2>/dev/null | tr -d '\r\n' > "$to"
+                info "the password file is UTF-16; converted it for signing"
+                return 0
+            fi
+
+            info "the password file looks like UTF-16 and iconv is not available, so it is"
+            info "  being used as it is; if signing reports a wrong password, save it as"
+            info "  plain text and try again"
+            ;;
+    esac
+
+    # A UTF-8 byte order mark is invisible in an editor and is not part of the password.
+    # Stripped by bytes rather than with sed, whose handling of \xEF differs between GNU
+    # and BSD.
+    tr -d '\r\n' < "$from" |
+        if [[ "${marker}" == "efbb" ]]; then tail -c +4; else cat; fi > "$to"
+}
+
 sign_one() {
     local file=$1
     local label=$2
@@ -931,7 +972,7 @@ MESSAGE
             exit 1
         fi
 
-        cat "$SIGN_PASSWORD_FILE" > "$password_file"
+        normalise_password_file "$SIGN_PASSWORD_FILE" "$password_file"
     elif [[ -n "${SIGN_PASSWORD:-}" ]]; then
         # Accepted because a build server has to get it from somewhere, and noted because
         # an environment variable is readable by anything running as this user.

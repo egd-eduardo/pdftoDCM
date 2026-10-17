@@ -46,9 +46,21 @@ on a Windows machine was ignored in silence, and neither script said where it ha
 
 It builds nothing and reports every path examined, what is actually in the folder when the
 expected name is not there, the certificate store's contents on Windows, and which of the
-two would be used. The password file is read with a `Trim()`: a file written by an editor
-ends in a newline, and without the trim the certificate fails to open with "the password
-may be incorrect", which is the most misleading error available. Demonstrated both ways.
+two would be used.
+
+**A password file is rarely plain text, and that cost a signing run.** PowerShell's
+`> file` writes UTF-16 with a byte order mark, as does Notepad's "Unicode": handing those
+bytes to `osslsigncode` offers it a password beginning `0xFF 0xFE` with a NUL between every
+character, and it answers "invalid password", which sends somebody hunting for a wrong
+password rather than a wrong encoding. `build.sh` now converts UTF-16 and strips a UTF-8
+byte order mark; `sign.ps1` trims the trailing newline, without which the certificate fails
+to open with "the password may be incorrect". Both were demonstrated failing first, against
+a real certificate and all three encodings.
+
+**`.gitignore` now covers `*.p12`, `codesign.password`, `*.password` and `password.txt`.**
+It covered `*.pfx` only, while the documentation named `.p12` and `codesign.password` as
+the files to create: a name a document tells somebody to use is a name that will eventually
+be typed inside a repository, and that is exactly what happened.
 
 **A defect found while doing this: a signed build was handing over an unsigned
 executable.** The handover folder's copy is a hard link to the published one, so that 80 MB
