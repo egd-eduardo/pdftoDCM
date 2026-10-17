@@ -297,7 +297,9 @@ MESSAGE
     fi
 
     "$python" "$REPO_ROOT/build/validate-xaml-bindings.py"
-    "$python" "$REPO_ROOT/build/validate-viewmodel-commands.py"
+    # The root is passed rather than left to the validator's own guess, so that running
+    # this script from anywhere checks the same tree it is building.
+    "$python" "$REPO_ROOT/build/validate-viewmodel-commands.py" "$REPO_ROOT"
     "$python" "$REPO_ROOT/build/validate-installer-script.py"
 }
 

@@ -51,11 +51,23 @@ DEFINITION = re.compile(r"(void|public|internal|protected|private)\s+RaiseCanExe
 
 
 def main() -> int:
-    root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
+    # Anchored to this file, not to the current directory, which is what the other two
+    # validators do and what this one did not. Run from inside build/, as happens when
+    # build.ps1 is started by right clicking it, it looked for build/src/**/ViewModels and
+    # reported that a repository full of view models contained none. The build then failed
+    # on a check that had not run. Every automated run happens to start at the repository
+    # root, so this only ever appeared on somebody's own machine.
+    default_root = Path(__file__).resolve().parent.parent
+    root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else default_root
     view_models = sorted(root.glob("src/**/ViewModels/*.cs"))
 
     if not view_models:
-        print(f"{root}: no view models found, so nothing was checked.", file=sys.stderr)
+        print(
+            f"{root}: no view models found, so nothing was checked.\n"
+            f"  Expected them under {root / 'src'}. Give the repository root as an "
+            f"argument if it is somewhere else.",
+            file=sys.stderr,
+        )
         return 1
 
     problems: list[str] = []

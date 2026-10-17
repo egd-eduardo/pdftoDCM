@@ -302,6 +302,35 @@ function Get-WorkingPython {
     return $null
 }
 
+<#
+    Runs one of the Python validators and turns its exit code into a build result.
+
+    The redirection is the point. Windows PowerShell turns anything a native command
+    writes to the error stream into an error record, and with $ErrorActionPreference set
+    to Stop that terminates the build before the exit code is ever examined. A validator
+    that failed therefore reported itself as a NativeCommandError wrapped around its own
+    message, and a validator that merely warned would have failed the build outright.
+    Merging the streams keeps the text visible and leaves the decision where it belongs,
+    with the exit code.
+
+    PowerShell 7 does not behave that way, which is why this went unnoticed: every
+    automated run uses it.
+#>
+function Invoke-Validator {
+    param(
+        [Parameter(Mandatory)][string]$Python,
+        [Parameter(Mandatory)][string]$Script,
+        [string[]]$Arguments = @(),
+        [Parameter(Mandatory)][string]$FailureMessage
+    )
+
+    $global:LASTEXITCODE = 0
+
+    & $Python $Script @Arguments 2>&1 | ForEach-Object { Write-Host $_ }
+
+    if ($LASTEXITCODE -ne 0) { throw $FailureMessage }
+}
+
 function Invoke-Validate {
     Write-Step 'Validating XAML bindings'
 
@@ -324,18 +353,23 @@ To run it here, install Python from https://www.python.org/downloads/ and tick
         return
     }
 
-    & $python $validator
-
     # Only reached with a working Python, so a non zero code now means the validator
     # genuinely found a problem rather than that Python could not start.
-    if ($LASTEXITCODE -ne 0) { throw 'The XAML bindings did not pass validation.' }
+    Invoke-Validator -Python $python -Script $validator `
+        -FailureMessage 'The XAML bindings did not pass validation.'
 
     # A command refreshed before it has been created throws in the view model's
     # constructor, so the window never opens. It compiles cleanly, and it only shows at a
     # site that has the feature configured.
-    & $python (Join-Path $RepoRoot 'build\validate-viewmodel-commands.py')
-
-    if ($LASTEXITCODE -ne 0) { throw 'The view model command refreshes did not pass validation.' }
+    #
+    # The repository root is passed rather than left to the validator's own guess. Its
+    # guess used to be the current directory, so starting this script from inside build\,
+    # which is what right clicking it does, made it search build\src and report that a
+    # repository full of view models held none.
+    Invoke-Validator -Python $python `
+        -Script (Join-Path $RepoRoot 'build\validate-viewmodel-commands.py') `
+        -Arguments @($RepoRoot) `
+        -FailureMessage 'The view model command refreshes did not pass validation.'
 }
 
 function Invoke-Test {
@@ -795,8 +829,8 @@ The self contained executable in artifacts\<rid>\app is fully functional without
     $python = Get-WorkingPython
 
     if ($python -and (Test-Path $validator)) {
-        & $python $validator
-        if ($LASTEXITCODE -ne 0) { throw 'The installer script did not pass validation.' }
+        Invoke-Validator -Python $python -Script $validator `
+            -FailureMessage 'The installer script did not pass validation.'
     }
     elseif (-not $python) {
         Write-Host '    Python is not available, so the installer script was not checked first.'

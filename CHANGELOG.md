@@ -64,6 +64,22 @@ that handing a private signing key to a hospital never comes to depend on nobody
 wildcard. Demonstrated by planting a certificate in an assembled package and watching the
 build refuse it.
 
+**A validator failed a build it had not checked.** `validate-viewmodel-commands.py`
+resolved the repository from the current directory, where the other two anchor to their own
+location. Started from inside `build\`, which is what right clicking `build.ps1` does, it
+looked for `build\src\**\ViewModels` and reported that a repository full of view models
+held none. Every automated run starts at the repository root, so this could only appear on
+somebody's own machine. It now anchors to itself and the build passes the root explicitly.
+
+**Windows PowerShell turned that message into something unrecognisable.** Anything a
+native command writes to the error stream becomes an error record there, and with
+`$ErrorActionPreference` at `Stop` it terminates the build before the exit code is read, so
+the failure arrived as a `NativeCommandError` wrapped around the validator's own text. Any
+validator that merely warned would have failed the build the same way. The three calls now
+merge the streams and let the exit code decide, which is also how a real failure gets to
+report itself in plain words. PowerShell 7 never behaved that way, which is why no
+automated run saw it.
+
 **`.gitignore` now covers `*.p12`, `codesign.password`, `*.password` and `password.txt`.**
 It covered `*.pfx` only, while the documentation named `.p12` and `codesign.password` as
 the files to create: a name a document tells somebody to use is a name that will eventually
