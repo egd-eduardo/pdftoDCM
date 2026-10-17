@@ -136,6 +136,9 @@
   "//PdfRenderDotsPerInch": "Resolution used when rendering PDF pages. 150 keeps body text comfortably readable on screen and is what this was verified at. Raising it grows every object by the square of the change, so 300 is four times the pixels of 150.",
   "PdfRenderDotsPerInch": 150,
 
+  "//MaximumRenderedPixelMegabytes": "Roughly how much pixel data the page images of one document may occupy. Nothing is transmitted until every object has passed validation, so a long report's pages are all held in memory at once, and the product also ships a 32 bit build whose address space a hundred page report at 300 DPI would exhaust. A document over the ceiling is rendered at a lower resolution, never in part: a reader shown twelve pages of a twenty page report cannot tell that eight are missing. 512 leaves an ordinary report untouched, 0 removes the ceiling, and what happened is written to the log either way.",
+  "MaximumRenderedPixelMegabytes": 512,
+
   "//Modality": "OT (Other) is the default because essentially every archive in the field accepts it. DOC is the value defined by the current standard for encapsulated document series. Change this only if your PACS administrator asks you to.",
   "Modality": "OT",
 

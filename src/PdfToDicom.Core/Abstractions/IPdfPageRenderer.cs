@@ -36,10 +36,17 @@ public interface IPdfPageRenderer
     /// </summary>
     /// <param name="pdfPath">Absolute path of the PDF.</param>
     /// <param name="dotsPerInch">Rendering resolution.</param>
+    /// <param name="budgetMegabytes">
+    /// Roughly how much pixel data the whole document may occupy. A long document is
+    /// rendered at a lower resolution rather than in part, and zero means no ceiling at
+    /// all. The ceiling exists because every page is held in memory until the objects have
+    /// all been validated, and the product ships a 32 bit build whose address space a long
+    /// report at 300 DPI would exhaust.
+    /// </param>
     /// <returns>
     /// One entry per page in page order, or an empty list when the document could not be
     /// rendered. Never a partial document: dropping pages silently would leave a reader
     /// believing they had seen the whole report.
     /// </returns>
-    IReadOnlyList<RenderedPdfPage> Render(string pdfPath, int dotsPerInch);
+    IReadOnlyList<RenderedPdfPage> Render(string pdfPath, int dotsPerInch, int budgetMegabytes = 0);
 }

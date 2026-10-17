@@ -345,6 +345,13 @@ public sealed class ConfigurationService : IConfigurationService
         configuration.MonitorSettleDelayMilliseconds =
             Math.Clamp(configuration.MonitorSettleDelayMilliseconds, 100, 60_000);
 
+        // Zero is a deliberate value meaning no ceiling, so it is kept rather than clamped
+        // up to the minimum. Anything else is brought inside a range where the setting
+        // still means something: below 32 MB a single page could not be rendered.
+        configuration.MaximumRenderedPixelMegabytes = configuration.MaximumRenderedPixelMegabytes <= 0
+            ? 0
+            : Math.Clamp(configuration.MaximumRenderedPixelMegabytes, 32, 8192);
+
         configuration.Destinations ??= new List<PacsDestination>();
         configuration.Templates ??= new List<PatientTemplate>();
 

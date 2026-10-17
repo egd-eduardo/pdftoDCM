@@ -2,7 +2,60 @@
 
 ## 3.5.0
 
-**A clean build, a visible way out, and settings that can be carried to the next machine.**
+**A clean build, a visible way out, settings that can be carried to the next machine, and
+a fifth of the memory.**
+
+### Memory
+
+Measured on a sixty page report, by sampling the process's own resident set rather than by
+reasoning about it:
+
+| | Peak resident |
+|---|---|
+| Before | 629 MB |
+| Reading the rasterizer's own pixel layout | 247 MB |
+| With the pixel data ceiling at 64 MB | 184 MB |
+
+And across two conversions in one process, which is what a workstation actually does:
+
+| | After one conversion | After two |
+|---|---|---|
+| Before | 246 MB | 311 MB |
+| Now | 106 MB | 108 MB |
+
+**The rasterizer's pixel layout is read where it lies.** Every page used to be converted to
+one known layout first, which allocated and copied a second whole page, about 8 MB each at
+150 DPI, for an image that was about to be read one pixel at a time anyway. The two four
+byte layouts differ only in whether red sits at offset 0 or offset 2. That change alone took
+the sixty page document from 629 MB to 247 MB, and **the pixel data is byte for byte
+identical**: verified by hashing all sixty page objects before and after.
+
+A silent failure was possible here, where a red stamp arrives blue, so a new test renders a
+hand written PDF of a red half over a blue half and checks the channels. It was confirmed to
+fail when the offsets are swapped. Rows are now read by stride as well, so a bitmap whose
+stride exceeds its width can no longer come out sheared.
+
+**A new ceiling on page image memory, `MaximumRenderedPixelMegabytes`, default 512.** Nothing
+is transmitted until every object has passed validation, because half a document in an
+archive is worse than none, so a long report's page images are all live at once, and the
+product ships a 32 bit build. A document over the ceiling is rendered **at a lower
+resolution, never in part**: a reader shown twelve pages of a twenty page report cannot tell
+that eight are missing. Below 72 DPI nothing is rendered and the log says why. The
+encapsulated document, the fidelity copy, is never affected. 0 removes the ceiling.
+
+**The memory is handed back when the work is done.** Each rendered page is a multi megabyte
+array, which lives on the large object heap: not compacted by default, swept only on a
+generation two collection. Left alone, the report that has just been sent stays resident,
+which is what Task Manager shows as high memory use. One blocking compacting collection now
+runs at the end of a conversion, where nobody is waiting; measured at 17 to 35 milliseconds
+for documents from one to sixty pages.
+
+**Two suspicions that were measured and dismissed.** Holding the generated object for the
+session was thought to keep the whole thing in memory, and a file handle with it: in fact
+opening a 1 MB object grows the heap by 8 KB, the large values are read on demand and no
+descriptor is retained. The result lists were thought to grow across conversions; they are
+cleared at the start of every run. Nothing was changed on either count, and the
+investigation is written down in the technical documentation so it is not repeated.
 
 ### Export and import the archives and worklist servers
 

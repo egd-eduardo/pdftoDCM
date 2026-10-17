@@ -19,6 +19,7 @@
 9. [Validation](#9-validation)
 9a. [The ImageSharp advisories](#9a-the-imagesharp-advisories)
 9b. [Closing the application](#9b-closing-the-application)
+9c. [Memory](#9c-memory)
 10. [Configuration](#10-configuration)
 10a. [Carrying settings between workstations](#10a-carrying-settings-between-workstations)
 11. [Logging and audit](#11-logging-and-audit)
@@ -1122,6 +1123,82 @@ that is not a string, a `Path` among other things, would simply not be drawn. Th
 button uses `HeaderIconButtonStyle`, the same thing built around a `ContentPresenter`,
 which hovers by washing the dark blue header with translucent white rather than by
 underlining.
+
+---
+
+## 9c. Memory
+
+A sixty page report is the case that matters. Everything below was measured on one, from
+the command line tool, by sampling the process's own resident set rather than by reasoning
+about allocations.
+
+| | Peak resident |
+|---|---|
+| Before this work | 629 MB |
+| Reading the rasterizer's own pixel layout | 247 MB |
+| With the pixel data ceiling at 64 MB | 184 MB |
+
+And across two conversions in one process, which is what a workstation actually does:
+
+| | After one conversion | After two |
+|---|---|---|
+| Before | 246 MB | 311 MB |
+| Releasing at the end of a conversion | 106 MB | 108 MB |
+
+**Why a conversion needs the pages all at once.** Nothing is transmitted until every object
+has passed validation, because half a document in an archive is worse than none. That is a
+deliberate property of the workflow, not an accident of it, and the price is that a long
+report's page images are live together. At 150 DPI an A4 page is about 2 MB in greyscale
+and 6 MB in colour, so sixty pages is 124 MB of genuinely live data. The work below is
+about everything that was resident *besides* that.
+
+**The rasterizer's layout is read where it lies.** `PdfPageRenderer` used to convert every
+page to one known pixel layout first, which allocated and copied a second full page, about
+8 MB each at 150 DPI, for an image that was about to be read one pixel at a time anyway.
+Both four byte layouts put the three colour channels first and the alpha last, so the only
+difference is whether red sits at offset 0 or offset 2, which one integer expresses. That
+alone took the sixty page document from 629 MB to 247 MB, and the generated pixel data is
+byte for byte identical: verified by hashing all sixty page objects before and after.
+
+The cost of that is caring which end of each pixel red lives at, and a mistake there would
+be silent: the page still renders, the sizes still match, and a red stamp arrives blue.
+`RedStaysRedAndBlueStaysBlue` renders a hand written PDF of a red half over a blue half and
+checks the channels. It was confirmed to fail when the two offsets are swapped.
+
+Rows are read by stride rather than as one span of the image. A bitmap's stride is allowed
+to exceed its width, and an image read as though it were contiguous when it is not comes out
+sheared.
+
+**A ceiling, not a page limit.** `MaximumRenderedPixelMegabytes`, default 512, caps the
+pixel data of one document's page images. Over it, the whole document is rendered at a lower
+resolution; pages are never dropped. A reader shown twelve pages of a twenty page report has
+no way of knowing that eight are missing, whereas twenty slightly softer pages is the whole
+report, and the encapsulated document, which is the fidelity copy, is unaffected either way.
+Below a floor of 72 DPI nothing is rendered at all and the log says why.
+
+The estimate comes from rendering the first page at the requested resolution and measuring
+it, because what a page costs depends on whether it came out colour, and that is decided
+from its own pixels. A document whose pages differ is estimated imperfectly; the first page
+of a report is the one with the letterhead on it, so the error is normally on the safe side.
+The resolution that fits is the requested one scaled by the square root of the ratio, since
+pixel count rises with the square of the resolution. `RenderedPdfPage` carries the
+resolution it was actually rendered at, so the log reports what happened rather than what
+was configured.
+
+**The memory is handed back when the work is done.** Every rendered page is a multi megabyte
+array, which lives on the large object heap: not compacted by default, and swept only on a
+generation two collection. Left to the collector's own judgement the report that has just
+been sent stays resident, which is exactly what somebody looking at Task Manager reports as
+high memory usage. `MainViewModel.ReleaseMemoryAfterWork` runs one blocking, compacting
+generation two collection at the end of a conversion, where the work is finished and nobody
+is waiting. Measured at 17 to 35 milliseconds for documents from one to sixty pages.
+
+**Two things that were measured and left alone.** `DicomFile.Open` on the generated object
+was suspected of holding the whole thing in memory for the session, and of keeping a file
+handle open. Neither is true: opening a 1 MB object grew the managed heap by 8 KB, the large
+values are read on demand, and no descriptor is retained. The transmission result and
+validation lists were suspected of growing across conversions; both are cleared at the start
+of every run. Nothing was changed on either count.
 
 ---
 

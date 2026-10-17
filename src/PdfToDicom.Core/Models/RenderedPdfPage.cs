@@ -16,9 +16,16 @@ namespace PdfToDicom.Core.Models;
 /// true and one per pixel otherwise. This is the layout DICOM expects for Planar
 /// Configuration 0, so no rearrangement happens later.
 /// </param>
+/// <param name="DotsPerInch">
+/// The resolution this page was actually rendered at, which is not always the resolution
+/// that was asked for: a document whose pages would not fit the configured pixel data
+/// allowance is rendered whole at a lower resolution. Carried here so that what is logged
+/// is what happened.
+/// </param>
 public sealed record RenderedPdfPage(
     int PageNumber,
     int Width,
     int Height,
     bool IsColour,
-    byte[] Pixels);
+    byte[] Pixels,
+    int DotsPerInch);

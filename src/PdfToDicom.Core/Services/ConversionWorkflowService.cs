@@ -504,8 +504,10 @@ public sealed class ConversionWorkflowService
 
         try
         {
-            IReadOnlyList<RenderedPdfPage> pages =
-                _pdfRenderer.Render(pdfPath, configuration.PdfRenderDotsPerInch);
+            IReadOnlyList<RenderedPdfPage> pages = _pdfRenderer.Render(
+                pdfPath,
+                configuration.PdfRenderDotsPerInch,
+                configuration.MaximumRenderedPixelMegabytes);
 
             if (pages.Count == 0)
             {
@@ -514,9 +516,13 @@ public sealed class ConversionWorkflowService
 
             long bytes = pages.Sum(p => p.Pixels.LongLength);
 
+            // The resolution the pages report, not the one that was configured. They differ
+            // when the document would not have fitted the pixel data allowance, and a log
+            // that said 300 DPI while 107 was used would send somebody looking in the
+            // wrong place.
             _logger.Information(
                 $"Rendered {pages.Count} page(s) of '{pdfInfo.FileName}' at " +
-                $"{configuration.PdfRenderDotsPerInch} DPI, {bytes / (1024 * 1024)} MB of pixel data.");
+                $"{pages[0].DotsPerInch} DPI, {bytes / (1024 * 1024)} MB of pixel data.");
 
             return _imageBuilder.BuildFromRenderedPages(
                 pages, demographics, studyInstanceUid, pdfInfo.FileName);
