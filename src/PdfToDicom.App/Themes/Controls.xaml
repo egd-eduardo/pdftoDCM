@@ -288,6 +288,18 @@
         <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
 
+    <!-- The same treatment for a radio button. Only the text properties are set; the
+         default template draws the bullet itself, and replacing a template to change
+         nothing but a font is how a control stops honouring the system's own
+         accessibility settings. -->
+    <Style x:Key="SettingRadioButtonStyle" TargetType="RadioButton">
+        <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
+        <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+        <Setter Property="Margin" Value="0,6" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
     <!-- ============================================================ DatePicker -->
 
     <Style x:Key="InputDatePickerStyle" TargetType="DatePicker">

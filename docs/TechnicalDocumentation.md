@@ -20,6 +20,7 @@
 9a. [The ImageSharp advisories](#9a-the-imagesharp-advisories)
 9b. [Closing the application](#9b-closing-the-application)
 10. [Configuration](#10-configuration)
+10a. [Carrying settings between workstations](#10a-carrying-settings-between-workstations)
 11. [Logging and audit](#11-logging-and-audit)
 12. [Building](#12-building)
 13. [Testing and verification](#13-testing-and-verification)
@@ -1141,6 +1142,53 @@ See `samples/config.sample.json` for an annotated example.
 
 ---
 
+## 10a. Carrying settings between workstations
+
+A department buys one licence of nobody's time to configure twenty identical machines.
+`SettingsTransfer` in Core writes the archives and the worklist servers to a file, reads one
+back, and applies it; the Backup page in Settings and the two command line verbs
+`export-settings` and `import-settings` are both thin shells over it.
+
+**Only the connection settings travel, and the omission is the point.** The file holds
+destinations and worklist servers. It does not hold the **calling AE Title**, and that is
+deliberate: copying it would give two workstations the same identity on the hospital
+network, which is the one thing a PACS administrator will object to, and it would happen
+silently. Institution, folders, language and templates are excluded for the same reason.
+They are local to the machine, and a file that quietly changed them would be a trap.
+
+Nothing secret is in the file. Neither entity holds a password; a DICOM association here is
+identified by AE Title. The page is still behind the same password as Destinations and
+Worklist, because the file does disclose the addresses of clinical systems and because the
+page can replace them wholesale.
+
+**Two servers are the same server when the AE Title, host and port match**, ignoring case
+and surrounding spaces. Not the identifier: identifiers are generated per machine, so the
+same archive typed by hand on two workstations has two of them, and matching on them would
+add a duplicate on every import. Each imported entry is given a fresh identifier for the
+same reason, and a name already in use gets a number rather than leaving two identical
+entries in a list somebody picks from under pressure.
+
+**Adding is idempotent.** Importing the same file twice changes nothing the second time,
+which is what makes the command safe in a rollout script that may run again. Replacing
+discards the configured entries of the kinds being imported, so the dialog asks first,
+defaults to No, and says how many will go; the command line requires `--replace`.
+
+**The dialog imports into what is on screen, not into what is on disk.** The settings
+dialog edits two observable collections and copies them into the configuration only when
+Save runs, so an import that went straight to the saved configuration would compare against
+a stale list and be overwritten by Save a moment later. Import brings the collections up to
+date and leaves the writing to Save, which means Cancel still discards it. The command line
+has nobody to press Save, so it writes immediately and prints what it did.
+
+**A file version check, not a guess.** Every file carries `FileKind` and a `FormatVersion`.
+The marker is stamped on the way out rather than defaulted on the property, and that detail
+is load bearing: a property left at its initialised value is indistinguishable after
+deserialization from one the file never mentioned, so a default of the marker itself made
+*any* JSON file look like one of ours. A test caught it. A file from a newer layout is
+refused with its version named rather than read optimistically.
+
+---
+
 ## 11. Logging and audit
 
 Two separate channels, deliberately.
@@ -1448,6 +1496,9 @@ pdftodicom generate --pdf report.pdf ... --no-send
 pdftodicom inspect --pdf out/12345_ACC001_1234.dcm
 pdftodicom config
 pdftodicom settings-password
+pdftodicom export-settings --out \\server\share\pacs-settings.json
+pdftodicom import-settings --file \\server\share\pacs-settings.json
+pdftodicom import-settings --file pacs-settings.json --worklists-only --replace
 pdftodicom check-names --pattern '{PatientId}_{Name}_{AccessionNumber}' \
                        --name 9999999999_JohnDoe_TEST123451.pdf
 pdftodicom send --pdf 9999999999_JohnDoe_TEST123451.pdf --from-filename
@@ -1464,6 +1515,10 @@ interoperability script drives.
 `settings-password` is handled before any configuration, log folder or DICOM stack is set
 up, so it works on a machine where none of those exist yet. The older name
 `worklist-password` is still accepted. See section 8a.
+
+`export-settings` and `import-settings` carry the archives and worklist servers between
+machines without the settings dialog, so commissioning twenty workstations is a line in a
+rollout script rather than an afternoon of retyping. See section 10a.
 
 `check-names` and `--from-filename` read the patient details out of the file name. Neither
 is a convenience: `check-names` is how a naming layout is proved before anybody relies on

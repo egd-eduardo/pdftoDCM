@@ -2,7 +2,53 @@
 
 ## 3.5.0
 
-**A clean build, and a visible way out.**
+**A clean build, a visible way out, and settings that can be carried to the next machine.**
+
+### Export and import the archives and worklist servers
+
+A new **Backup** page in Settings writes the configured archives and worklist servers to a
+file, and reads one back on another workstation. Configure one machine, export, import on
+the rest. The same thing from a rollout script:
+
+```
+pdftodicom export-settings --out \\server\share\pacs-settings.json
+pdftodicom import-settings --file \\server\share\pacs-settings.json
+pdftodicom import-settings --file pacs-settings.json --worklists-only --replace
+```
+
+**Only the connection settings travel, and the omission is the point.** The file holds the
+destinations and the worklist servers. It does **not** hold the calling AE Title: copying
+that would give two workstations one identity on the hospital network, which is the single
+thing a PACS administrator will object to, and it would have happened silently. Institution,
+folders, language and templates are left out for the same reason, being local to the
+machine.
+
+**Importing the same file twice changes nothing the second time.** Two entries are the same
+server when the AE Title, host and port match, ignoring case and spaces, so a file left on a
+shared drive can be imported by the next person to set a machine up without doubling the
+list. Identifiers are not used for the comparison, because they are generated per machine;
+each imported entry gets a fresh one, and a name already in use gets a number rather than
+leaving two identical entries in a list somebody picks from under pressure.
+
+**Replace** is offered for when one workstation is the reference and the rest should match
+it. It asks first, defaults to No, and says how many entries it is about to discard. In the
+dialog nothing is written until Save, so Cancel still abandons an import; the command line
+has nobody to press Save, so it writes at once and prints what it did.
+
+Nothing secret is in the file: neither a destination nor a worklist server holds a password.
+The page is behind the same password as Destinations and Worklist all the same, because the
+file discloses the addresses of clinical systems and the page can replace them wholesale.
+
+**One defect worth recording.** `FileKind`, the marker that says a file is ours, started out
+as a property default. After deserialization a property left at its default is
+indistinguishable from one the file never mentioned, so *any* JSON file passed the check. A
+test written to prove the refusal is what caught it. The marker is now stamped on writing,
+and the property defaults to empty.
+
+21 tests cover the transfer: the round trip, every setting of an entry surviving it through a
+serializer comparison rather than a hand written list, the AE-Title-stays-home guarantee,
+idempotence, name collisions, replacing one kind while leaving the other, forgetting a
+worklist that was discarded, and five ways a file can be wrong.
 
 ### A door icon that closes the application
 

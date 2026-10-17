@@ -88,6 +88,22 @@ public sealed class CommandLineOptions
     /// <summary>Include debug level entries in the log.</summary>
     public bool Verbose { get; private set; }
 
+    /// <summary>
+    /// On import-settings, discard the configured entries instead of adding to them.
+    /// </summary>
+    /// <remarks>
+    /// Off unless asked for. A rollout script that runs twice should not have to be
+    /// idempotent by luck, and adding is idempotent by itself: an entry already configured
+    /// is recognised and left alone.
+    /// </remarks>
+    public bool ReplaceOnImport { get; private set; }
+
+    /// <summary>Limit a settings export or import to the archives.</summary>
+    public bool DestinationsOnly { get; private set; }
+
+    /// <summary>Limit a settings export or import to the worklist servers.</summary>
+    public bool WorklistsOnly { get; private set; }
+
     /// <summary>Errors encountered while parsing.</summary>
     public List<string> ParseErrors { get; } = new();
 
@@ -143,6 +159,15 @@ public sealed class CommandLineOptions
                     continue;
                 case "split-names":
                     options.SplitNames = true;
+                    continue;
+                case "replace":
+                    options.ReplaceOnImport = true;
+                    continue;
+                case "destinations-only":
+                    options.DestinationsOnly = true;
+                    continue;
+                case "worklists-only":
+                    options.WorklistsOnly = true;
                     continue;
             }
 
@@ -288,6 +313,12 @@ public sealed class CommandLineOptions
           inspect     Print the DICOM tags of an existing .dcm file.
           extract     Recover the original PDF from a .dcm file, byte for byte.
           config      Show the effective configuration and where it is stored.
+          export-settings
+                      Write the archives and worklist servers to a file.
+          import-settings
+                      Read such a file and add its entries to this machine, which is
+                      what makes setting up many workstations a script rather than an
+                      afternoon of retyping.
           settings-password
                       Turn a password into the verifier that guards the worklist and
                       destination settings, to be compiled into a build. The password
@@ -326,6 +357,19 @@ public sealed class CommandLineOptions
                                        matches one. Omit it to match every patient.
           --surname <value>            Narrow the query to this family name, with the
                                        same wildcards.
+
+        SETTINGS TRANSFER OPTIONS
+          --out <path>                 Where export-settings writes the file.
+          --file <path>                The file import-settings reads.
+          --destinations-only          Carry only the archives.
+          --worklists-only             Carry only the worklist servers. Neither option
+                                       means both, which is the usual case.
+          --replace                    On import, discard the entries configured on this
+                                       machine and take the file's instead. Without it
+                                       the file's entries are added and anything already
+                                       configured at the same AE Title, host and port is
+                                       left alone, so running the same import twice
+                                       changes nothing the second time.
 
         PATIENT OPTIONS (mandatory for send and generate)
           --file <path>                The file to convert. May be repeated to convert
@@ -376,6 +420,9 @@ public sealed class CommandLineOptions
                           --given-name Maria --dob 1970-05-21 --accession ACC001
           pdftodicom send --image scan.tiff --patient-id 12345 --surname Silva \
                           --given-name Maria --dob 1970-05-21 --accession ACC001
+          pdftodicom export-settings --out \\server\share\pacs-settings.json
+          pdftodicom import-settings --file \\server\share\pacs-settings.json
+          pdftodicom import-settings --file pacs-settings.json --worklists-only --replace
           pdftodicom inspect --pdf out/12345_ACC001_1234.dcm
           pdftodicom extract --pdf out/12345_ACC001_1234.dcm --out recovered.pdf
 
