@@ -38,6 +38,7 @@ dotnet test "PDF to DICOM.sln" -c Release          # 291 tests
 python3 build/validate-xaml-bindings.py            # two way bindings to read only properties
 python3 build/validate-viewmodel-commands.py       # unguarded RaiseCanExecuteChanged
 python3 build/validate-installer-script.py         # installer sources and flags
+python3 build/validate-powershell-strict.py        # .Count on something that is not a collection
 bash build/verify-against-dcmtk.sh                 # 94 interoperability checks, needs DCMTK
 ```
 

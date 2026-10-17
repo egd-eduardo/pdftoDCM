@@ -545,10 +545,18 @@ Write-Host "    signing as $($certificate.Subject), expires $($certificate.NotAf
 # The application and the command line tool for this architecture, plus any installer
 # that has been built. Everything else is embedded inside these, so there is nothing
 # further to sign.
+#
+# The whole pipeline is wrapped, not just the list being filtered: a pipeline that emits
+# one object assigns that object, not a list of one, and Windows PowerShell refuses to
+# read .Count from anything that is not really a collection once Set-StrictMode is on.
+# An application only build with no installer yet leaves exactly one file here, which is
+# the ordinary case, so the wrapping is what keeps the count below from failing the run.
 $targets = @(
-    (Join-Path $Artifacts "$Runtime\app\PdfToDicom.exe"),
-    (Join-Path $Artifacts "$Runtime\cli\pdftodicom.exe")
-) | Where-Object { Test-Path $_ }
+    @(
+        (Join-Path $Artifacts "$Runtime\app\PdfToDicom.exe"),
+        (Join-Path $Artifacts "$Runtime\cli\pdftodicom.exe")
+    ) | Where-Object { Test-Path $_ }
+)
 
 $installers = Get-ChildItem $Artifacts -Filter 'PdfToDicom-Setup*.exe' -ErrorAction SilentlyContinue |
     Select-Object -ExpandProperty FullName

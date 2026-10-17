@@ -1521,6 +1521,39 @@ about. The cost is one character per call site.
 > nothing runs, which is why every check passed and the fault reached a release. The
 > destination selection beside it had carried the guard since it was written.
 
+### PowerShell strict mode verification
+
+```bash
+python3 build/validate-powershell-strict.py
+```
+
+Fails the build on a `.Count` read that Windows PowerShell will refuse to perform.
+
+`build.ps1` and `sign.ps1` both run under `Set-StrictMode -Version Latest`. Under that
+setting Windows PowerShell will not read a property an object does not really have, and a
+single object is not a collection, so it has no `Count`. A pipeline that emits one result
+assigns that one object, which makes the shape below a build that stops partway:
+
+```powershell
+$targets = @(
+    (Join-Path $Artifacts "$Runtime\app\PdfToDicom.exe"),
+    (Join-Path $Artifacts "$Runtime\cli\pdftodicom.exe")
+) | Where-Object { Test-Path $_ }
+
+Write-Step "Signing $($targets.Count) file(s)"
+```
+
+The array subexpression wraps the list being filtered, not the pipeline, so an
+application only build with no installer yet, which is the ordinary case, left `$targets`
+holding a plain string. The check requires the whole right hand side to be wrapped:
+`$targets = @( ... | Where-Object { ... } )`.
+
+> This check exists because exactly that reached a developer's machine. Nothing available
+> here can reproduce it: PowerShell 7 gives every object a synthetic `Count` and answers
+> `1`, macOS and Linux never run these scripts at all, and the CI runner has PowerShell 7.
+> The fault can only appear on Windows, in the middle of a build, which is why a static
+> check is worth more than the convention it enforces.
+
 ### Interoperability verification
 
 ```bash

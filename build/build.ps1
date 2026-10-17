@@ -332,7 +332,7 @@ function Invoke-Validator {
 }
 
 function Invoke-Validate {
-    Write-Step 'Validating XAML bindings'
+    Write-Step 'Validating the XAML, the view models and the build scripts'
 
     # A broken WPF binding compiles cleanly and then crashes when the window loads, so
     # it is checked here rather than discovered by a user on a clinical workstation.
@@ -370,6 +370,15 @@ To run it here, install Python from https://www.python.org/downloads/ and tick
         -Script (Join-Path $RepoRoot 'build\validate-viewmodel-commands.py') `
         -Arguments @($RepoRoot) `
         -FailureMessage 'The view model command refreshes did not pass validation.'
+
+    # This script and sign.ps1 both run under Set-StrictMode, where Windows PowerShell
+    # will not read .Count from a single object. The signing step died that way on a
+    # developer machine while every other run, all of them on PowerShell 7 or on another
+    # operating system, answered the same expression without complaint.
+    Invoke-Validator -Python $python `
+        -Script (Join-Path $RepoRoot 'build\validate-powershell-strict.py') `
+        -Arguments @($RepoRoot) `
+        -FailureMessage 'The PowerShell scripts hold a .Count read that Windows PowerShell will refuse.'
 }
 
 function Invoke-Test {
@@ -569,7 +578,10 @@ function Invoke-Assemble {
     $standalone = Join-Path $Artifacts "PdfToDicom-$version-$Runtime.exe"
     Copy-OrLink -Source $ApplicationPath -Target $standalone
 
-    $fileCount = (Get-ChildItem $package -Recurse -File).Count
+    # Wrapped for the same reason as the signing targets: a single file, or none at
+    # all, is not a collection, and Windows PowerShell will not read .Count from one
+    # under Set-StrictMode.
+    $fileCount = @(Get-ChildItem $package -Recurse -File).Count
 
     Write-Host "    folder : $package"
 
