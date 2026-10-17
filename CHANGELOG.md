@@ -57,6 +57,13 @@ byte order mark; `sign.ps1` trims the trailing newline, without which the certif
 to open with "the password may be incorrect". Both were demonstrated failing first, against
 a real certificate and all three encodings.
 
+**The package can no longer carry signing material.** The handover check refuses any file
+whose name contains `codesign`, `.pfx`, `.p12`, `.password` or `.key`. The package is
+assembled from a named list of files, so none could reach it today; the check is there so
+that handing a private signing key to a hospital never comes to depend on nobody writing a
+wildcard. Demonstrated by planting a certificate in an assembled package and watching the
+build refuse it.
+
 **`.gitignore` now covers `*.p12`, `codesign.password`, `*.password` and `password.txt`.**
 It covered `*.pfx` only, while the documentation named `.p12` and `codesign.password` as
 the files to create: a name a document tells somebody to use is a name that will eventually

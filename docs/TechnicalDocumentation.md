@@ -1674,6 +1674,13 @@ neither builds unsigned, says so in a few lines, and carries on.
 handing over an unsigned executable would be the wrong outcome, and `-NoSign` skips signing
 altogether.
 
+**The repository is not one of the places looked at.** A certificate committed to the
+repository, even under one of these names, is not read by either script: both look in the
+home folder, or wherever `SIGN_PFX` points. A copy kept in the repository is a copy, not a
+configuration. The package soundness check refuses any file whose name contains
+`codesign`, `.pfx`, `.p12`, `.password` or `.key`, so such a copy cannot reach a site even
+if the package's file list grows a wildcard one day.
+
 **Both scripts can explain themselves**, which is the part that was missing: the first
 version of the Windows script read only the certificate store, so a `.pfx` placed in that
 folder on a Windows machine was ignored in silence.
