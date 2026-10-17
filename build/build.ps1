@@ -10,13 +10,24 @@
     can produce the executable but not the installer, because Inno Setup requires
     Windows.
 
-.PARAMETER Runtime
-    Target architecture: win-x86, win-x64 (default) or win-arm64. Windows on ARM can run
-    the x64 build under emulation, but a native arm64 build avoids that layer entirely.
+.PARAMETER Runtimes
+    Target architectures, one or more of win-x86, win-x64 and win-arm64. Both win-x64 and
+    win-arm64 by default: the machines in service are 64 bit, and the ARM build is what a
+    Windows on ARM virtual machine should run natively rather than under emulation.
+    Accepted as -Runtime as well, so an older command line still works.
+
+.PARAMETER Cli
+    Also publish the command line tool. Off by default, because it is a second
+    self contained publish of its own and most builds do not need it. The handover
+    package simply omits its "Command line" folder when it was not built. The release
+    pipeline passes it, so what reaches a site is still complete.
 
 .PARAMETER Sign
-    Sign the published executables and the installer after building. Requires a code
-    signing certificate; see build/sign.ps1 and docs/CodeSigning.md.
+    Require signing, and fail when no code signing certificate can be found. Signing is
+    attempted anyway without this: see below.
+
+.PARAMETER NoSign
+    Do not sign at all.
 
 .PARAMETER Zip
     Also produce a zip of the handover folder. Off by default: the folder itself can be
@@ -25,30 +36,49 @@
 
 .PARAMETER Task
     all      restore, build, test, publish and package (default)
+    app      publish the application only, for the quickest trip to a running exe
     test     run the test suite only
-    publish  publish the executables only
+    publish  publish the executables and assemble the handover folder
     package  build the installer only, from an existing publish
     prune    keep the deliverables, drop the intermediate build output
     clean    remove build output
 
+.NOTES
+    Signing happens by default wherever it can. When a code signing certificate is in the
+    current user's store it is used without being asked for; when there is none the build
+    says so in one line and carries on, because an unsigned build is complete and runs.
+    Pass -Sign to make a missing certificate an error, or -NoSign to skip signing.
+
 .EXAMPLE
     .\build\build.ps1
+    .\build\build.ps1 -Task app -Runtimes win-arm64
     .\build\build.ps1 -Task test
-    .\build\build.ps1 -Runtime win-arm64
-    .\build\build.ps1 -Sign
+    .\build\build.ps1 -Cli
+    .\build\build.ps1 -NoSign
 #>
 
 [CmdletBinding()]
 param(
-    [ValidateSet('all', 'test', 'publish', 'package', 'prune', 'clean')]
+    [ValidateSet('all', 'app', 'test', 'publish', 'package', 'prune', 'clean')]
     [string]$Task = 'all',
 
     [string]$Configuration = 'Release',
 
+    # Both architectures by default. Every machine this is deployed to is 64 bit, and the
+    # ARM build exists because it is tested on a Windows on ARM virtual machine, where a
+    # native build avoids the emulation layer. The alias keeps -Runtime win-arm64 working.
+    [Alias('Runtime')]
     [ValidateSet('win-x86', 'win-x64', 'win-arm64')]
-    [string]$Runtime = 'win-x64',
+    [string[]]$Runtimes = @('win-x64', 'win-arm64'),
+
+    # The command line tool is a second self contained publish, as large and as slow as
+    # the application's, and most builds have no use for it. Off unless asked for; the
+    # release pipeline asks.
+    [switch]$Cli,
 
     [switch]$Sign,
+
+    [switch]$NoSign,
 
     # A zip is produced only when asked for. The handover folder can be copied to another
     # machine as it stands, so an archive is of use only for sending one file to somebody.
@@ -305,6 +335,8 @@ function Invoke-Test {
 }
 
 function Invoke-Publish {
+    param([Parameter(Mandatory)][string]$Runtime)
+
     Write-Step "Publishing the desktop application for $Runtime"
 
     # Self contained and single file: the runtime, WPF and every dependency are embedded,
@@ -321,6 +353,28 @@ function Invoke-Publish {
 
     if ($LASTEXITCODE -ne 0) { throw 'Publishing the desktop application failed.' }
 
+    $exe = Join-Path $Artifacts "$Runtime\app\PdfToDicom.exe"
+    $size = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+    Write-Host "    produced PdfToDicom.exe ($size MB)"
+
+    if (-not $Cli) {
+        # Said rather than left to be noticed, because the handover folder that follows
+        # will have no "Command line" folder in it and that should not be a surprise.
+        Write-Host '    the command line tool was not built; pass -Cli if you want it'
+
+        # An earlier build with -Cli would have left one here, and the packaging step
+        # takes whatever it finds. Shipping yesterday's command line tool beside today's
+        # application is worse than shipping none, so the stale output goes.
+        $stale = Join-Path $Artifacts "$Runtime\cli"
+
+        if (Test-Path $stale) {
+            Remove-Item $stale -Recurse -Force
+            Write-Host '    removed the command line tool left by an earlier build'
+        }
+
+        return
+    }
+
     Write-Step "Publishing the command line tool for $Runtime"
 
     dotnet publish (Join-Path $RepoRoot 'src\PdfToDicom.Cli\PdfToDicom.Cli.csproj') `
@@ -334,11 +388,6 @@ function Invoke-Publish {
         --nologo -v quiet
 
     if ($LASTEXITCODE -ne 0) { throw 'Publishing the command line tool failed.' }
-
-    $exe = Join-Path $Artifacts "$Runtime\app\PdfToDicom.exe"
-    $size = [math]::Round((Get-Item $exe).Length / 1MB, 1)
-    Write-Host "    produced PdfToDicom.exe ($size MB)"
-
 }
 
 <#
@@ -352,12 +401,14 @@ function Invoke-Publish {
     to be considered rather than shipped by accident.
 #>
 function Invoke-Assemble {
-    Write-Step 'Assembling the package to hand over'
+    param([Parameter(Mandatory)][string]$Runtime)
+
+    Write-Step "Assembling the package to hand over for $Runtime"
 
     $ApplicationPath = Join-Path $Artifacts "$Runtime\app\PdfToDicom.exe"
 
     if (-not (Test-Path $ApplicationPath)) {
-        throw "Nothing to package. Publish first: .\build\build.ps1 -Task publish -Runtime $Runtime"
+        throw "Nothing to package. Publish first: .\build\build.ps1 -Task publish -Runtimes $Runtime"
     }
 
     $version = (Select-Xml -Path (Join-Path $RepoRoot 'Directory.Build.props') `
@@ -459,7 +510,7 @@ function Invoke-Assemble {
     }
 
     Write-Host "    exe    : $standalone"
-    Write-Host "    $fileCount file(s): the application and the command line tool, the"
+    Write-Host "    $fileCount file(s): the application$(if (Test-Path $cli) { ' and the command line tool' }), the"
     Write-Host "    licence and third party notices, five documents and two samples"
 
     # Reported rather than left to be discovered. A full three architecture build is the
@@ -634,6 +685,8 @@ Read LICENCE.txt before use.
 }
 
 function Invoke-Package {
+    param([Parameter(Mandatory)][string]$Runtime)
+
     Write-Step 'Building the installer'
 
     $iscc = @(
@@ -718,51 +771,104 @@ The self contained executable in artifacts\<rid>\app is fully functional without
         ForEach-Object { Write-Host "    installer: $($_.FullName)" }
 }
 
+<#
+    Signs what has been published for one architecture.
+
+    Signing is attempted by default, which is what -IfAvailable expresses: a machine with
+    a certificate signs without being asked, and a machine without one says so and carries
+    on rather than failing a build that is otherwise complete. Passing -Sign turns a
+    missing certificate into an error, for the release build where an unsigned executable
+    would be the wrong thing to hand over.
+#>
 function Invoke-Sign {
-    Write-Step 'Signing'
+    param([Parameter(Mandatory)][string]$Runtime)
+
+    if ($NoSign) {
+        Write-Step "Not signing $Runtime, because -NoSign was given"
+        return
+    }
+
+    Write-Step "Signing $Runtime"
 
     # Delegated rather than inlined, so signing can also be run on its own against
     # an existing build without repeating it.
-    & (Join-Path $PSScriptRoot 'sign.ps1') -Runtime $Runtime
+    $arguments = @('-Runtime', $Runtime)
+
+    if (-not $Sign) { $arguments += '-IfAvailable' }
+
+    & (Join-Path $PSScriptRoot 'sign.ps1') @arguments
     if ($LASTEXITCODE -ne 0) { throw 'Signing failed.' }
 }
 
 Assert-Sdk
 
+if ($Sign -and $NoSign) {
+    throw 'Pass -Sign or -NoSign, not both.'
+}
+
+# Said once, before anything is built, because it decides what comes out at the end.
+if ($Task -ne 'clean' -and $Task -ne 'prune') {
+    Write-Host "    building for $($Runtimes -join ', ')$(if ($Cli) { ', with the command line tool' })"
+}
+
 switch ($Task) {
     'clean'   { Invoke-Clean }
     'prune'   { Invoke-Prune }
     'test'    { Invoke-Restore; Invoke-Build; Invoke-Validate; Invoke-Test }
+
+    # The shortest trip to a running executable: no tests, no handover folder, no
+    # installer. For the loop of change something, build it, run it on the test machine.
+    'app' {
+        Invoke-Restore
+
+        foreach ($runtime in $Runtimes) {
+            Invoke-Publish -Runtime $runtime
+            Invoke-Sign -Runtime $runtime
+            Write-Host "    $(Join-Path $Artifacts "$runtime\app\PdfToDicom.exe")"
+        }
+    }
+
     'publish' {
         Invoke-Restore
-        Invoke-Publish
-        if ($Sign) { Invoke-Sign }
-        Invoke-Assemble
+
+        foreach ($runtime in $Runtimes) {
+            Invoke-Publish -Runtime $runtime
+
+            # Before assembling, not after. The handover folder takes copies of the
+            # executable, so signing afterwards would sign the original and leave every
+            # copy that is actually handed out unsigned.
+            Invoke-Sign -Runtime $runtime
+            Invoke-Assemble -Runtime $runtime
+        }
     }
+
     'package' {
-        if ($Sign) { Invoke-Sign }
-        Invoke-Assemble
-        Invoke-Package
-        if ($Sign) { Invoke-Sign }
+        foreach ($runtime in $Runtimes) {
+            Invoke-Sign -Runtime $runtime
+            Invoke-Assemble -Runtime $runtime
+            Invoke-Package -Runtime $runtime
+
+            # Again, because the installer did not exist the first time round.
+            Invoke-Sign -Runtime $runtime
+        }
     }
+
     'all' {
         Invoke-Restore
         Invoke-Build
         Invoke-Validate
+
+        # Once, not once per architecture. The tests exercise the library, which is the
+        # same code whichever architecture it will later be published for.
         Invoke-Test
-        Invoke-Publish
 
-        # Signing has to happen here, between publishing and packaging, not at the end.
-        # The package and the installer both take copies of the executable, so signing
-        # afterwards would sign the original and leave every copy that is actually handed
-        # out unsigned.
-        if ($Sign) { Invoke-Sign }
-
-        Invoke-Assemble
-        Invoke-Package
-
-        # Again, because the installer did not exist the first time round.
-        if ($Sign) { Invoke-Sign }
+        foreach ($runtime in $Runtimes) {
+            Invoke-Publish -Runtime $runtime
+            Invoke-Sign -Runtime $runtime
+            Invoke-Assemble -Runtime $runtime
+            Invoke-Package -Runtime $runtime
+            Invoke-Sign -Runtime $runtime
+        }
     }
 }
 

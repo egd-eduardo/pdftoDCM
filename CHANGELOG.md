@@ -2,8 +2,51 @@
 
 ## 3.5.0
 
-**A clean build, a visible way out, settings that can be carried to the next machine, and
-a fifth of the memory.**
+**A clean build, a visible way out, settings that can be carried to the next machine, a
+fifth of the memory, and a build that produces both architectures and signs them.**
+
+### The build
+
+**Both architectures from one command.** `build.ps1` and `build.sh` now build win-x64 and
+win-arm64 every time, because the machine a build is made on is not the machine it runs on:
+the sites are 64 bit and the testing is done on a Windows on ARM virtual machine, where a
+native build avoids the emulation layer. `-Runtimes` takes a list, `RID` and `RIDS` do the
+same on a Mac, and `-Runtime` is kept as an alias so older notes still work.
+
+**The command line tool is no longer built every time.** It is a second self contained
+publish, as large and as slow as the application's, and a build about to be copied to a test
+machine has no use for it. `-Cli`, or `CLI=1`, adds it; the release pipeline passes it so
+what reaches a site is still complete. A stale one left by an earlier build is removed
+rather than packaged, because shipping yesterday's tool beside today's application would be
+worse than shipping none.
+
+**A task that does the least possible**, for the loop of change something, build it, run it:
+
+```
+.\build\build.ps1 -Task app        build/build.sh app
+```
+
+No tests, no handover folder, no installer. Two signed executables and nothing else.
+
+**Signing happens by default wherever it can**, and is not asked about. On Windows that
+means a certificate in the current user's store; on a Mac, one at
+`~/.pdftodicom/codesign.pfx`, with its password beside it if you would rather not be asked.
+A machine with no certificate builds unsigned, says so, and carries on. `-Sign` turns a
+missing certificate into an error for a release build, and `-NoSign` skips it.
+
+**A defect found while doing this: a signed build was handing over an unsigned
+executable.** The handover folder's copy is a hard link to the published one, so that 80 MB
+is not stored three times. `osslsigncode` cannot sign in place, so it writes a second file,
+and the script moved that over the original; a move unlinks the original, so the handover
+copy kept the old, unsigned bytes while the file beside it was signed. The signed bytes are
+now written through the existing file, and signing runs before the folder is assembled
+rather than after. Both halves were demonstrated: a move leaves the two names on different
+inodes, writing through leaves them on one.
+
+Everything above was exercised end to end on a real build of both architectures: the PE
+machine types checked (0x8664 and 0xAA64), the package sound with and without the command
+line tool, the stale tool removed, and a throwaway certificate used to confirm that all
+three copies of the executable carry the signature.
 
 ### Memory
 

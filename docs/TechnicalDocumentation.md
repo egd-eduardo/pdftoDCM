@@ -1304,14 +1304,34 @@ and no image data**.
 
 The product is built for Windows only, natively for each of its three architectures:
 
-| Runtime identifier | Target |
-|---|---|
-| `win-x86` | 32 bit Windows, still present on older clinical workstations |
-| `win-x64` | The mainstream 64 bit workstation |
-| `win-arm64` | Windows on ARM, natively rather than through x64 emulation |
+| Runtime identifier | Target | Built by default |
+|---|---|---|
+| `win-x64` | The mainstream 64 bit workstation, which is what the sites run | Yes |
+| `win-arm64` | Windows on ARM, natively rather than through x64 emulation | Yes |
+| `win-x86` | 32 bit Windows, still present on older clinical workstations | No, ask for it |
+
+**Both default architectures are built by every command**, because the machine a build is
+made on is not the machine it runs on: the sites are 64 bit, and the testing is done on a
+Windows on ARM virtual machine where a native build avoids the emulation layer. 32 bit is
+left out because a third build is another 80 MB and another thing to pick the wrong one of;
+`-Runtimes win-x86` or `RID=win-x86` builds it when a 32 bit machine turns up.
 
 CI verifies the PE machine type of every published executable, so a build cannot silently
 fall back to the runner's own architecture.
+
+### What is not built unless asked for
+
+**The command line tool.** It is a second self contained single file publish, about as
+large and as slow as the application's, and a build about to be copied to a test machine
+has no use for it. `-Cli` on Windows, `CLI=1` on a Mac, and the release pipeline passes it
+so what reaches a site is still complete. A handover folder assembled without it simply has
+no `Command line` folder, and both scripts say so as they go rather than leaving it to be
+noticed.
+
+A stale one is removed rather than packaged. An earlier build with the tool leaves its
+output in `artifacts/<rid>/cli`, and the packaging step takes whatever it finds there:
+shipping yesterday's command line tool beside today's application would be worse than
+shipping none.
 
 ### Prerequisites
 
@@ -1327,13 +1347,17 @@ fall back to the runner's own architecture.
 ### On Windows
 
 ```powershell
-.\build\build.ps1                        # everything, including the installer
-.\build\build.ps1 -Runtime win-arm64     # native ARM64
-.\build\build.ps1 -Runtime win-x86       # 32 bit
-.\build\build.ps1 -Task publish
-.\build\build.ps1 -Task package
-.\build\build.ps1 -Task prune          # keep the deliverables, drop the intermediates
+.\build\build.ps1                          # 64 bit and ARM, tested, packaged, installers
+.\build\build.ps1 -Task app                # the executables only: the fast loop
+.\build\build.ps1 -Task app -Runtimes win-arm64
+.\build\build.ps1 -Cli                     # with the command line tool
+.\build\build.ps1 -Runtimes win-x86        # a third architecture, on its own
+.\build\build.ps1 -Task test
+.\build\build.ps1 -Task prune              # keep the deliverables, drop the intermediates
 ```
+
+`-Runtime` is kept as an alias for `-Runtimes`, so a note or a script written against the
+old single architecture parameter still works.
 
 ### From macOS or Linux
 
@@ -1341,8 +1365,12 @@ The build tooling cross compiles the Windows binaries, which is what lets the te
 interoperability check run on a Linux CI runner.
 
 ```bash
-build/build.sh                       # restore, build, test, publish (win-x64)
-RID=win-arm64 build/build.sh publish # a different architecture
+build/build.sh                       # restore, build, test, publish both, assemble both
+build/build.sh app                   # the executables only: the fast loop
+build/build.sh ship                  # both architectures in one folder to hand over
+RID=win-arm64 build/build.sh app     # one architecture
+RIDS="win-x64 win-x86" build/build.sh publish
+CLI=1 build/build.sh                 # with the command line tool
 build/build.sh test
 build/build.sh prune                 # keep the deliverables, drop the intermediates
 build/build.sh clean
@@ -1384,7 +1412,7 @@ Output is written per architecture, so all three can coexist.
 | `artifacts/<rid>/app/PdfToDicom.exe` | Self contained desktop application (~62 to 69 MB) |
 | `artifacts/<rid>/cli/pdftodicom.exe` | Self contained command line tool |
 | `artifacts/PdfToDicom-<version>-<rid>/` | The folder handed to a site |
-| `artifacts/PdfToDicom-<version>-<rid>.zip` | The same, zipped |
+| `artifacts/PdfToDicom-<version>-<rid>.zip` | The same, zipped, and only when asked for |
 | `artifacts/PdfToDicom-<version>-<rid>.exe` | The application again, named for the build, for handing one file to somebody |
 | `artifacts/PdfToDicom-Setup-<version>-<arch>.exe` | Per user installer (Windows build only) |
 
@@ -1631,16 +1659,37 @@ Deploy `config.json` to `%APPDATA%\PdfToDicom\` before first launch. See
 
 ### Code signing
 
-The application is designed to be signed. Sign `artifacts/<rid>/app/PdfToDicom.exe` **before**
-building the installer for that architecture, then sign the installer. Repeat per
-architecture:
+**Signing happens by default wherever it can.** Neither script asks. On Windows, a code
+signing certificate in the current user's store is used; on a Mac or Linux, a certificate
+at `~/.pdftodicom/codesign.pfx`, or wherever `SIGN_PFX` points. A machine with none builds
+unsigned, says so in a few lines, and carries on, because an unsigned build is complete and
+runs. `-Sign` on Windows makes a missing certificate an error instead, for a release build
+where handing over an unsigned executable would be the wrong outcome, and `-NoSign` skips
+signing altogether.
+
+Signing runs **after publishing and before the handover folder is assembled**, and then
+again after the installer exists, because both the folder and the installer take the
+executable as they find it.
+
+**The hard link defect, which is the reason that order is written down.** The handover
+folder's `PdfToDicom.exe` is a hard link to the published one, so that an 80 MB file is not
+stored three times. `osslsigncode` cannot sign in place: it writes a second file, and
+`build.sh` used to move that over the original. A move unlinks the original and renames the
+new file into its place, so the handover copy kept pointing at the old, unsigned bytes while
+the published file beside it was signed. A build that was asked to sign therefore handed
+over an unsigned executable, and nothing said so. The signed bytes are now written *through*
+the existing file, which keeps every name for it in agreement whatever order the build does
+things in. Both halves were demonstrated: a move leaves the two names on different inodes,
+and writing through leaves them on one.
+
+By hand, for reference, `signtool` on Windows:
 
 ```powershell
 signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
     /f certificate.pfx /p $password artifacts\win-x64\app\PdfToDicom.exe
-.\build\build.ps1 -Task package -Runtime win-x64
+.\build\build.ps1 -Task package -Runtimes win-x64
 signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
-    /f certificate.pfx /p $password artifacts\PdfToDicom-Setup-1.5.0-x64.exe
+    /f certificate.pfx /p $password artifacts\PdfToDicom-Setup-3.5.0-x64.exe
 ```
 
 ---

@@ -173,7 +173,14 @@ jobs:
             10.0.x
 
       - name: Publish the self contained executables
-        run: .\build\build.ps1 -Task publish -Runtime ${{ matrix.rid }}
+        # -Cli because this is the build that reaches a site, and the handover package is
+        # meant to carry the command line tool. A developer's build leaves it out, since
+        # it is a second self contained publish and most of them have no use for it.
+        #
+        # One architecture per job, named explicitly: the script builds 64 bit and ARM
+        # together by default, which is right at a desk and wrong in a matrix that already
+        # runs one job per architecture.
+        run: .\build\build.ps1 -Task publish -Runtimes ${{ matrix.rid }} -Cli
         shell: pwsh
 
       - name: Install Inno Setup
@@ -182,7 +189,7 @@ jobs:
         shell: pwsh
 
       - name: Build the installer
-        run: .\build\build.ps1 -Task package -Runtime ${{ matrix.rid }}
+        run: .\build\build.ps1 -Task package -Runtimes ${{ matrix.rid }} -Cli
         shell: pwsh
 
       - name: Confirm the executable is genuinely self contained
