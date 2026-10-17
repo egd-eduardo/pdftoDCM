@@ -34,12 +34,25 @@ scratch/
 # ---------------------------------------------------------------------------
 *.key
 *.pfx
+*.p12
 *.snk
 
 # Exported code signing certificates. The public half (.cer) is safe to share
 # but is generated per machine, so it is not tracked either.
 *.cer
 code-signing-backup.pfx
+
+# The password that opens one of the above. A certificate and its password in the
+# same place is a certificate with no password at all.
+#
+# These names are here because they are the ones the build looks for in
+# ~/.pdftodicom, and a name a document tells somebody to use is a name that will
+# eventually be typed inside a repository. *.p12 above is here for the same
+# reason: it was missing while the documentation named it, and a certificate was
+# committed under it.
+codesign.password
+*.password
+password.txt
 # ---------------------------------------------------------------------------
 # Published executables.
 #

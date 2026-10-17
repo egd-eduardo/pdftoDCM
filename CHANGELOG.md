@@ -28,11 +28,39 @@ worse than shipping none.
 
 No tests, no handover folder, no installer. Two signed executables and nothing else.
 
-**Signing happens by default wherever it can**, and is not asked about. On Windows that
-means a certificate in the current user's store; on a Mac, one at
-`~/.pdftodicom/codesign.pfx`, with its password beside it if you would rather not be asked.
-A machine with no certificate builds unsigned, says so, and carries on. `-Sign` turns a
-missing certificate into an error for a release build, and `-NoSign` skips it.
+**Signing happens by default wherever it can**, and is not asked about. The certificate
+goes in **one folder on both machines**, `~/.pdftodicom` or `%USERPROFILE%\.pdftodicom`,
+under any of `codesign.pfx`, `codesign.p12`, `certificate.pfx` or `certificate.p12`, with
+its password in `codesign.password` beside it if you would rather not be asked. On Windows
+the certificate store is used as a fallback, so a self signed certificate still works with
+no file at all. A machine with neither builds unsigned, says so, and carries on. `-Sign`
+turns a missing certificate into an error for a release build, and `-NoSign` skips it.
+
+**Both scripts can now explain themselves**, which they could not when this first shipped:
+the Windows script read only the certificate store, so a certificate placed in that folder
+on a Windows machine was ignored in silence, and neither script said where it had looked.
+
+```
+.\build\build.ps1 -Task signing        build/build.sh signing
+```
+
+It builds nothing and reports every path examined, what is actually in the folder when the
+expected name is not there, the certificate store's contents on Windows, and which of the
+two would be used.
+
+**A password file is rarely plain text, and that cost a signing run.** PowerShell's
+`> file` writes UTF-16 with a byte order mark, as does Notepad's "Unicode": handing those
+bytes to `osslsigncode` offers it a password beginning `0xFF 0xFE` with a NUL between every
+character, and it answers "invalid password", which sends somebody hunting for a wrong
+password rather than a wrong encoding. `build.sh` now converts UTF-16 and strips a UTF-8
+byte order mark; `sign.ps1` trims the trailing newline, without which the certificate fails
+to open with "the password may be incorrect". Both were demonstrated failing first, against
+a real certificate and all three encodings.
+
+**`.gitignore` now covers `*.p12`, `codesign.password`, `*.password` and `password.txt`.**
+It covered `*.pfx` only, while the documentation named `.p12` and `codesign.password` as
+the files to create: a name a document tells somebody to use is a name that will eventually
+be typed inside a repository, and that is exactly what happened.
 
 **A defect found while doing this: a signed build was handing over an unsigned
 executable.** The handover folder's copy is a hard link to the published one, so that 80 MB

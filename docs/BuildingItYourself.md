@@ -462,6 +462,38 @@ or ARM64, and a third build is another 80 MB and another thing to pick the wrong
 
 The installer is still Windows only, because Inno Setup is.
 
+### Where to put the certificate
+
+**One folder, both machines**, and the same file names:
+
+| Machine | Folder |
+|---|---|
+| Mac or Linux | `~/.pdftodicom/` |
+| Windows | `%USERPROFILE%\.pdftodicom\`, usually `C:\Users\<you>\.pdftodicom\` |
+
+The names looked for, in order: `codesign.pfx`, `codesign.p12`, `certificate.pfx`,
+`certificate.p12`. The password goes in `codesign.password` beside it, or you are asked
+for it. **The name matters**: a file called anything else is not found, which is the usual
+reason "I put it in the folder and nothing happened".
+
+**Ask the build what it sees.** It builds nothing and takes a second:
+
+```powershell
+.\build\build.ps1 -Task signing
+```
+
+```bash
+build/build.sh signing
+```
+
+It names every path it looked at, lists what is actually in the folder when the expected
+name is not there, and on Windows shows what the certificate store holds as well.
+
+On Windows the certificate store is still used when there is no file: a certificate you
+created with `-CreateSelfSigned`, or one your IT department installed, is found without
+any file at all. A file you put in the folder deliberately takes precedence over it, and
+`-Thumbprint` insists on a particular store certificate.
+
 ### Signing from a Mac or Linux
 
 Leave the certificate at `~/.pdftodicom/codesign.pfx` and **every build signs itself**,
