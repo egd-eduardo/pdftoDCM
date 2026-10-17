@@ -121,8 +121,8 @@ This appears under `artifacts\`:
 
 ```
 artifacts\
-  PdfToDicom-3.4.0-win-x64\        <- the folder to hand over
-  PdfToDicom-3.4.0-win-x64.exe     <- just the application, version in the name
+  PdfToDicom-3.4.1-win-x64\        <- the folder to hand over
+  PdfToDicom-3.4.1-win-x64.exe     <- just the application, version in the name
 ```
 
 **No zip is made.** The folder can be copied to the machine, or onto a stick, exactly as it

@@ -17,6 +17,7 @@
 8a. [Modality Worklist](#8a-modality-worklist)
 8b. [Importing from the file name](#8b-importing-from-the-file-name)
 9. [Validation](#9-validation)
+9a. [The ImageSharp advisories](#9a-the-imagesharp-advisories)
 10. [Configuration](#10-configuration)
 11. [Logging and audit](#11-logging-and-audit)
 12. [Building](#12-building)
@@ -1008,6 +1009,67 @@ arriving as an opaque status code from the archive.
 The input layer has two switches, `requireDateOfBirth` and `requireAccessionNumber`, both
 true for anything typed and both false for an unattended import from a file name. See
 section 8b for why, and for what stays strict regardless.
+
+---
+
+## 9a. The ImageSharp advisories
+
+Five security advisories stand against every release of SixLabors.ImageSharp from 2.0.0 to
+4.1.1. This product uses **2.1.13**, the last of the 2.x line, and suppresses those five
+**individually by advisory URL** in `PdfToDicom.Core.csproj`.
+
+Stated plainly, because a suppressed security warning that nobody can audit is worse than
+the warning.
+
+### Why not simply upgrade
+
+The fix for all five is **4.1.2**. There is none in 2.x. Moving to 4.x is not a version
+bump:
+
+- ImageSharp 3.0 adopted the **Six Labors Split License**. It grants Apache-2.0 terms to an
+  individual or company under 1M USD annual gross revenue, so the terms are most likely
+  acceptable here.
+- But **4.x refuses to build without a licence key.** Its build targets fail with
+  `No Six Labors license found ... obtain a license from sixlabors.com/pricing`. That was
+  tried: it is a hard error, not a warning.
+
+So a patched ImageSharp requires obtaining a key from Six Labors first. Until that happens
+the choice is 2.1.13 with these suppressions, or no image support.
+
+### Why it is defensible here
+
+Four of the five cannot be reached by this code, and the fifth is a slow decode of a file
+the operator chose themselves. Each was checked against the source, not assumed.
+
+| Advisory | What it needs | Reachable? |
+|---|---|---|
+| `GHSA-j3p4-wp97-rph4` | TIFF as `HalfVector4`, then `HistogramEqualization()` | **No.** Never called; decoding is non-generic, then cloned to `Rgb24` or `L8` |
+| `GHSA-j9gm-c75j-xc9q` | TIFF CCITT Group 3 **encoder** | **No.** Nothing here encodes TIFF; `TiffEncoder` is not referenced |
+| `GHSA-jjfr-hcj7-qf5w` | TIFF CCITT Group 4 **encoder** | **No.** Same |
+| `GHSA-gwg2-r3hj-4w44` | ICC parser via `Convert` or `IccProfile.Entries` | **No.** Default is `Preserve`, which does not parse; no colour profile code |
+| `GHSA-wmxv-xphr-5c9g` | BigTIFF EXIF IFD, decode occupying a thread for seconds | **Yes.** Availability only; the file is one the operator picked on their own workstation |
+
+### Why the suppression is narrow
+
+`NuGetAuditSuppress` suppresses one advisory each. A new advisory, against this package or
+any other, still fails the audit. That was verified by deleting one of the five and
+confirming only that one reappeared.
+
+The blunt alternative, `NoWarn` on `NU1902;NU1903`, was rejected: it would hide every
+future package vulnerability in the project, which is not an acceptable trade in software
+that handles patient data.
+
+`NuGetAuditSuppress` needs **NuGet 6.12 or later**, which means a .NET 9 or 10 SDK. The 8.0
+SDK ignores the item in silence, so CI installs both: 8.0.x for the runtime the tests need,
+10.0.x for a NuGet that honours the suppressions. Without that, the same repository
+produces five warnings on a build agent and none on a developer's machine.
+
+### When to revisit
+
+Obtain a Six Labors licence key, move to 4.1.2 or later, and delete all five suppressions.
+Re-check the reasoning above if this code ever starts **encoding TIFF**, **reading ICC
+profiles**, or calling **`HistogramEqualization`** — three of the four "not reached"
+answers would stop being true.
 
 ---
 

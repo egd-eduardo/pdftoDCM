@@ -1,5 +1,64 @@
 # Changelog
 
+## 3.4.1
+
+**A clean build: no warnings at all, where there were thirteen.**
+
+### The ImageSharp security advisories
+
+Five advisories stand against every ImageSharp from 2.0.0 to 4.1.1. Each was read, and
+each was checked against this code rather than assumed. **Four cannot be reached here**,
+and the fifth is a slow decode of a file the operator chose on their own workstation:
+
+| Advisory | Needs | Reachable? |
+|---|---|---|
+| `j3p4-wp97-rph4` | TIFF as `HalfVector4` + `HistogramEqualization()` | No, never called |
+| `j9gm-c75j-xc9q` | TIFF CCITT Group 3 **encoder** | No, nothing encodes TIFF |
+| `jjfr-hcj7-qf5w` | TIFF CCITT Group 4 **encoder** | No, same |
+| `gwg2-r3hj-4w44` | ICC parser via `Convert` or `IccProfile.Entries` | No, default `Preserve` parses nothing |
+| `wmxv-xphr-5c9g` | BigTIFF EXIF IFD, a decode of several seconds | **Yes**, availability only |
+
+They are now suppressed **individually, by advisory URL**, with that analysis recorded
+beside them in the project file and in the technical documentation. A new advisory, against
+this package or any other, still fails the audit: confirmed by deleting one of the five and
+watching only that one reappear. The blunt `NoWarn NU1902;NU1903` was rejected because it
+would hide every future package vulnerability.
+
+**Why not just upgrade.** The fix for all five is 4.1.2, and there is none in the 2.x line.
+ImageSharp 3.0 moved to the Six Labors Split License, which does grant Apache-2.0 terms
+below 1M USD annual gross revenue, so the terms are probably acceptable here. But **4.x
+refuses to build without a licence key**: its build targets fail outright with
+*"No Six Labors license found"*. A patched ImageSharp therefore needs a key from Six Labors
+first, and until somebody obtains one the choice is 2.1.13 with these suppressions or no
+image support at all.
+
+Also moved 2.1.11 to **2.1.13**, the last of the 2.x line, which is worth having regardless.
+
+**CI now installs two SDKs.** `NuGetAuditSuppress` needs NuGet 6.12 or later, so a .NET 9
+or 10 SDK; the 8.0 SDK ignores it in silence. CI gets 8.0.x for the runtime the tests need
+and 10.0.x for a NuGet that honours the suppressions, so the same repository no longer
+produces five warnings on a build agent and none on a developer's machine.
+
+### The CA1416 warnings
+
+Three in `PdfPageRenderer.cs`, unrelated to the above. PDFtoImage declares its entry points
+as supported on Android 31+, Linux, macOS and Windows; this assembly targets plain `net8.0`,
+which also admits browser, iOS and tvOS, so the analyzer cannot prove the calls are not
+reached there.
+
+They are not, and the concern is already handled better than an attribute could: the
+renderer loads the native library and asks it for real work before anything depends on it,
+and a platform where it cannot load produces a document without page images rather than a
+crash. Suppressed at the class with that reasoning written out. Narrowing with
+`[SupportedOSPlatform]` was the alternative and was rejected: the attribute propagates to
+every caller.
+
+### Result
+
+`dotnet build` reports **0 warnings and 0 errors** for all four projects. 265 tests pass and
+the 94 DCMTK interoperability checks pass, including the page image rendering that depends
+on the packages involved.
+
 ## 3.4.0
 
 **Naming layouts and date formats can be built by picking from a list, and the build

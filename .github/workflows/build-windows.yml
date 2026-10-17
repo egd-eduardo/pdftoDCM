@@ -37,7 +37,18 @@ jobs:
       - name: Set up the .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          # Both, and the order matters for why.
+          #
+          # 8.0.x supplies the runtime the tests execute on, since everything targets
+          # net8.0. 10.0.x supplies a NuGet new enough to honour NuGetAuditSuppress,
+          # which is how the five ImageSharp advisories are suppressed individually in
+          # PdfToDicom.Core.csproj. NuGet 6.8, which ships with the 8.0 SDK, ignores
+          # that item silently, so on 8.0 alone those five warnings reappear here while
+          # a developer on a current SDK sees none. Same repository, different output,
+          # which is the kind of difference that wastes an afternoon.
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Restore
         # Restore generates assets for every runtime identifier declared in the project
@@ -148,7 +159,18 @@ jobs:
       - name: Set up the .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          # Both, and the order matters for why.
+          #
+          # 8.0.x supplies the runtime the tests execute on, since everything targets
+          # net8.0. 10.0.x supplies a NuGet new enough to honour NuGetAuditSuppress,
+          # which is how the five ImageSharp advisories are suppressed individually in
+          # PdfToDicom.Core.csproj. NuGet 6.8, which ships with the 8.0 SDK, ignores
+          # that item silently, so on 8.0 alone those five warnings reappear here while
+          # a developer on a current SDK sees none. Same repository, different output,
+          # which is the kind of difference that wastes an afternoon.
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Publish the self contained executables
         run: .\build\build.ps1 -Task publish -Runtime ${{ matrix.rid }}

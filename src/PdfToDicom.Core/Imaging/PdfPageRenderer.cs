@@ -28,6 +28,31 @@ namespace PdfToDicom.Core.Imaging;
 /// </remarks>
 public sealed class PdfPageRenderer : IPdfPageRenderer
 {
+    // ------------------------------------------------------------------ CA1416
+    //
+    // PDFtoImage declares its entry points as supported on Android 31+, Linux, macOS and
+    // Windows. This assembly targets plain net8.0, which also admits browser, iOS and
+    // tvOS, so the analyzer correctly observes that these call sites are "reachable on all
+    // platforms" and cannot prove they are not reached on one of those three.
+    //
+    // They are not. The product is a Windows desktop application; the only other platforms
+    // this assembly ever runs on are Linux and macOS, where the build, the tests and the
+    // DICOM interoperability check execute, and the native library supports both.
+    //
+    // More to the point, the concern the analyzer is raising is already handled at run
+    // time and better than an attribute could: ProbeNativeLibrary below loads the library
+    // and asks it for real work before anything depends on it, IsAvailable reports the
+    // answer, and Render returns an empty list with an explanation when it is false. A
+    // platform where the library cannot load produces a document without page images
+    // rather than a crash.
+    //
+    // Narrowing the class with [SupportedOSPlatform] for each of the three platforms was
+    // the alternative, and it was rejected: the attribute propagates to every caller, so
+    // the composition root and the workflow service would each need the same three
+    // attributes to stay quiet, which is a lot of ceremony to express something the
+    // runtime probe already enforces.
+    #pragma warning disable CA1416
+
     private readonly IAppLogger _logger;
     private readonly Lazy<bool> _available;
 
@@ -215,4 +240,6 @@ public sealed class PdfPageRenderer : IPdfPageRenderer
         "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n" +
         "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 72 72]>>endobj\n" +
         "trailer<</Root 1 0 R>>\n");
+
+    #pragma warning restore CA1416
 }

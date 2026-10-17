@@ -39,9 +39,9 @@
     <Company>Eduardo Dias</Company>
     <Authors>Eduardo Dias</Authors>
     <Copyright>Copyright (c) 2026 Eduardo Dias. All rights reserved.</Copyright>
-    <Version>3.4.0</Version>
-    <AssemblyVersion>3.4.0.0</AssemblyVersion>
-    <FileVersion>3.4.0.0</FileVersion>
+    <Version>3.4.1</Version>
+    <AssemblyVersion>3.4.1.0</AssemblyVersion>
+    <FileVersion>3.4.1.0</FileVersion>
     <NeutralLanguage>en-US</NeutralLanguage>
   </PropertyGroup>
 
