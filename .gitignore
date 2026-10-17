@@ -73,3 +73,5 @@ password.txt
 # The READMEs under dist/ are tracked; the binaries beside them are not.
 # ---------------------------------------------------------------------------
 dist/**/*.exe
+codesign.password
+codesign.p12
