@@ -598,6 +598,62 @@
                                    Style="{StaticResource CaptionTextStyle}"
                                    TextWrapping="Wrap" Margin="0,0,0,14" />
 
+                        <!-- Build a layout by pressing the fields off in the order they
+                             appear in a real file name. The box below stays editable, so
+                             anything the picker cannot express is still typed by hand. -->
+                        <TextBlock Text="{loc:Localize Settings.Import.Build}" Style="{StaticResource SectionHeaderTextStyle}" />
+                        <TextBlock Text="{loc:Localize Settings.Import.Build.Caption}"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap" Margin="0,0,0,10" />
+
+                        <ItemsControl ItemsSource="{Binding FilenameFieldChoices}" Margin="0,0,0,10">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource SecondaryButtonStyle}"
+                                            Command="{Binding DataContext.AddFieldCommand,
+                                                      RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding Token}"
+                                            ToolTip="{Binding Placeholder}"
+                                            Content="{Binding Display}"
+                                            MinHeight="30" Margin="0,0,6,6" Padding="12,0" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding PatternUnderConstruction, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
+                                <Button Content="{loc:Localize Settings.Import.Build.Use}"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Command="{Binding UsePatternCommand}"
+                                        MinWidth="110" Margin="0,0,6,0" />
+                                <Button Content="{loc:Localize Settings.Import.Build.Clear}"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Command="{Binding ClearPatternCommand}"
+                                        MinWidth="90" />
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                            <TextBlock Text="{loc:Localize Settings.Import.Build.Separator}"
+                                       Style="{StaticResource CaptionTextStyle}"
+                                       VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBox Text="{Binding PatternSeparator, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextBoxStyle}"
+                                     Width="60" />
+                        </StackPanel>
+
                         <TextBlock Text="{loc:Localize Settings.Import.Patterns}" Style="{StaticResource FieldLabelTextStyle}" />
                         <TextBox Text="{Binding FilenamePatternsText, UpdateSourceTrigger=LostFocus}"
                                  Style="{StaticResource InputTextBoxStyle}"
@@ -617,7 +673,29 @@
                                  MinHeight="60" Margin="0,0,0,4" />
                         <TextBlock Text="{loc:Localize Settings.Import.DateFormats.Caption}"
                                    Style="{StaticResource CaptionTextStyle}"
-                                   TextWrapping="Wrap" Margin="0,0,0,14" />
+                                   TextWrapping="Wrap" Margin="0,0,0,8" />
+
+                        <!-- Each shows the format and the same date written in it, because
+                             "ddMMyyyy" means nothing to most people and "21051970" is
+                             recognised instantly. Pressing one appends it to the box above,
+                             in the order they are pressed. -->
+                        <ItemsControl ItemsSource="{Binding DateFormatChoices}" Margin="0,0,0,14">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource SecondaryButtonStyle}"
+                                            Command="{Binding DataContext.AddDateFormatCommand,
+                                                      RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding Format}"
+                                            Content="{Binding Display}"
+                                            MinHeight="30" Margin="0,0,6,6" Padding="12,0" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
 
                         <TextBlock Text="{loc:Localize Settings.Import.PadPatientId}" Style="{StaticResource FieldLabelTextStyle}" />
                         <TextBox Text="{Binding Working.FilenameImport.PadPatientIdTo, UpdateSourceTrigger=PropertyChanged}"

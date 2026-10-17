@@ -18,6 +18,11 @@
     Sign the published executables and the installer after building. Requires a code
     signing certificate; see build/sign.ps1 and docs/CodeSigning.md.
 
+.PARAMETER Zip
+    Also produce a zip of the handover folder. Off by default: the folder itself can be
+    copied to another machine exactly as it stands, so an archive is only of use for
+    sending one file to somebody.
+
 .PARAMETER Task
     all      restore, build, test, publish and package (default)
     test     run the test suite only
@@ -43,7 +48,11 @@ param(
     [ValidateSet('win-x86', 'win-x64', 'win-arm64')]
     [string]$Runtime = 'win-x64',
 
-    [switch]$Sign
+    [switch]$Sign,
+
+    # A zip is produced only when asked for. The handover folder can be copied to another
+    # machine as it stands, so an archive is of use only for sending one file to somebody.
+    [switch]$Zip
 )
 
 $ErrorActionPreference = 'Stop'
@@ -420,12 +429,18 @@ function Invoke-Assemble {
     # ---------------------------------------------------------------- start here
     New-StartHereFile -Path (Join-Path $package 'READ ME FIRST.txt') -Version $version
 
-    # Checked before the zip is made, so a defective package is never handed over.
+    # Checked before anything is archived or handed over, so a defective package is not.
     Assert-PackageIsSound -Package $package -ExpectCli ([bool](Test-Path $cli))
 
     # ---------------------------------------------------------------- archive
-    $zip = Join-Path $Artifacts "PdfToDicom-$version-$Runtime.zip"
-    Compress-Archive -Path "$package\*" -DestinationPath $zip -Force
+    # Only when asked for. The folder above is the deliverable: it can be copied to
+    # another machine, or onto a stick, exactly as it stands.
+    $zip = $null
+
+    if ($Zip) {
+        $zip = Join-Path $Artifacts "PdfToDicom-$version-$Runtime.zip"
+        Compress-Archive -Path "$package\*" -DestinationPath $zip -Force
+    }
 
     # A standalone copy whose name carries the version and the architecture. The file
     # inside the package stays PdfToDicom.exe, because the manuals, the shortcuts and the
@@ -438,7 +453,11 @@ function Invoke-Assemble {
     $fileCount = (Get-ChildItem $package -Recurse -File).Count
 
     Write-Host "    folder : $package"
-    Write-Host "    zip    : $zip"
+
+    if ($zip) {
+        Write-Host "    zip    : $zip"
+    }
+
     Write-Host "    exe    : $standalone"
     Write-Host "    $fileCount file(s): the application and the command line tool, the"
     Write-Host "    licence and third party notices, five documents and two samples"

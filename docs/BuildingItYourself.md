@@ -117,12 +117,20 @@ It does not modify the source, install anything system wide, or need administrat
 
 ## What you get
 
-Two things appear under `artifacts\`:
+This appears under `artifacts\`:
 
 ```
 artifacts\
-  PdfToDicom-3.3.1-win-x64\        <- the folder to hand over
-  PdfToDicom-3.3.1-win-x64.zip     <- the same, ready to email
+  PdfToDicom-3.4.0-win-x64\        <- the folder to hand over
+  PdfToDicom-3.4.0-win-x64.exe     <- just the application, version in the name
+```
+
+**No zip is made.** The folder can be copied to the machine, or onto a stick, exactly as it
+stands, so an archive is only of use for sending one file by email. Add `-Zip` if you want
+one:
+
+```powershell
+.\build\build.ps1 -Zip
 ```
 
 The folder contains everything a site needs and nothing it should not have:
@@ -367,3 +375,68 @@ architecture matches. A `win-arm64` build will not run on an ordinary 64 bit PC.
 Right click `build.ps1` and choose **Run with PowerShell**, or open PowerShell in the
 folder and paste one of those lines. Add **Inno Setup 6** and the same script also builds
 the installer.
+
+---
+
+## Building both architectures at once, on a Mac or Linux
+
+```bash
+build/build.sh ship
+```
+
+That builds 64 bit and ARM, runs the tests and the validators first, and leaves one folder
+holding both:
+
+```
+artifacts/ship/
+  WHICH FOLDER DO I USE.txt     Which one for which machine, and how to tell
+  win-x64/                      Complete, ready to copy
+  win-arm64/                    Complete, ready to copy
+```
+
+Copy the whole folder, or just the one that matches the machine. Each is a full package:
+the application, the command line tool, the licence, the notices, the manuals and the
+samples. Nothing needs installing on the target machine.
+
+32 bit is deliberately not built by `ship`. Every Windows 10 or 11 machine in service runs
+x64 or ARM64, and a third build is another 80 MB and another thing to pick the wrong one
+of. Build it on its own if a 32 bit machine ever turns up:
+
+```bash
+RID=win-x86 build/build.sh publish
+```
+
+The installer is still Windows only, because Inno Setup is.
+
+### Signing from a Mac or Linux
+
+```bash
+SIGN_PFX=~/keys/codesign.pfx build/build.sh ship
+```
+
+It asks for the certificate password without showing it, signs both architectures, and
+timestamps against the same servers `sign.ps1` uses. It needs `osslsigncode`:
+
+```bash
+brew install osslsigncode          # macOS
+sudo apt-get install osslsigncode  # Linux
+```
+
+**This is not the same as signing on Windows, and the difference matters.** `sign.ps1`
+takes the certificate from the Windows certificate store, where the private key can be
+marked non exportable and never exists as a file. There is no equivalent here, so this
+needs the key **as a file on the disk**. Keep it off shared drives, on an encrypted disk,
+and out of the repository: `.gitignore` already covers `*.pfx`, and that is a safety net
+rather than a plan.
+
+If the key was created exportable, you can get a `.pfx` out of the Windows machine that
+already signs:
+
+```powershell
+$c = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Select-Object -First 1
+Export-PfxCertificate -Cert $c -FilePath codesign.pfx -Password (Read-Host -AsSecureString)
+```
+
+If it was not exportable, signing stays on the Windows machine, which is the safer place
+for it anyway. Nothing is signed unless `SIGN_PFX` names a file, so an ordinary
+`build/build.sh ship` just builds.

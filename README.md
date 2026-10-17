@@ -93,8 +93,14 @@ and the DICOM interoperability check run on a Linux CI runner. Only the Inno Set
 installer genuinely requires Windows.
 
 ```bash
-RID=win-arm64 build/build.sh publish        # from macOS or Linux
+build/build.sh ship                         # 64 bit and ARM, one folder to hand over
+RID=win-arm64 build/build.sh publish        # one architecture
+SIGN_PFX=~/keys/codesign.pfx build/build.sh ship   # and sign them
 ```
+
+`ship` leaves `artifacts/ship/` holding a complete, copyable folder per architecture and a
+note saying which is which. **No zip is produced** by either script unless asked for
+(`ZIP=1`, or `-Zip` on PowerShell): the folder can be copied to a machine as it stands.
 
 Every push builds all three architectures and attaches the installers to
 [the CI run](.github/workflows/build-windows.yml).
