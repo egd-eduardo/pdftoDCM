@@ -302,5 +302,31 @@
   "Settings.Import.Field.AccessionNumber": "Número de acesso",
   "Settings.Import.Field.DateOfBirth": "Data de nascimento",
   "Settings.Import.Field.StudyDescription": "Descrição do estudo",
-  "Settings.Import.Field.Ignore": "Ignorar esta parte"
+  "Settings.Import.Field.Ignore": "Ignorar esta parte",
+
+  "Settings.Tab.Backup": "Cópia de segurança",
+  "Settings.Lock.LockedCaption.Backup": "Esta página escreve e lê um ficheiro com os endereços dos arquivos e dos servidores de lista de trabalho, e pode substituir os que estão configurados aqui. Requer a mesma palavra-passe das páginas Destinos e Lista de trabalho.",
+  "Settings.Backup.Intro": "Configure uma estação, exporte as definições de ligação e importe o ficheiro nas restantes. Apenas os arquivos e os servidores de lista de trabalho são transportados: o AE Title desta estação, as pastas, o idioma e os modelos ficam como estão, por serem próprios da máquina.",
+  "Settings.Backup.Include": "O que transportar",
+  "Settings.Backup.IncludeDestinations": "Os arquivos para onde os documentos são enviados",
+  "Settings.Backup.IncludeWorklists": "Os servidores de lista de trabalho",
+  "Settings.Backup.Export": "Exportar para um ficheiro",
+  "Settings.Backup.ExportCaption": "Escreve as entradas tal como aparecem agora nas outras páginas, incluindo as que acabou de acrescentar.",
+  "Settings.Backup.Import": "Importar de um ficheiro",
+  "Settings.Backup.ImportCaption": "Nada é escrito nesta estação até premir Guardar, pelo que uma importação ainda pode ser abandonada com Cancelar.",
+  "Settings.Backup.Mode": "O que uma importação faz às entradas que já existem aqui",
+  "Settings.Backup.Mode.Add": "Acrescentar o que falta e manter as restantes",
+  "Settings.Backup.Mode.Replace": "Substituí-las pelas entradas do ficheiro",
+  "Settings.Backup.FileFilter": "Definições do PDF to DICOM (*.json)|*.json|Todos os ficheiros (*.*)|*.*",
+  "Settings.Backup.Exported": "Exportados {0} arquivo(s) e {1} servidor(es) de lista de trabalho para {2}.",
+  "Settings.Backup.ExportFailed": "Não foi possível escrever o ficheiro: {0}",
+  "Settings.Backup.Imported": "Importados {0} arquivo(s) e {1} servidor(es) de lista de trabalho. {2} já estavam configurados aqui e não foram alterados, e {3} foram descartados. Prima Guardar para manter.",
+  "Settings.Backup.ImportedNothing": "Nada foi alterado: todos os {0} servidor(es) do ficheiro já estão configurados aqui.",
+  "Settings.Backup.ConfirmReplace": "Substituir descarta {0} arquivo(s) e {1} servidor(es) de lista de trabalho configurados nesta estação, e passa a usar as entradas do ficheiro.\n\nNada é escrito até premir Guardar.\n\nContinuar?",
+  "Settings.Backup.NothingChosenInFile": "O ficheiro não contém o tipo de definições que pediu para importar. Assinale o que o ficheiro contém de facto, ou exporte-o de novo incluindo-as.",
+
+  "Action.Exit": "Sair",
+  "Action.Exit.Tooltip": "Fechar a aplicação. Tudo o que estiver em curso é interrompido e é pedida confirmação.",
+  "Exit.Confirm": "Fechar o PDF to DICOM?\n\nTudo o que estiver preenchido no formulário e não tiver sido enviado será perdido.",
+  "Exit.ConfirmBusy": "Está uma conversão em curso.\n\nFechar agora interrompe-a. Se um documento estava a ser enviado, o arquivo pode não o ter aceitado; nada é apagado, pelo que pode ser enviado de novo a partir da pasta de saída.\n\nFechar mesmo assim?"
 }

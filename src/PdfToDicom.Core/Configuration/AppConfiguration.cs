@@ -229,6 +229,26 @@ public sealed class AppConfiguration
     public bool RenderPdfPagesAsImages { get; set; } = true;
 
     /// <summary>
+    /// Roughly how much pixel data the page images of one document may occupy, in
+    /// megabytes. Zero means no ceiling.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Nothing is transmitted until every object has passed validation, because half a
+    /// document in an archive is worse than none, so a long report's page images are all
+    /// held in memory at once. The product also ships a 32 bit build, whose address space
+    /// a hundred page report at 300 DPI would exhaust.
+    /// </para>
+    /// <para>
+    /// A document over the ceiling is rendered at a lower resolution, never in part: a
+    /// reader shown twelve pages of a twenty page report cannot tell that eight are
+    /// missing. The default is generous enough that an ordinary report is untouched, and a
+    /// site that wants full resolution on very long documents can raise it.
+    /// </para>
+    /// </remarks>
+    public int MaximumRenderedPixelMegabytes { get; set; } = 512;
+
+    /// <summary>
     /// How patient information is read out of the names of files arriving in the monitored
     /// folder.
     /// </summary>

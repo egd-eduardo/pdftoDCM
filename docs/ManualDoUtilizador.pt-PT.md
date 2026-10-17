@@ -56,7 +56,7 @@ Tudo acontece numa só janela, que se lê de cima para baixo.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  PDF para DICOM                    Registos   Definições   Acerca    │  ← cabeçalho
+│  PDF para DICOM              Registos  Definições  Acerca │ 🚪 Sair   │  ← cabeçalho
 │  Hospital de Exemplo                                                 │
 ├───────────────────────────────────────┬──────────────────────────────┤
 │  1. Selecionar o documento PDF        │  3. PACS de destino          │
@@ -80,6 +80,13 @@ Tudo acontece numa só janela, que se lê de cima para baixo.
 ```
 
 Os campos marcados com asterisco vermelho (**\***) são obrigatórios.
+
+**Fechar a aplicação.** O ícone de porta no canto superior direito fecha a aplicação.
+Utilize-o quando a janela tiver sido movida ou redimensionada de tal forma que o botão de
+fechar habitual, no canto, não esteja visível. Pede sempre confirmação e, se estiver um
+documento a ser gerado ou enviado, avisa antes de interromper. Nada do que já foi escrito
+na pasta de saída é apagado, pelo que um documento interrompido durante o envio pode ser
+enviado de novo.
 
 **O ponto colorido na barra de estado indica em que fase se encontra:**
 
@@ -470,6 +477,7 @@ pelo departamento de informática.
 | **Lista de trabalho** | Os servidores de listas de trabalho de modalidade, tantos quantos o hospital tiver. Protegido por uma palavra-passe na posse de quem instalou a aplicação; apontar um deles para o servidor errado colocaria à sua frente os doentes errados. |
 | **Pastas** | Onde são guardados os ficheiros e os registos, e a monitorização de pastas. |
 | **Nomes de ficheiros** | O formato utilizado para ler os dados do doente a partir do nome do ficheiro, e uma caixa que experimenta um nome e mostra o que seria lido. Ver a secção 3. |
+| **Cópia de segurança** | Exportar os arquivos e os servidores de lista de trabalho para um ficheiro, e importar esse ficheiro noutra estação. Protegido pela mesma palavra-passe das duas páginas cujas entradas transporta. |
 | **Aspeto** | Idioma, modo escuro e confirmação antes de enviar. |
 
 Duas definições são relevantes para o utilizador:
@@ -479,6 +487,25 @@ Duas definições são relevantes para o utilizador:
 
 > **Mantenha ativada a opção "Pedir confirmação antes de enviar".** É a última verificação
 > de que o documento corresponde ao doente.
+
+### Configurar uma segunda estação
+
+Configure uma máquina e, na página **Cópia de segurança**, prima **Exportar para um
+ficheiro** e guarde o ficheiro num local acessível a ambas as máquinas. Na estação
+seguinte, abra a mesma página, prima **Importar de um ficheiro**, escolha-o e prima
+**Guardar**.
+
+- **Acrescentar o que falta** é a opção normal, e a mais segura. Um arquivo ou servidor de
+  lista de trabalho já configurado aqui é reconhecido e fica exatamente como está, pelo que
+  importar o mesmo ficheiro duas vezes não altera nada à segunda.
+- **Substituí-las pelas entradas do ficheiro** serve para quando uma máquina é a referência
+  e as restantes devem ficar iguais. Pede confirmação e indica quantas entradas vai
+  descartar.
+- Nada é escrito até premir **Guardar**, pelo que **Cancelar** ainda abandona a importação.
+
+O ficheiro transporta apenas os arquivos e os servidores de lista de trabalho. O AE Title
+desta estação, as pastas, o idioma e os modelos ficam como estão, e isso é intencional:
+duas estações com o mesmo AE Title é algo que o administrador do PACS irá questionar.
 
 ---
 

@@ -1,7 +1,7 @@
 # DICOM Conformance Statement
 
 **Product:** PDF to DICOM
-**Version:** 3.4.0
+**Version:** 3.5.0
 **Document version:** 1.1
 **Date:** 2026
 

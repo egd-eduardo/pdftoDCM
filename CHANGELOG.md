@@ -1,5 +1,190 @@
 # Changelog
 
+## 3.5.0
+
+**A clean build, a visible way out, settings that can be carried to the next machine, and
+a fifth of the memory.**
+
+### Memory
+
+Measured on a sixty page report, by sampling the process's own resident set rather than by
+reasoning about it:
+
+| | Peak resident |
+|---|---|
+| Before | 629 MB |
+| Reading the rasterizer's own pixel layout | 247 MB |
+| With the pixel data ceiling at 64 MB | 184 MB |
+
+And across two conversions in one process, which is what a workstation actually does:
+
+| | After one conversion | After two |
+|---|---|---|
+| Before | 246 MB | 311 MB |
+| Now | 106 MB | 108 MB |
+
+**The rasterizer's pixel layout is read where it lies.** Every page used to be converted to
+one known layout first, which allocated and copied a second whole page, about 8 MB each at
+150 DPI, for an image that was about to be read one pixel at a time anyway. The two four
+byte layouts differ only in whether red sits at offset 0 or offset 2. That change alone took
+the sixty page document from 629 MB to 247 MB, and **the pixel data is byte for byte
+identical**: verified by hashing all sixty page objects before and after.
+
+A silent failure was possible here, where a red stamp arrives blue, so a new test renders a
+hand written PDF of a red half over a blue half and checks the channels. It was confirmed to
+fail when the offsets are swapped. Rows are now read by stride as well, so a bitmap whose
+stride exceeds its width can no longer come out sheared.
+
+**A new ceiling on page image memory, `MaximumRenderedPixelMegabytes`, default 512.** Nothing
+is transmitted until every object has passed validation, because half a document in an
+archive is worse than none, so a long report's page images are all live at once, and the
+product ships a 32 bit build. A document over the ceiling is rendered **at a lower
+resolution, never in part**: a reader shown twelve pages of a twenty page report cannot tell
+that eight are missing. Below 72 DPI nothing is rendered and the log says why. The
+encapsulated document, the fidelity copy, is never affected. 0 removes the ceiling.
+
+**The memory is handed back when the work is done.** Each rendered page is a multi megabyte
+array, which lives on the large object heap: not compacted by default, swept only on a
+generation two collection. Left alone, the report that has just been sent stays resident,
+which is what Task Manager shows as high memory use. One blocking compacting collection now
+runs at the end of a conversion, where nobody is waiting; measured at 17 to 35 milliseconds
+for documents from one to sixty pages.
+
+**Two suspicions that were measured and dismissed.** Holding the generated object for the
+session was thought to keep the whole thing in memory, and a file handle with it: in fact
+opening a 1 MB object grows the heap by 8 KB, the large values are read on demand and no
+descriptor is retained. The result lists were thought to grow across conversions; they are
+cleared at the start of every run. Nothing was changed on either count, and the
+investigation is written down in the technical documentation so it is not repeated.
+
+### Export and import the archives and worklist servers
+
+A new **Backup** page in Settings writes the configured archives and worklist servers to a
+file, and reads one back on another workstation. Configure one machine, export, import on
+the rest. The same thing from a rollout script:
+
+```
+pdftodicom export-settings --out \\server\share\pacs-settings.json
+pdftodicom import-settings --file \\server\share\pacs-settings.json
+pdftodicom import-settings --file pacs-settings.json --worklists-only --replace
+```
+
+**Only the connection settings travel, and the omission is the point.** The file holds the
+destinations and the worklist servers. It does **not** hold the calling AE Title: copying
+that would give two workstations one identity on the hospital network, which is the single
+thing a PACS administrator will object to, and it would have happened silently. Institution,
+folders, language and templates are left out for the same reason, being local to the
+machine.
+
+**Importing the same file twice changes nothing the second time.** Two entries are the same
+server when the AE Title, host and port match, ignoring case and spaces, so a file left on a
+shared drive can be imported by the next person to set a machine up without doubling the
+list. Identifiers are not used for the comparison, because they are generated per machine;
+each imported entry gets a fresh one, and a name already in use gets a number rather than
+leaving two identical entries in a list somebody picks from under pressure.
+
+**Replace** is offered for when one workstation is the reference and the rest should match
+it. It asks first, defaults to No, and says how many entries it is about to discard. In the
+dialog nothing is written until Save, so Cancel still abandons an import; the command line
+has nobody to press Save, so it writes at once and prints what it did.
+
+Nothing secret is in the file: neither a destination nor a worklist server holds a password.
+The page is behind the same password as Destinations and Worklist all the same, because the
+file discloses the addresses of clinical systems and the page can replace them wholesale.
+
+**One defect worth recording.** `FileKind`, the marker that says a file is ours, started out
+as a property default. After deserialization a property left at its default is
+indistinguishable from one the file never mentioned, so *any* JSON file passed the check. A
+test written to prove the refusal is what caught it. The marker is now stamped on writing,
+and the property defaults to empty.
+
+21 tests cover the transfer: the round trip, every setting of an entry surviving it through a
+serializer comparison rather than a hand written list, the AE-Title-stays-home guarantee,
+idempotence, name collisions, replacing one kind while leaving the other, forgetting a
+worklist that was discarded, and five ways a file can be wrong.
+
+### A door icon that closes the application
+
+The window can be moved or sized so that its own close button sits off the screen, which
+on a shared workstation leaves somebody hunting for a corner that is not there. There is
+now a door icon at the right of the header, set apart from Logs, Settings and About by a
+separator because it is the one button there that ends what you are doing.
+
+It asks before closing, and the question it asks depends on what is happening:
+
+- **Nothing in progress.** It warns that anything typed into the form and not yet sent
+  will be lost.
+- **A conversion or transmission in progress.** It says so plainly, warns that a document
+  part way through being sent may not have been accepted by the archive, and notes that
+  nothing is deleted, so the document can be sent again from the output folder. The
+  default answer here is **No**.
+
+Answer yes and the work in flight is cancelled, the folder watcher and the configuration
+listener are detached, the generated DICOM object, which can run to tens of megabytes, is
+released, the result and validation lists are emptied and the log is flushed to disk
+before the process ends. Cancellation is **requested, not waited for**: blocking the
+window until a network operation notices could hold it open for as long as the association
+timeout, which is exactly what somebody pressing an exit button is trying to escape. The
+process exit ends the work either way.
+
+The window's own close button and Alt+F4 go through the same confirmation, so there is one
+closing path rather than two that could drift apart.
+
+### The ImageSharp security advisories
+
+Five advisories stand against every ImageSharp from 2.0.0 to 4.1.1. Each was read, and
+each was checked against this code rather than assumed. **Four cannot be reached here**,
+and the fifth is a slow decode of a file the operator chose on their own workstation:
+
+| Advisory | Needs | Reachable? |
+|---|---|---|
+| `j3p4-wp97-rph4` | TIFF as `HalfVector4` + `HistogramEqualization()` | No, never called |
+| `j9gm-c75j-xc9q` | TIFF CCITT Group 3 **encoder** | No, nothing encodes TIFF |
+| `jjfr-hcj7-qf5w` | TIFF CCITT Group 4 **encoder** | No, same |
+| `gwg2-r3hj-4w44` | ICC parser via `Convert` or `IccProfile.Entries` | No, default `Preserve` parses nothing |
+| `wmxv-xphr-5c9g` | BigTIFF EXIF IFD, a decode of several seconds | **Yes**, availability only |
+
+They are now suppressed **individually, by advisory URL**, with that analysis recorded
+beside them in the project file and in the technical documentation. A new advisory, against
+this package or any other, still fails the audit: confirmed by deleting one of the five and
+watching only that one reappear. The blunt `NoWarn NU1902;NU1903` was rejected because it
+would hide every future package vulnerability.
+
+**Why not just upgrade.** The fix for all five is 4.1.2, and there is none in the 2.x line.
+ImageSharp 3.0 moved to the Six Labors Split License, which does grant Apache-2.0 terms
+below 1M USD annual gross revenue, so the terms are probably acceptable here. But **4.x
+refuses to build without a licence key**: its build targets fail outright with
+*"No Six Labors license found"*. A patched ImageSharp therefore needs a key from Six Labors
+first, and until somebody obtains one the choice is 2.1.13 with these suppressions or no
+image support at all.
+
+Also moved 2.1.11 to **2.1.13**, the last of the 2.x line, which is worth having regardless.
+
+**CI now installs two SDKs.** `NuGetAuditSuppress` needs NuGet 6.12 or later, so a .NET 9
+or 10 SDK; the 8.0 SDK ignores it in silence. CI gets 8.0.x for the runtime the tests need
+and 10.0.x for a NuGet that honours the suppressions, so the same repository no longer
+produces five warnings on a build agent and none on a developer's machine.
+
+### The CA1416 warnings
+
+Three in `PdfPageRenderer.cs`, unrelated to the above. PDFtoImage declares its entry points
+as supported on Android 31+, Linux, macOS and Windows; this assembly targets plain `net8.0`,
+which also admits browser, iOS and tvOS, so the analyzer cannot prove the calls are not
+reached there.
+
+They are not, and the concern is already handled better than an attribute could: the
+renderer loads the native library and asks it for real work before anything depends on it,
+and a platform where it cannot load produces a document without page images rather than a
+crash. Suppressed at the class with that reasoning written out. Narrowing with
+`[SupportedOSPlatform]` was the alternative and was rejected: the attribute propagates to
+every caller.
+
+### Result
+
+`dotnet build` reports **0 warnings and 0 errors** for all four projects. 265 tests pass and
+the 94 DCMTK interoperability checks pass, including the page image rendering that depends
+on the packages involved.
+
 ## 3.4.0
 
 **Naming layouts and date formats can be built by picking from a list, and the build

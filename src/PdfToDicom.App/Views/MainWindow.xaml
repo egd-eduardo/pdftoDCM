@@ -71,6 +71,32 @@
                     <Button Content="{loc:Localize Action.About}"
                             Style="{StaticResource HeaderButtonStyle}"
                             Command="{Binding ShowAboutCommand}" />
+
+                    <!-- A visible way out. The window can be maximised or positioned so
+                         that its own close button is off screen, and on a shared
+                         workstation the person using it should not have to go looking for
+                         the corner. Set apart from the others with a separator, because it
+                         is the one button here that ends what you are doing. -->
+                    <Border Width="1" Margin="8,4" Background="{DynamicResource InvertedTextBrush}" Opacity="0.35" />
+
+                    <Button Style="{StaticResource HeaderIconButtonStyle}"
+                            Command="{Binding ExitCommand}"
+                            ToolTip="{loc:Localize Action.Exit.Tooltip}"
+                            AutomationProperties.Name="{loc:Localize Action.Exit}">
+                        <StackPanel Orientation="Horizontal">
+                            <!-- A door frame standing open with an arrow leaving through
+                                 it, pointing away from the door. Drawn as a path rather
+                                 than shipped as an image so it stays crisp at any display
+                                 scaling and needs no resource file. -->
+                            <Path Width="15" Height="15" Stretch="Uniform"
+                                  VerticalAlignment="Center"
+                                  Fill="{DynamicResource InvertedTextBrush}"
+                                  Data="M 2,1 L 9,1 L 9,3 L 4,3 L 4,17 L 9,17 L 9,19 L 2,19 Z
+                                        M 19,10 L 14,5 L 14,8.5 L 10,8.5 L 10,11.5 L 14,11.5 L 14,15 Z" />
+                            <TextBlock Text="{loc:Localize Action.Exit}"
+                                       Margin="7,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>

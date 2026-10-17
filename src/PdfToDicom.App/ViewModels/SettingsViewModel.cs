@@ -36,6 +36,10 @@ public sealed class SettingsViewModel : ObservableObject
     private string _filenameTestResult = string.Empty;
     private string _patternUnderConstruction = string.Empty;
     private string _patternSeparator = "_";
+    private bool _transferDestinations = true;
+    private bool _transferWorklists = true;
+    private bool _importReplaces;
+    private string _transferStatus = string.Empty;
 
     /// <summary>Creates the view model over a working copy of the current configuration.</summary>
     public SettingsViewModel(ApplicationServices services)
@@ -65,6 +69,8 @@ public sealed class SettingsViewModel : ObservableObject
         BrowseOutputFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.OutputFolder = f, Working.OutputFolder));
         BrowsePdfFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.DefaultPdfFolder = f, Working.DefaultPdfFolder));
         BrowseMonitoredFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.MonitoredFolder = f, Working.MonitoredFolder));
+        ExportSettingsCommand = new RelayCommand(ExportSettings, () => ChosenParts != SettingsTransferParts.None);
+        ImportSettingsCommand = new RelayCommand(ImportSettings, () => ChosenParts != SettingsTransferParts.None);
 
         Destinations = new ObservableCollection<PacsDestination>(Working.Destinations);
         SelectedDestination = Destinations.FirstOrDefault();
@@ -741,6 +747,308 @@ public sealed class SettingsViewModel : ObservableObject
 
     /// <summary>Chooses the monitored folder.</summary>
     public RelayCommand BrowseMonitoredFolderCommand { get; }
+
+    // ================================================== Backup and transfer
+
+    /// <summary>Include the archives in an export, and take them from an import.</summary>
+    public bool TransferDestinations
+    {
+        get => _transferDestinations;
+        set
+        {
+            if (SetProperty(ref _transferDestinations, value))
+            {
+                ExportSettingsCommand?.RaiseCanExecuteChanged();
+                ImportSettingsCommand?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>Include the worklist servers in an export, and take them from an import.</summary>
+    public bool TransferWorklists
+    {
+        get => _transferWorklists;
+        set
+        {
+            if (SetProperty(ref _transferWorklists, value))
+            {
+                ExportSettingsCommand?.RaiseCanExecuteChanged();
+                ImportSettingsCommand?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// True when an import should discard what is configured here rather than add to it.
+    /// </summary>
+    /// <remarks>
+    /// Bound to a pair of radio buttons rather than a single checkbox. "Replace" throws
+    /// away a site's configured servers, and an option that does that should be read and
+    /// chosen, not toggled past.
+    /// </remarks>
+    public bool ImportReplaces
+    {
+        get => _importReplaces;
+        set
+        {
+            if (SetProperty(ref _importReplaces, value))
+            {
+                // The other button is bound to the opposite of this, and will not redraw
+                // unless it is told that it changed too.
+                OnPropertyChanged(nameof(ImportAdds));
+            }
+        }
+    }
+
+    /// <summary>True when an import should add to what is configured here.</summary>
+    /// <remarks>
+    /// The other half of the pair, so that both radio buttons bind to this one piece of
+    /// state and cannot disagree with each other.
+    /// </remarks>
+    public bool ImportAdds
+    {
+        get => !_importReplaces;
+        set => ImportReplaces = !value;
+    }
+
+    /// <summary>What the last export or import did, shown on the page.</summary>
+    public string TransferStatus
+    {
+        get => _transferStatus;
+        private set => SetProperty(ref _transferStatus, value);
+    }
+
+    /// <summary>Writes the chosen parts to a file.</summary>
+    public RelayCommand ExportSettingsCommand { get; }
+
+    /// <summary>Reads a file and brings the chosen parts in.</summary>
+    public RelayCommand ImportSettingsCommand { get; }
+
+    /// <summary>Which kinds the two checkboxes currently select.</summary>
+    private SettingsTransferParts ChosenParts =>
+        (TransferDestinations ? SettingsTransferParts.Destinations : SettingsTransferParts.None) |
+        (TransferWorklists ? SettingsTransferParts.Worklists : SettingsTransferParts.None);
+
+    /// <summary>
+    /// Brings the working copy up to date with the two lists on screen, and returns it.
+    /// </summary>
+    /// <remarks>
+    /// The dialog edits two observable collections and only copies them into the working
+    /// configuration when Save runs. Exporting from the working copy alone would therefore
+    /// miss a server added a moment ago, and importing into it would compare incoming
+    /// entries against a stale list. Both go through this instead. It changes the working
+    /// copy, not the saved configuration: cancelling the dialog still discards everything.
+    /// </remarks>
+    private AppConfiguration WorkingFromScreen()
+    {
+        Working.Destinations = Destinations.ToList();
+        Working.Worklists = Worklists.ToList();
+        return Working;
+    }
+
+    private void ExportSettings()
+    {
+        SettingsTransferParts parts = ChosenParts;
+
+        if (parts == SettingsTransferParts.None)
+        {
+            return;
+        }
+
+        string station = string.IsNullOrWhiteSpace(Working.StationName)
+            ? Environment.MachineName
+            : Working.StationName.Trim();
+
+        var dialog = new SaveFileDialog
+        {
+            Title = _services.Localizer.Get("Settings.Backup.Export"),
+            Filter = _services.Localizer.Get("Settings.Backup.FileFilter"),
+            FileName = $"PdfToDicom-settings-{Sanitise(station)}-{DateTime.Now:yyyyMMdd}{SettingsTransfer.FileExtension}",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        SettingsBundle bundle = SettingsTransfer.CreateBundle(
+            WorkingFromScreen(), parts, station, App.ProductVersion);
+
+        try
+        {
+            SettingsTransfer.Write(bundle, dialog.FileName);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            TransferStatus = _services.Localizer.Format("Settings.Backup.ExportFailed", ex.Message);
+            _services.Logger.Error($"The settings could not be exported to '{dialog.FileName}'.", ex);
+            return;
+        }
+
+        TransferStatus = _services.Localizer.Format(
+            "Settings.Backup.Exported",
+            bundle.Destinations.Count,
+            bundle.Worklists.Count,
+            dialog.FileName);
+
+        _services.Logger.Information(
+            $"Settings were exported to '{dialog.FileName}': " +
+            $"{bundle.Destinations.Count} destination(s), {bundle.Worklists.Count} worklist server(s).");
+
+        // Audited. The file names the clinical systems a site talks to, and who made a copy
+        // of that is a reasonable question to be able to answer later.
+        _services.AuditLogger.ConfigurationChanged(
+            $"Settings exported: {bundle.Destinations.Count} destination(s), " +
+            $"{bundle.Worklists.Count} worklist server(s).");
+    }
+
+    private void ImportSettings()
+    {
+        SettingsTransferParts parts = ChosenParts;
+
+        if (parts == SettingsTransferParts.None)
+        {
+            return;
+        }
+
+        var dialog = new OpenFileDialog
+        {
+            Title = _services.Localizer.Get("Settings.Backup.Import"),
+            Filter = _services.Localizer.Get("Settings.Backup.FileFilter"),
+            CheckFileExists = true
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        SettingsBundleRead read = SettingsTransfer.Read(dialog.FileName);
+
+        if (!read.Succeeded)
+        {
+            // In a message box rather than only in the status line: the operator chose a
+            // file and nothing happened to it, which needs an answer they cannot miss.
+            MessageBox.Show(
+                read.Problem,
+                _services.Localizer.Get("Settings.Backup.Import"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+
+            TransferStatus = read.Problem;
+            return;
+        }
+
+        SettingsBundle bundle = read.Bundle!;
+
+        // Only what the file actually holds, so that asking for both and importing a file
+        // of archives alone does not read as though the worklists were considered.
+        SettingsTransferParts available = parts & bundle.Parts;
+
+        if (available == SettingsTransferParts.None)
+        {
+            MessageBox.Show(
+                _services.Localizer.Get("Settings.Backup.NothingChosenInFile"),
+                _services.Localizer.Get("Settings.Backup.Import"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+
+            return;
+        }
+
+        SettingsImportMode mode = ImportReplaces
+            ? SettingsImportMode.ReplaceExisting
+            : SettingsImportMode.AddToExisting;
+
+        if (mode == SettingsImportMode.ReplaceExisting && !ConfirmReplacement(available))
+        {
+            return;
+        }
+
+        AppConfiguration updated = WorkingFromScreen();
+        SettingsImportReport report = SettingsTransfer.Apply(bundle, updated, available, mode);
+
+        // The collections are what the dialog shows and what Save writes, so they are
+        // rebuilt from the result rather than left holding the old entries.
+        Destinations.Clear();
+
+        foreach (PacsDestination destination in updated.Destinations)
+        {
+            Destinations.Add(destination);
+        }
+
+        Worklists.Clear();
+
+        foreach (WorklistConfiguration worklist in updated.Worklists)
+        {
+            Worklists.Add(worklist);
+        }
+
+        SelectedDestination = Destinations.FirstOrDefault();
+        SelectedWorklist = Worklists.FirstOrDefault();
+
+        TransferStatus = report.ChangedNothing
+            ? _services.Localizer.Format(
+                "Settings.Backup.ImportedNothing",
+                report.DestinationsAlreadyPresent + report.WorklistsAlreadyPresent)
+            : _services.Localizer.Format(
+                "Settings.Backup.Imported",
+                report.DestinationsAdded,
+                report.WorklistsAdded,
+                report.DestinationsAlreadyPresent + report.WorklistsAlreadyPresent,
+                report.DestinationsRemoved + report.WorklistsRemoved);
+
+        _services.Logger.Information(
+            $"Settings were imported from '{dialog.FileName}' ({mode}): " +
+            $"{report.DestinationsAdded} destination(s) and {report.WorklistsAdded} worklist server(s) added, " +
+            $"{report.DestinationsAlreadyPresent + report.WorklistsAlreadyPresent} already present, " +
+            $"{report.DestinationsRemoved + report.WorklistsRemoved} discarded.");
+    }
+
+    /// <summary>
+    /// Asks before discarding configured servers, saying how many will go.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to No. Replacing is the right choice when one workstation is the reference
+    /// for the rest, and the wrong one by a long way when somebody meant to add a server.
+    /// </remarks>
+    private bool ConfirmReplacement(SettingsTransferParts parts)
+    {
+        int destinations = parts.HasFlag(SettingsTransferParts.Destinations) ? Destinations.Count : 0;
+        int worklists = parts.HasFlag(SettingsTransferParts.Worklists) ? Worklists.Count : 0;
+
+        if (destinations + worklists == 0)
+        {
+            // Nothing to lose, so nothing to ask about.
+            return true;
+        }
+
+        return MessageBox.Show(
+            _services.Localizer.Format("Settings.Backup.ConfirmReplace", destinations, worklists),
+            _services.Localizer.Get("Settings.Backup.Import"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+    }
+
+    /// <summary>
+    /// Makes a station name usable in a file name.
+    /// </summary>
+    /// <remarks>
+    /// A station name is free text and a site may well have put a slash or a colon in it.
+    /// Offered as a suggested file name, those characters would have the save dialog refuse
+    /// a name the operator did not choose.
+    /// </remarks>
+    private static string Sanitise(string value)
+    {
+        var clean = new string(value
+            .Select(character => Array.IndexOf(Path.GetInvalidFileNameChars(), character) >= 0 ? '-' : character)
+            .ToArray())
+            .Trim('-', ' ', '.');
+
+        return clean.Length == 0 ? "workstation" : clean;
+    }
 
     /// <summary>
     /// Validates and persists the working copy.

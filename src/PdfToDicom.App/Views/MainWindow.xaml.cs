@@ -43,8 +43,31 @@ public partial class MainWindow : Window
         Keyboard.Focus(PatientIdBox);
     }
 
-    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e) =>
+    /// <summary>
+    /// Confirms before closing, then releases what the view model holds.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The single place leaving the application is decided, so the exit button in the
+    /// header, the window's own close button and Alt+F4 all behave the same way. The
+    /// button simply closes the window and arrives here.
+    /// </para>
+    /// <para>
+    /// Cancelling the close when the operator says no is the whole point: this application
+    /// is left open all day on a shared workstation, and a stray click should not discard
+    /// a form somebody has just filled in, nor abandon a transmission half way through.
+    /// </para>
+    /// </remarks>
+    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (ViewModel is not null && !ViewModel.ConfirmExit())
+        {
+            e.Cancel = true;
+            return;
+        }
+
         (DataContext as IDisposable)?.Dispose();
+    }
 
     // ------------------------------------------------------------------ Drag and drop
 

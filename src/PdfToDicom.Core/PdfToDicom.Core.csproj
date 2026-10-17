@@ -15,6 +15,74 @@
     <AssemblyName>PdfToDicom.Core</AssemblyName>
   </PropertyGroup>
 
+  <!-- ====================================================================
+       ImageSharp security advisories: why these five are suppressed
+       ====================================================================
+
+       Five advisories are open against every ImageSharp from 2.0.0 to 4.1.1. They
+       are suppressed INDIVIDUALLY, by advisory URL, and each one was checked against
+       this code before it was listed. A new advisory, against this package or any
+       other, still fails the audit: that was verified by removing one of these five
+       and watching only that one reappear.
+
+       WHY NOT SIMPLY UPGRADE. The fix for all five is 4.1.2. There is none in the
+       2.x line; 2.1.13 is the last 2.x and still carries all five. Moving to 4.x is
+       not a version bump:
+
+         - ImageSharp 3.0 moved to the Six Labors Split License. That licence does
+           grant Apache-2.0 terms to an individual or company under 1M USD annual
+           gross revenue, so the terms would most likely be fine here.
+         - But 4.x REFUSES TO BUILD without a licence key. Its build targets fail
+           with "No Six Labors license found ... obtain a license from
+           sixlabors.com/pricing". Tried, and it is a hard error, not a warning.
+
+       So using a patched ImageSharp means obtaining a key from Six Labors first.
+       Until somebody does that, the choice is 2.1.13 with these suppressions or no
+       image support at all.
+
+       WHY THIS IS SAFE HERE. Four of the five cannot be reached by this code, and
+       the fifth is a slow decode of a file the operator chose themselves.
+
+       GHSA-j3p4-wp97-rph4  TIFF decoded as HalfVector4 THEN HistogramEqualization().
+                            Not reached: HistogramEqualization is never called. This
+                            code decodes non-generically and clones to Rgb24 or L8.
+
+       GHSA-j9gm-c75j-xc9q  TIFF CCITT Group 3 ENCODER.
+       GHSA-jjfr-hcj7-qf5w  TIFF CCITT Group 4 ENCODER.
+                            Not reached: nothing here ever encodes a TIFF. Images are
+                            decoded and their pixels written into DICOM; TiffEncoder
+                            is not referenced anywhere in the solution.
+
+       GHSA-gwg2-r3hj-4w44  ICC profile parser, needs ColorProfileHandling.Convert or
+                            a read of IccProfile.Entries. Not reached: the default is
+                            Preserve, which does not parse the profile, and no code
+                            here touches colour profiles.
+
+       GHSA-wmxv-xphr-5c9g  BigTIFF EXIF IFD: a malformed file can occupy a decoding
+                            thread for several seconds. THIS ONE IS REACHABLE, since
+                            a TIFF chosen by the operator is decoded. Availability
+                            only, no memory corruption, and the "attacker" is whoever
+                            is sitting at the workstation choosing a file on it. A
+                            slow decode on a local machine is not a vulnerability
+                            worth losing image support over.
+
+       WHEN TO REVISIT. Obtain a Six Labors licence key and move to 4.1.2 or later,
+       at which point every line below should be deleted. Re-check this reasoning if
+       the code ever starts encoding TIFF, reading ICC profiles, or calling
+       HistogramEqualization: three of these four "not reached" answers would stop
+       being true.
+
+       The analysis is repeated in docs/TechnicalDocumentation.md so it is visible to
+       anybody reviewing the product rather than only to whoever opens this file.
+       ==================================================================== -->
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j3p4-wp97-rph4" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j9gm-c75j-xc9q" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-jjfr-hcj7-qf5w" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-gwg2-r3hj-4w44" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-wmxv-xphr-5c9g" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- Fellow Oak DICOM: the mature, widely deployed .NET DICOM toolkit. -->
     <PackageReference Include="fo-dicom" Version="5.2.2" />
@@ -22,8 +90,12 @@
     <PackageReference Include="PdfPig" Version="0.1.10" />
     <!-- Version 2.1.x is Apache-2.0 licensed, which matches the other components and
          keeps redistribution simple. It is pure managed code, so it adds no native
-         binaries to the single file executable and behaves identically on ARM64. -->
-    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.11" />
+         binaries to the single file executable and behaves identically on ARM64.
+
+         2.1.13 is the last release of that line. Five advisories stand against it and
+         against every version up to 4.1.1; see the block above for which, why each is
+         or is not reachable here, and what it would take to move to a patched one. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.13" />
     <!-- Renders PDF pages to bitmaps so a viewer that will only open a study containing an
          image can still show the report. PDFtoImage is MIT and wraps PDFium, which is
          Apache-2.0 and is the PDF engine in Chrome. Both ship win-x86, win-x64 and

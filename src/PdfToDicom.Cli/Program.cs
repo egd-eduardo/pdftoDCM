@@ -58,6 +58,8 @@ try
         "inspect" => RunInspect(services, options),
         "extract" => RunExtract(services, options),
         "config" => RunShowConfiguration(services),
+        "export-settings" => RunExportSettings(services, options),
+        "import-settings" => RunImportSettings(services, options),
         _ => UnknownCommand(options.Command)
     };
 }
@@ -945,6 +947,143 @@ static int RunExtract(ApplicationServices services, CommandLineOptions options)
 }
 
 /// <summary>Prints the effective configuration and where it is stored.</summary>
+/// <summary>
+/// Writes the archives and worklist servers to a file.
+/// </summary>
+/// <remarks>
+/// Here as well as in the settings dialog because setting up a ward full of workstations
+/// is a job for a script. The dialog is for the person who configured the first machine;
+/// this is for the twenty after it.
+/// </remarks>
+static int RunExportSettings(ApplicationServices services, CommandLineOptions options)
+{
+    if (string.IsNullOrWhiteSpace(options.OutputPath))
+    {
+        Console.Error.WriteLine("error: export-settings needs --out <path>.");
+        return ExitCodes.InvalidArguments;
+    }
+
+    SettingsTransferParts parts = ChosenParts(options);
+
+    AppConfiguration configuration = services.ConfigurationService.Current;
+    string station = string.IsNullOrWhiteSpace(configuration.StationName)
+        ? Environment.MachineName
+        : configuration.StationName;
+
+    SettingsBundle bundle = SettingsTransfer.CreateBundle(
+        configuration, parts, station, ProductVersion());
+
+    try
+    {
+        SettingsTransfer.Write(bundle, options.OutputPath);
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+    {
+        Console.Error.WriteLine($"error: the file could not be written: {ex.Message}");
+        services.Logger.Error($"The settings could not be exported to '{options.OutputPath}'.", ex);
+        return ExitCodes.GenerationFailed;
+    }
+
+    Console.WriteLine($"Exported to {Path.GetFullPath(options.OutputPath)}");
+    Console.WriteLine($"  archives        : {bundle.Destinations.Count}");
+    Console.WriteLine($"  worklist servers: {bundle.Worklists.Count}");
+    Console.WriteLine();
+    Console.WriteLine("The file carries connection settings only. This workstation's own calling");
+    Console.WriteLine("AE Title, folders and language stay where they are.");
+
+    services.AuditLogger.ConfigurationChanged(
+        $"Settings exported to '{options.OutputPath}': {bundle.Destinations.Count} destination(s), " +
+        $"{bundle.Worklists.Count} worklist server(s).");
+
+    return ExitCodes.Success;
+}
+
+/// <summary>
+/// Reads a settings file and brings its entries into this machine's configuration.
+/// </summary>
+/// <remarks>
+/// Unlike the dialog, this writes the configuration immediately: there is nobody here to
+/// press Save. What it did is printed, and an unattended run can be read back from the
+/// log and the audit trail.
+/// </remarks>
+static int RunImportSettings(ApplicationServices services, CommandLineOptions options)
+{
+    string? path = options.PdfPath;
+
+    if (string.IsNullOrWhiteSpace(path))
+    {
+        Console.Error.WriteLine("error: import-settings needs --file <path>.");
+        return ExitCodes.InvalidArguments;
+    }
+
+    SettingsBundleRead read = SettingsTransfer.Read(path);
+
+    if (!read.Succeeded)
+    {
+        Console.Error.WriteLine($"error: {read.Problem}");
+        return ExitCodes.InvalidArguments;
+    }
+
+    SettingsBundle bundle = read.Bundle!;
+    SettingsTransferParts parts = ChosenParts(options) & bundle.Parts;
+
+    if (parts == SettingsTransferParts.None)
+    {
+        Console.Error.WriteLine(
+            "error: the file does not hold the kind of settings that were asked for.");
+        return ExitCodes.InvalidArguments;
+    }
+
+    SettingsImportMode mode = options.ReplaceOnImport
+        ? SettingsImportMode.ReplaceExisting
+        : SettingsImportMode.AddToExisting;
+
+    AppConfiguration configuration = services.ConfigurationService.Current;
+    SettingsImportReport report = SettingsTransfer.Apply(bundle, configuration, parts, mode);
+
+    services.ConfigurationService.Save(configuration);
+
+    Console.WriteLine($"Imported from {Path.GetFullPath(path)}");
+    Console.WriteLine($"  exported {bundle.ExportedUtc:yyyy-MM-dd HH:mm} UTC" +
+                      (bundle.ExportedFrom.Length > 0 ? $" from {bundle.ExportedFrom}" : string.Empty));
+    Console.WriteLine($"  archives        : {report.DestinationsAdded} added, " +
+                      $"{report.DestinationsAlreadyPresent} already present, " +
+                      $"{report.DestinationsRemoved} discarded");
+    Console.WriteLine($"  worklist servers: {report.WorklistsAdded} added, " +
+                      $"{report.WorklistsAlreadyPresent} already present, " +
+                      $"{report.WorklistsRemoved} discarded");
+    Console.WriteLine();
+    Console.WriteLine(report.ChangedNothing
+        ? "Nothing changed: everything in the file was already configured here."
+        : $"Written to {services.ConfigurationService.ConfigurationFilePath}");
+
+    services.AuditLogger.ConfigurationChanged(
+        $"Settings imported from '{path}' ({mode}): " +
+        $"{report.DestinationsAdded} destination(s) and {report.WorklistsAdded} worklist server(s) added, " +
+        $"{report.DestinationsAlreadyPresent + report.WorklistsAlreadyPresent} already present, " +
+        $"{report.DestinationsRemoved + report.WorklistsRemoved} discarded.");
+
+    return ExitCodes.Success;
+}
+
+/// <summary>
+/// Turns the two limiting options into the kinds to carry. Neither one means both.
+/// </summary>
+static SettingsTransferParts ChosenParts(CommandLineOptions options)
+{
+    if (options.DestinationsOnly && !options.WorklistsOnly)
+    {
+        return SettingsTransferParts.Destinations;
+    }
+
+    if (options.WorklistsOnly && !options.DestinationsOnly)
+    {
+        return SettingsTransferParts.Worklists;
+    }
+
+    return SettingsTransferParts.Both;
+}
+
 static int RunShowConfiguration(ApplicationServices services)
 {
     AppConfiguration configuration = services.ConfigurationService.Current;

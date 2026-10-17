@@ -56,7 +56,7 @@ Everything happens in one window, and it reads from top to bottom.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  PDF to DICOM                              Logs   Settings   About   │  ← header
+│  PDF to DICOM                     Logs  Settings  About │ 🚪 Exit   │  ← header
 │  Hospital de Exemplo                                                 │
 ├───────────────────────────────────────┬──────────────────────────────┤
 │  1. Select the PDF document           │  3. Destination PACS         │
@@ -81,6 +81,12 @@ Everything happens in one window, and it reads from top to bottom.
 ```
 
 Fields marked with a red asterisk (**\***) are mandatory.
+
+**Closing the application.** The door icon at the top right closes it. Use it when the
+window has been moved or sized so that the usual close button in the corner is not
+visible. It always asks first, and if a document is part way through being generated or
+sent it says so before stopping. Nothing already written to the output folder is deleted,
+so a document interrupted while being sent can be sent again.
 
 **The coloured dot in the status bar tells you where you are:**
 
@@ -463,6 +469,7 @@ Click **Settings** in the header. Most of these are set once by your IT departme
 | **Worklist** | The modality worklist servers, as many as the hospital has. Locked with a password held by whoever installed the application; pointing one at the wrong server would put the wrong patients in front of you. |
 | **Folders** | Where files and logs are kept, and folder monitoring. |
 | **File names** | The naming layout used to read the patient details out of a file name, and a box that tries a name and shows what it would read. See section 3. |
+| **Backup** | Export the archives and worklist servers to a file, and import that file on another workstation. Locked with the same password as the two pages whose entries it carries. |
 | **Appearance** | Language, dark mode, and whether to confirm before sending. |
 
 Two settings are worth knowing about as a user:
@@ -472,6 +479,23 @@ Two settings are worth knowing about as a user:
 
 > **Leave "Ask for confirmation before sending" switched on.** It is the last check that
 > the document matches the patient.
+
+### Setting up a second workstation
+
+Configure one machine, then on the **Backup** page press **Export to a file** and keep the
+file somewhere both machines can reach. On the next workstation, open the same page, press
+**Import from a file**, choose it, and press **Save**.
+
+- **Add what is missing** is the normal choice, and the safe one. An archive or worklist
+  server already configured here is recognised and left exactly as it is, so importing the
+  same file twice changes nothing the second time.
+- **Replace them with the file's entries** is for when one machine is the reference and the
+  rest should match it. It asks first and says how many entries it is about to discard.
+- Nothing is written until you press **Save**, so **Cancel** still abandons an import.
+
+The file carries the archives and the worklist servers only. This workstation's own AE
+Title, folders, language and templates stay as they are, which is deliberate: two
+workstations sharing one AE Title is something your PACS administrator will ask about.
 
 ---
 

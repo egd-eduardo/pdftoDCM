@@ -17,7 +17,11 @@
 8a. [Modality Worklist](#8a-modality-worklist)
 8b. [Importing from the file name](#8b-importing-from-the-file-name)
 9. [Validation](#9-validation)
+9a. [The ImageSharp advisories](#9a-the-imagesharp-advisories)
+9b. [Closing the application](#9b-closing-the-application)
+9c. [Memory](#9c-memory)
 10. [Configuration](#10-configuration)
+10a. [Carrying settings between workstations](#10a-carrying-settings-between-workstations)
 11. [Logging and audit](#11-logging-and-audit)
 12. [Building](#12-building)
 13. [Testing and verification](#13-testing-and-verification)
@@ -1011,6 +1015,193 @@ section 8b for why, and for what stays strict regardless.
 
 ---
 
+## 9a. The ImageSharp advisories
+
+Five security advisories stand against every release of SixLabors.ImageSharp from 2.0.0 to
+4.1.1. This product uses **2.1.13**, the last of the 2.x line, and suppresses those five
+**individually by advisory URL** in `PdfToDicom.Core.csproj`.
+
+Stated plainly, because a suppressed security warning that nobody can audit is worse than
+the warning.
+
+### Why not simply upgrade
+
+The fix for all five is **4.1.2**. There is none in 2.x. Moving to 4.x is not a version
+bump:
+
+- ImageSharp 3.0 adopted the **Six Labors Split License**. It grants Apache-2.0 terms to an
+  individual or company under 1M USD annual gross revenue, so the terms are most likely
+  acceptable here.
+- But **4.x refuses to build without a licence key.** Its build targets fail with
+  `No Six Labors license found ... obtain a license from sixlabors.com/pricing`. That was
+  tried: it is a hard error, not a warning.
+
+So a patched ImageSharp requires obtaining a key from Six Labors first. Until that happens
+the choice is 2.1.13 with these suppressions, or no image support.
+
+### Why it is defensible here
+
+Four of the five cannot be reached by this code, and the fifth is a slow decode of a file
+the operator chose themselves. Each was checked against the source, not assumed.
+
+| Advisory | What it needs | Reachable? |
+|---|---|---|
+| `GHSA-j3p4-wp97-rph4` | TIFF as `HalfVector4`, then `HistogramEqualization()` | **No.** Never called; decoding is non-generic, then cloned to `Rgb24` or `L8` |
+| `GHSA-j9gm-c75j-xc9q` | TIFF CCITT Group 3 **encoder** | **No.** Nothing here encodes TIFF; `TiffEncoder` is not referenced |
+| `GHSA-jjfr-hcj7-qf5w` | TIFF CCITT Group 4 **encoder** | **No.** Same |
+| `GHSA-gwg2-r3hj-4w44` | ICC parser via `Convert` or `IccProfile.Entries` | **No.** Default is `Preserve`, which does not parse; no colour profile code |
+| `GHSA-wmxv-xphr-5c9g` | BigTIFF EXIF IFD, decode occupying a thread for seconds | **Yes.** Availability only; the file is one the operator picked on their own workstation |
+
+### Why the suppression is narrow
+
+`NuGetAuditSuppress` suppresses one advisory each. A new advisory, against this package or
+any other, still fails the audit. That was verified by deleting one of the five and
+confirming only that one reappeared.
+
+The blunt alternative, `NoWarn` on `NU1902;NU1903`, was rejected: it would hide every
+future package vulnerability in the project, which is not an acceptable trade in software
+that handles patient data.
+
+`NuGetAuditSuppress` needs **NuGet 6.12 or later**, which means a .NET 9 or 10 SDK. The 8.0
+SDK ignores the item in silence, so CI installs both: 8.0.x for the runtime the tests need,
+10.0.x for a NuGet that honours the suppressions. Without that, the same repository
+produces five warnings on a build agent and none on a developer's machine.
+
+### When to revisit
+
+Obtain a Six Labors licence key, move to 4.1.2 or later, and delete all five suppressions.
+Re-check the reasoning above if this code ever starts **encoding TIFF**, **reading ICC
+profiles**, or calling **`HistogramEqualization`** — three of the four "not reached"
+answers would stop being true.
+
+---
+
+## 9b. Closing the application
+
+A maximised or badly positioned window can put its own close button off the screen, so the
+header carries a door icon bound to `MainViewModel.ExitCommand`.
+
+**One closing path, not two.** The command does nothing more than
+`Application.Current?.MainWindow?.Close()`. Everything that matters happens in
+`MainWindow.OnClosing`, which calls `MainViewModel.ConfirmExit()` and sets `e.Cancel` when
+the answer is no. The door button, the window's own close button and Alt+F4 therefore run
+the same code; had the button confirmed and shut down by itself, there would have been two
+behaviours to keep in step and one of them would eventually have drifted.
+
+`ShutdownMode` is `OnMainWindowClose`, so the non-modal log viewer cannot keep the process
+alive after the main window has gone.
+
+**The command is deliberately always enabled.** Every command that changes the document or
+the form carries `() => !IsBusy`. The exit command carries no guard at all: a door that
+greys itself out during the one operation a person is most likely to want to abandon would
+be the opposite of what it is for.
+
+**Cancellation is requested, not awaited.** `ConfirmExit` calls `_cancellation?.Cancel()`
+and returns. Waiting for a DICOM association to notice could hold the window open for as
+long as the network timeout. The process exit ends the work regardless, and the archive's
+own association handling deals with a half-finished transfer; nothing in the output folder
+is removed, so the document can be sent again.
+
+Two details in `ConfirmExit` are not decoration:
+
+- `_exitConfirmed` makes a second call return true without asking again. Closing twice
+  genuinely happens: pressing the door while the window is already closing, or Windows
+  shutting down behind a confirmation that has already been given.
+- `Cancel()` is wrapped against `ObjectDisposedException`. `MessageBox.Show` pumps
+  messages, so the running task's `finally` block, which disposes and nulls the token
+  source, can complete between the question and the answer.
+
+`Dispose` then detaches the folder monitor and configuration listeners, drops
+`_lastGeneratedFile`, which holds a whole DICOM object and can run to tens of megabytes,
+clears the result and validation collections and flushes the logger. The process would
+release all of this anyway; doing it in order is what makes the window closable while a
+conversion is still running, and the flush is what makes the last log lines survive.
+
+**The header icon needed its own style.** `HeaderButtonStyle` derives from
+`LinkButtonStyle`, whose template puts `Content` straight into a `TextBlock.Text`. Content
+that is not a string, a `Path` among other things, would simply not be drawn. The door
+button uses `HeaderIconButtonStyle`, the same thing built around a `ContentPresenter`,
+which hovers by washing the dark blue header with translucent white rather than by
+underlining.
+
+---
+
+## 9c. Memory
+
+A sixty page report is the case that matters. Everything below was measured on one, from
+the command line tool, by sampling the process's own resident set rather than by reasoning
+about allocations.
+
+| | Peak resident |
+|---|---|
+| Before this work | 629 MB |
+| Reading the rasterizer's own pixel layout | 247 MB |
+| With the pixel data ceiling at 64 MB | 184 MB |
+
+And across two conversions in one process, which is what a workstation actually does:
+
+| | After one conversion | After two |
+|---|---|---|
+| Before | 246 MB | 311 MB |
+| Releasing at the end of a conversion | 106 MB | 108 MB |
+
+**Why a conversion needs the pages all at once.** Nothing is transmitted until every object
+has passed validation, because half a document in an archive is worse than none. That is a
+deliberate property of the workflow, not an accident of it, and the price is that a long
+report's page images are live together. At 150 DPI an A4 page is about 2 MB in greyscale
+and 6 MB in colour, so sixty pages is 124 MB of genuinely live data. The work below is
+about everything that was resident *besides* that.
+
+**The rasterizer's layout is read where it lies.** `PdfPageRenderer` used to convert every
+page to one known pixel layout first, which allocated and copied a second full page, about
+8 MB each at 150 DPI, for an image that was about to be read one pixel at a time anyway.
+Both four byte layouts put the three colour channels first and the alpha last, so the only
+difference is whether red sits at offset 0 or offset 2, which one integer expresses. That
+alone took the sixty page document from 629 MB to 247 MB, and the generated pixel data is
+byte for byte identical: verified by hashing all sixty page objects before and after.
+
+The cost of that is caring which end of each pixel red lives at, and a mistake there would
+be silent: the page still renders, the sizes still match, and a red stamp arrives blue.
+`RedStaysRedAndBlueStaysBlue` renders a hand written PDF of a red half over a blue half and
+checks the channels. It was confirmed to fail when the two offsets are swapped.
+
+Rows are read by stride rather than as one span of the image. A bitmap's stride is allowed
+to exceed its width, and an image read as though it were contiguous when it is not comes out
+sheared.
+
+**A ceiling, not a page limit.** `MaximumRenderedPixelMegabytes`, default 512, caps the
+pixel data of one document's page images. Over it, the whole document is rendered at a lower
+resolution; pages are never dropped. A reader shown twelve pages of a twenty page report has
+no way of knowing that eight are missing, whereas twenty slightly softer pages is the whole
+report, and the encapsulated document, which is the fidelity copy, is unaffected either way.
+Below a floor of 72 DPI nothing is rendered at all and the log says why.
+
+The estimate comes from rendering the first page at the requested resolution and measuring
+it, because what a page costs depends on whether it came out colour, and that is decided
+from its own pixels. A document whose pages differ is estimated imperfectly; the first page
+of a report is the one with the letterhead on it, so the error is normally on the safe side.
+The resolution that fits is the requested one scaled by the square root of the ratio, since
+pixel count rises with the square of the resolution. `RenderedPdfPage` carries the
+resolution it was actually rendered at, so the log reports what happened rather than what
+was configured.
+
+**The memory is handed back when the work is done.** Every rendered page is a multi megabyte
+array, which lives on the large object heap: not compacted by default, and swept only on a
+generation two collection. Left to the collector's own judgement the report that has just
+been sent stays resident, which is exactly what somebody looking at Task Manager reports as
+high memory usage. `MainViewModel.ReleaseMemoryAfterWork` runs one blocking, compacting
+generation two collection at the end of a conversion, where the work is finished and nobody
+is waiting. Measured at 17 to 35 milliseconds for documents from one to sixty pages.
+
+**Two things that were measured and left alone.** `DicomFile.Open` on the generated object
+was suspected of holding the whole thing in memory for the session, and of keeping a file
+handle open. Neither is true: opening a 1 MB object grew the managed heap by 8 KB, the large
+values are read on demand, and no descriptor is retained. The transmission result and
+validation lists were suspected of growing across conversions; both are cleared at the start
+of every run. Nothing was changed on either count.
+
+---
+
 ## 10. Configuration
 
 JSON, at `%APPDATA%\PdfToDicom\config.json` (`~/.config/PdfToDicom/` on macOS and Linux).
@@ -1025,6 +1216,53 @@ See `samples/config.sample.json` for an annotated example.
   application always starts.
 - **Out of range values are repaired on load.** A hand edited file cannot put the
   application into an unusable state.
+
+---
+
+## 10a. Carrying settings between workstations
+
+A department buys one licence of nobody's time to configure twenty identical machines.
+`SettingsTransfer` in Core writes the archives and the worklist servers to a file, reads one
+back, and applies it; the Backup page in Settings and the two command line verbs
+`export-settings` and `import-settings` are both thin shells over it.
+
+**Only the connection settings travel, and the omission is the point.** The file holds
+destinations and worklist servers. It does not hold the **calling AE Title**, and that is
+deliberate: copying it would give two workstations the same identity on the hospital
+network, which is the one thing a PACS administrator will object to, and it would happen
+silently. Institution, folders, language and templates are excluded for the same reason.
+They are local to the machine, and a file that quietly changed them would be a trap.
+
+Nothing secret is in the file. Neither entity holds a password; a DICOM association here is
+identified by AE Title. The page is still behind the same password as Destinations and
+Worklist, because the file does disclose the addresses of clinical systems and because the
+page can replace them wholesale.
+
+**Two servers are the same server when the AE Title, host and port match**, ignoring case
+and surrounding spaces. Not the identifier: identifiers are generated per machine, so the
+same archive typed by hand on two workstations has two of them, and matching on them would
+add a duplicate on every import. Each imported entry is given a fresh identifier for the
+same reason, and a name already in use gets a number rather than leaving two identical
+entries in a list somebody picks from under pressure.
+
+**Adding is idempotent.** Importing the same file twice changes nothing the second time,
+which is what makes the command safe in a rollout script that may run again. Replacing
+discards the configured entries of the kinds being imported, so the dialog asks first,
+defaults to No, and says how many will go; the command line requires `--replace`.
+
+**The dialog imports into what is on screen, not into what is on disk.** The settings
+dialog edits two observable collections and copies them into the configuration only when
+Save runs, so an import that went straight to the saved configuration would compare against
+a stale list and be overwritten by Save a moment later. Import brings the collections up to
+date and leaves the writing to Save, which means Cancel still discards it. The command line
+has nobody to press Save, so it writes immediately and prints what it did.
+
+**A file version check, not a guess.** Every file carries `FileKind` and a `FormatVersion`.
+The marker is stamped on the way out rather than defaulted on the property, and that detail
+is load bearing: a property left at its initialised value is indistinguishable after
+deserialization from one the file never mentioned, so a default of the marker itself made
+*any* JSON file look like one of ours. A test caught it. A file from a newer layout is
+refused with its version named rather than read optimistically.
 
 ---
 
@@ -1335,6 +1573,9 @@ pdftodicom generate --pdf report.pdf ... --no-send
 pdftodicom inspect --pdf out/12345_ACC001_1234.dcm
 pdftodicom config
 pdftodicom settings-password
+pdftodicom export-settings --out \\server\share\pacs-settings.json
+pdftodicom import-settings --file \\server\share\pacs-settings.json
+pdftodicom import-settings --file pacs-settings.json --worklists-only --replace
 pdftodicom check-names --pattern '{PatientId}_{Name}_{AccessionNumber}' \
                        --name 9999999999_JohnDoe_TEST123451.pdf
 pdftodicom send --pdf 9999999999_JohnDoe_TEST123451.pdf --from-filename
@@ -1351,6 +1592,10 @@ interoperability script drives.
 `settings-password` is handled before any configuration, log folder or DICOM stack is set
 up, so it works on a machine where none of those exist yet. The older name
 `worklist-password` is still accepted. See section 8a.
+
+`export-settings` and `import-settings` carry the archives and worklist servers between
+machines without the settings dialog, so commissioning twenty workstations is a line in a
+rollout script rather than an afternoon of retyping. See section 10a.
 
 `check-names` and `--from-filename` read the patient details out of the file name. Neither
 is a convenience: `check-names` is how a naming layout is proved before anybody relies on
