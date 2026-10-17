@@ -12,11 +12,21 @@
 #   build/build.sh              build, test and publish
 #   build/build.sh test         run the validators and the tests only
 #   build/build.sh publish      publish only
+#   build/build.sh ship         build 64 bit and ARM into one folder to hand over
+#   build/build.sh sign         sign what has already been published
 #   build/build.sh prune        keep the deliverables, drop the intermediates
 #   build/build.sh clean        remove build output
 #
 # Set RID to choose the target architecture (win-x86, win-x64, win-arm64):
 #   RID=win-arm64 build/build.sh publish
+#
+# No zip is produced unless asked for. The handover folder is the deliverable and can be
+# copied to another machine as it stands; a zip is only of use for sending one file:
+#   ZIP=1 build/build.sh publish
+#
+# Signing, from macOS or Linux, needs osslsigncode and the certificate as a .pfx or .p12
+# file. See "build/build.sh sign" and docs/CodeSigning.md:
+#   SIGN_PFX=~/keys/codesign.pfx build/build.sh ship
 
 # Arrays, [[ ]] and here strings are used throughout, so this needs bash and not the
 # system /bin/sh. Running it with "sh build/build.sh" fails with a syntax error whose
@@ -37,6 +47,23 @@ CONFIGURATION="Release"
 # and is what a Windows on ARM machine should really run.
 #   RID=win-arm64 build/build.sh publish
 RUNTIME="${RID:-win-x64}"
+
+# Architectures "ship" builds. x86 is deliberately not among them: every Windows 10 or 11
+# machine in service runs one of these two, and a third build is another 80 MB and another
+# thing to pick the wrong one of. Build it explicitly if a 32 bit machine ever turns up.
+SHIP_RUNTIMES=(win-x64 win-arm64)
+
+# A zip is produced only when asked for. The handover folder can be copied to another
+# machine as it stands, so the zip is of use only for sending one file to somebody.
+MAKE_ZIP="${ZIP:-0}"
+
+# Signing, when a certificate is configured. SIGN_PFX is the certificate with its private
+# key; the password comes from SIGN_PASSWORD_FILE, or is asked for, and is never put on a
+# command line where the process list would show it.
+SIGN_PFX="${SIGN_PFX:-}"
+SIGN_PASSWORD_FILE="${SIGN_PASSWORD_FILE:-}"
+SIGN_NAME="${SIGN_NAME:-PDF to DICOM}"
+SIGN_URL="${SIGN_URL:-}"
 
 cd "$REPO_ROOT"
 
@@ -101,9 +128,13 @@ link_or_copy() {
 
 # Removes what can be produced again and keeps what cannot be produced quickly.
 #
-# Kept: the zip, the versioned standalone executable and the installer, which are the
-# things somebody actually asked for. Removed: the publish staging directories and the
-# unpacked handover folder, whose entire content is inside the zip.
+# Kept: the handover folder, the versioned standalone executable, the installer and a zip
+# if one was asked for. Removed: the publish staging directories, and the handover folder
+# only when a zip of it sits beside it, since its content is then in the zip.
+#
+# With no zip, which is now the default, the folder is always kept. That is the point of
+# it: the folder IS the deliverable, and pruning away the thing somebody is about to copy
+# to a machine would be an odd definition of tidying up.
 #
 # Deliberately a task of its own rather than part of "publish" or "all". On Windows the
 # installer is built by a separate "package" run that reads the staging directory, and the
@@ -493,15 +524,27 @@ do_publish() {
 
     assert_package_is_sound "$package" "$have_cli"
 
-    (cd "$ARTIFACTS" && zip -qr "PdfToDicom-$version-$RUNTIME.zip" "PdfToDicom-$version-$RUNTIME")
+    # Only when asked for. The folder above is the deliverable: it can be copied to
+    # another machine, or onto a stick, exactly as it stands.
+    if [[ "$MAKE_ZIP" != "0" ]]; then
+        if command -v zip >/dev/null 2>&1; then
+            (cd "$ARTIFACTS" && zip -qr "PdfToDicom-$version-$RUNTIME.zip" "PdfToDicom-$version-$RUNTIME")
+        else
+            info "zip is not installed, so no archive was made. The folder is the deliverable."
+        fi
+    fi
 
     # A standalone copy whose name carries the version and the architecture. The file
     # inside the package stays PdfToDicom.exe, because the manuals, the shortcuts and the
     # installer all name it. This copy is for handing one file to somebody.
     link_or_copy "$ARTIFACTS/$RUNTIME/app/PdfToDicom.exe" "$ARTIFACTS/PdfToDicom-$version-$RUNTIME.exe"
 
-    info "package: $package"
-    info "zip:     $ARTIFACTS/PdfToDicom-$version-$RUNTIME.zip"
+    info "folder:  $package"
+
+    if [[ -f "$ARTIFACTS/PdfToDicom-$version-$RUNTIME.zip" ]]; then
+        info "zip:     $ARTIFACTS/PdfToDicom-$version-$RUNTIME.zip"
+    fi
+
     info "exe:     $ARTIFACTS/PdfToDicom-$version-$RUNTIME.exe"
     info "$(find "$package" -type f | wc -l | tr -d ' ') file(s)"
     info "artifacts: $(human_size "$ARTIFACTS") on disk, $(human_size_counting_links "$ARTIFACTS") if every link were a copy"
@@ -519,16 +562,319 @@ do_publish() {
 MESSAGE
 }
 
+# ---------------------------------------------------------------- signing
+
+# Mirrors what build/sign.ps1 does on Windows, for a build made on macOS or Linux.
+#
+# The two take their certificate from different places, and they have to. sign.ps1 uses
+# PowerShell's Set-AuthenticodeSignature with a certificate from the Windows certificate
+# store, where the private key can be marked non exportable and never exists as a file.
+# There is no equivalent store here, so this needs the certificate AS a file, which is a
+# private key sitting on a disk. That is a real difference in exposure and the reason this
+# is opt in rather than automatic: nothing is signed unless SIGN_PFX names a file.
+#
+# Keep that file out of the repository (.gitignore already covers *.pfx), off shared
+# drives, and on an encrypted disk.
+#
+# The password is never put on a command line. osslsigncode's -pass would show it in the
+# process list to every other user on the machine; -readpass takes a file instead, so the
+# password goes to a file this script creates with owner only permissions and deletes
+# immediately afterwards.
+# Runs a command, discarding its output, and without the shell announcing a crash.
+#
+# osslsigncode does not merely fail when it cannot reach a timestamp server: it segfaults.
+# A command's own redirection cannot hide that, because the message is printed by the shell
+# that reaped the child, not by the child. Running it through a nested shell moves the
+# announcement into that shell, whose stderr is discarded with it, and the outer shell then
+# sees an ordinary non zero exit code. The caller handles the failure; the operator is not
+# shown a segmentation fault that is not their problem.
+run_quietly() {
+    bash -c '"$@" >/dev/null 2>&1' _ "$@" 2>/dev/null
+}
+
+sign_one() {
+    local file=$1
+    local label=$2
+    local password_file=$3
+
+    if [[ ! -f "$file" ]]; then
+        return 0
+    fi
+
+    local signed="$file.signed"
+
+    # Built as an array. Putting an optional argument inside ${VAR:+...} and letting the
+    # shell split it is how a URL with a space in it turns into two arguments.
+    local -a base=(
+        sign
+        -pkcs12 "$SIGN_PFX"
+        -readpass "$password_file"
+        -h sha256
+        -n "$SIGN_NAME"
+    )
+
+    if [[ -n "$SIGN_URL" ]]; then
+        base+=(-i "$SIGN_URL")
+    fi
+
+    # The same servers build/sign.ps1 tries, in the same order. A timestamp is what lets a
+    # signature outlive the certificate, so it is worth trying more than one.
+    local server
+    for server in http://timestamp.digicert.com \
+                  http://timestamp.sectigo.com \
+                  http://timestamp.globalsign.com/tsa/r6advanced1; do
+
+        if run_quietly osslsigncode "${base[@]}" -ts "$server" -in "$file" -out "$signed"; then
+            mv -f "$signed" "$file"
+            info "signed $label (timestamped by ${server#http://})"
+            return 0
+        fi
+
+        rm -f "$signed"
+    done
+
+    # Every timestamp server failed. Worth signing anyway and saying so: a signature
+    # without a timestamp is still tamper evidence, it simply stops being verifiable once
+    # the certificate expires.
+    if run_quietly osslsigncode "${base[@]}" -in "$file" -out "$signed"; then
+        mv -f "$signed" "$file"
+        info "signed $label WITHOUT a timestamp: no timestamp server could be reached"
+        info "  the signature will stop being verifiable when the certificate expires"
+        return 0
+    fi
+
+    rm -f "$signed"
+    echo "    ERROR: $label could not be signed." >&2
+    return 1
+}
+
+do_sign() {
+    step "Signing the published executables"
+
+    if [[ -z "$SIGN_PFX" ]]; then
+        cat <<'MESSAGE'
+    Nothing was signed, because no certificate was given.
+
+    Signing here needs the certificate as a .pfx or .p12 file, including its private
+    key, and osslsigncode to apply it:
+
+      macOS   : brew install osslsigncode
+      Linux   : sudo apt-get install osslsigncode
+
+    Then point at the certificate:
+
+      SIGN_PFX=~/keys/codesign.pfx build/build.sh ship
+
+    To export one from the Windows machine that already signs, in PowerShell:
+
+      $c = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Select-Object -First 1
+      Export-PfxCertificate -Cert $c -FilePath codesign.pfx -Password (Read-Host -AsSecureString)
+
+    That only works if the key was created exportable. If it was not, signing stays on
+    the Windows machine, which is the safer place for it anyway.
+
+    This is not an error. An unsigned build is complete and runs; see docs/CodeSigning.md
+    for what a signature does and does not buy.
+MESSAGE
+        return 0
+    fi
+
+    if [[ ! -f "$SIGN_PFX" ]]; then
+        echo "    ERROR: SIGN_PFX is set to '$SIGN_PFX', which is not a file." >&2
+        exit 1
+    fi
+
+    if ! command -v osslsigncode >/dev/null 2>&1; then
+        cat <<'MESSAGE'
+    ERROR: a certificate was given but osslsigncode is not installed, so nothing
+    could be signed. Refusing to continue rather than quietly handing over an
+    unsigned build that was meant to be signed.
+
+      macOS   : brew install osslsigncode
+      Linux   : sudo apt-get install osslsigncode
+MESSAGE
+        exit 1
+    fi
+
+    # The password, obtained once for the whole run and held in a file only this user can
+    # read, for as long as the signing takes.
+    local password_file
+    password_file="$(mktemp "${TMPDIR:-/tmp}/pdftodicom-sign.XXXXXX")"
+    chmod 600 "$password_file"
+
+    # Removed however this function ends, including on an error or an interrupt. The
+    # RETURN trap covers the normal and the "set -e" paths; INT and TERM cover somebody
+    # pressing Ctrl+C while it is signing. A global EXIT trap is deliberately not set,
+    # because it would silently replace any other EXIT handler this script grows later.
+    trap 'rm -f "$password_file"' RETURN INT TERM
+
+    if [[ -n "$SIGN_PASSWORD_FILE" ]]; then
+        if [[ ! -f "$SIGN_PASSWORD_FILE" ]]; then
+            echo "    ERROR: SIGN_PASSWORD_FILE is set to '$SIGN_PASSWORD_FILE', which is not a file." >&2
+            exit 1
+        fi
+
+        cat "$SIGN_PASSWORD_FILE" > "$password_file"
+    elif [[ -n "${SIGN_PASSWORD:-}" ]]; then
+        # Accepted because a build server has to get it from somewhere, and noted because
+        # an environment variable is readable by anything running as this user.
+        printf '%s' "$SIGN_PASSWORD" > "$password_file"
+        info "the password came from SIGN_PASSWORD; prefer SIGN_PASSWORD_FILE where you can"
+    else
+        printf '    Certificate password (not shown): '
+        local password
+        IFS= read -rs password
+        printf '\n'
+        printf '%s' "$password" > "$password_file"
+        unset password
+    fi
+
+    local failures=0
+    local runtime
+
+    # Each architecture once. "ship" sets RUNTIME as it goes, so the current one is
+    # usually already in SHIP_RUNTIMES, and osslsigncode on an already signed file is at
+    # best wasted work.
+    local -a targets=()
+    for runtime in "${SHIP_RUNTIMES[@]}" "$RUNTIME"; do
+        if [[ -d "$ARTIFACTS/$runtime" ]] && [[ " ${targets[*]-} " != *" $runtime "* ]]; then
+            targets+=("$runtime")
+        fi
+    done
+
+    if (( ${#targets[@]} == 0 )); then
+        info "nothing has been published yet, so there was nothing to sign"
+        return 0
+    fi
+
+    for runtime in "${targets[@]}"; do
+        # The executable inside the handover folder is a hard link to the staging copy, so
+        # signing the staging copy signs the one that is handed over. Replacing the file
+        # rather than editing it in place would break that link, which is why sign_one
+        # moves the result over the original.
+        sign_one "$ARTIFACTS/$runtime/app/PdfToDicom.exe" "$runtime desktop application" "$password_file" || failures=$((failures + 1))
+        sign_one "$ARTIFACTS/$runtime/cli/pdftodicom.exe" "$runtime command line tool" "$password_file" || failures=$((failures + 1))
+    done
+
+    if (( failures > 0 )); then
+        echo "    ERROR: $failures file(s) could not be signed." >&2
+        exit 1
+    fi
+
+    info "a signature does not stop Windows warning about an unrecognised publisher;"
+    info "see docs/CodeSigning.md for what it does buy"
+}
+
+# ---------------------------------------------------------------- ship
+
+# Mirrors a directory, hard linking each file where the filesystem allows it.
+#
+# The executables are around 80 MB each, and the handover copy is already a link to the
+# staging copy. Copying here would undo that for no benefit, so each file is linked and
+# only falls back to a copy when linking is refused.
+link_tree() {
+    local source=$1
+    local target=$2
+
+    local relative
+    while IFS= read -r relative; do
+        mkdir -p "$target/$(dirname "$relative")"
+        link_or_copy "$source/$relative" "$target/$relative"
+    done < <(cd "$source" && find . -type f | sed 's|^\./||')
+}
+
+# Builds both architectures into one folder that can be handed over or copied as it is.
+#
+# One folder with a subfolder per architecture, rather than the executables loose together.
+# The application inside each is called PdfToDicom.exe, which the manuals, the shortcuts
+# and the installer all name, and two of those cannot share a folder. A subfolder each also
+# means what gets copied to a machine is a complete package, documentation and samples
+# included, rather than a bare executable.
+do_ship() {
+    local version
+    version="$(sed -n 's|.*<Version>\(.*\)</Version>.*|\1|p' "$REPO_ROOT/Directory.Build.props" | head -1)"
+
+    local ship="$ARTIFACTS/ship"
+    rm -rf "$ship"
+    mkdir -p "$ship"
+
+    local runtime
+    for runtime in "${SHIP_RUNTIMES[@]}"; do
+        RUNTIME="$runtime"
+        do_publish
+    done
+
+    # Signed once, after both are published, so the password is asked for once.
+    do_sign
+
+    step "Assembling the folder to hand over"
+
+    for runtime in "${SHIP_RUNTIMES[@]}"; do
+        link_tree "$ARTIFACTS/PdfToDicom-$version-$runtime" "$ship/$runtime"
+        info "$ship/$runtime"
+    done
+
+    write_ship_readme "$ship/WHICH FOLDER DO I USE.txt" "$version"
+
+    step "Result"
+    info "$ship"
+    info "copy that folder, or the one architecture folder inside it, to the machine"
+    info "$(find "$ship" -type f | wc -l | tr -d ' ') file(s), $(human_size "$ship") on disk"
+    info "no zip was made; pass ZIP=1 if you want one as well"
+}
+
+# A note at the top of the ship folder, because "win-x64 or win-arm64?" is the one question
+# somebody copying this folder will have, and the answer is not obvious from the names.
+write_ship_readme() {
+    local path=$1
+    local version=$2
+
+    local title="PDF to DICOM $version"
+    local rule
+    rule="$(printf '%*s' "${#title}" '' | tr ' ' '=')"
+
+    cat > "$path" <<TEXT
+$title
+$rule
+
+This folder holds one complete copy of the application per processor type. Copy the
+folder that matches the machine, or copy all of it and pick there.
+
+  win-x64     Almost every Windows desktop and laptop. Start here if unsure.
+  win-arm64   Windows on ARM: Surface Pro X, Dev Kit, Snapdragon laptops.
+
+Not sure which? On the machine, press the Windows key, type "About your PC", and read
+"System type". It says either "x64-based processor" or "ARM-based processor".
+
+Picking the wrong one is not dangerous. Windows on ARM runs the x64 build under
+emulation, so it will work but more slowly; an x64 machine simply refuses to run the
+ARM build.
+
+Inside each folder:
+
+  PdfToDicom.exe       The application. Nothing to install; double click it.
+  READ ME FIRST.txt    Start here.
+  Documentation\\       The manuals, in English and Portuguese.
+  Samples\\             An example configuration and an example report.
+  Command line\\        pdftodicom.exe, for scripted or unattended use.
+
+Nothing else needs to be installed on the machine: no .NET, no Java, no Visual C++
+runtime. Administrator rights are not required to run it.
+TEXT
+}
+
 require_sdk
 
 case "${1:-all}" in
     clean)   do_clean ;;
     prune)   do_prune ;;
     test)    do_restore; do_build; do_validate; do_test ;;
-    publish) do_restore; do_publish ;;
-    all)     do_restore; do_build; do_validate; do_test; do_publish ;;
+    publish) do_restore; do_publish; do_sign ;;
+    sign)    do_sign ;;
+    ship)    do_restore; do_build; do_validate; do_test; do_ship ;;
+    all)     do_restore; do_build; do_validate; do_test; do_publish; do_sign ;;
     *)
-        echo "Usage: $0 [all|test|publish|prune|clean]" >&2
+        echo "Usage: $0 [all|test|publish|ship|sign|prune|clean]" >&2
         exit 1
         ;;
 esac

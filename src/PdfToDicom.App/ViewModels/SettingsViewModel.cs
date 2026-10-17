@@ -34,6 +34,8 @@ public sealed class SettingsViewModel : ObservableObject
     private bool _isTesting;
     private string _filenameTestName = string.Empty;
     private string _filenameTestResult = string.Empty;
+    private string _patternUnderConstruction = string.Empty;
+    private string _patternSeparator = "_";
 
     /// <summary>Creates the view model over a working copy of the current configuration.</summary>
     public SettingsViewModel(ApplicationServices services)
@@ -55,6 +57,10 @@ public sealed class SettingsViewModel : ObservableObject
         AddWorklistCommand = new RelayCommand(AddWorklist);
         RemoveWorklistCommand = new RelayCommand(RemoveWorklist, () => SelectedWorklist is not null);
         TestFilenameCommand = new RelayCommand(TestFilename);
+        AddFieldCommand = new RelayCommand(AddField);
+        AddDateFormatCommand = new RelayCommand(AddDateFormat);
+        UsePatternCommand = new RelayCommand(UsePattern, () => PatternUnderConstruction.Trim().Length > 0);
+        ClearPatternCommand = new RelayCommand(() => PatternUnderConstruction = string.Empty);
         BrowseLogFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.LogFolder = f, Working.LogFolder));
         BrowseOutputFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.OutputFolder = f, Working.OutputFolder));
         BrowsePdfFolderCommand = new RelayCommand(() => BrowseForFolder(f => Working.DefaultPdfFolder = f, Working.DefaultPdfFolder));
@@ -231,6 +237,169 @@ public sealed class SettingsViewModel : ObservableObject
             Working.FilenameImport.DateFormats = SplitLines(value);
             OnPropertyChanged();
         }
+    }
+
+    // ------------------------------------------------- Building a layout by picking fields
+
+    /// <summary>
+    /// The fields that can go into a naming layout, in the order they are offered.
+    /// </summary>
+    /// <remarks>
+    /// Taken from <see cref="FilenameField.All"/> rather than listed again here, so a field
+    /// added to the reader appears in the picker without anybody remembering to. The
+    /// trailing entry is the "ignore this part" token, which is not a field and so is not
+    /// in that list.
+    /// </remarks>
+    public IReadOnlyList<FilenameFieldChoice> FilenameFieldChoices { get; } =
+        FilenameField.All
+            .Select(token => new FilenameFieldChoice(token, $"Settings.Import.Field.{token}"))
+            .Append(new FilenameFieldChoice("*", "Settings.Import.Field.Ignore"))
+            .ToList();
+
+    /// <summary>
+    /// The date formats that can be picked, with an example of each.
+    /// </summary>
+    /// <remarks>
+    /// The built in list, plus the two month-first forms. Those are deliberately absent
+    /// from the defaults, because with both day-first and month-first present 03-04-1970
+    /// would match whichever came first and nobody would know which; offering them here is
+    /// different, because picking one is a statement about what the sending system writes.
+    /// </remarks>
+    public IReadOnlyList<DateFormatChoice> DateFormatChoices { get; } = new[]
+    {
+        "yyyyMMdd", "yyyy-MM-dd", "ddMMyyyy", "dd-MM-yyyy", "dd.MM.yyyy",
+        "MMddyyyy", "MM-dd-yyyy"
+    }.Select(format => new DateFormatChoice(format)).ToList();
+
+    /// <summary>
+    /// The layout being assembled by picking fields, before it is added to the list.
+    /// </summary>
+    /// <remarks>
+    /// A line of its own rather than appending into the list of layouts directly. The
+    /// layouts box holds several lines and is edited by hand as well, and inserting into
+    /// whichever line the caret happened to be on would be unpredictable.
+    /// </remarks>
+    public string PatternUnderConstruction
+    {
+        get => _patternUnderConstruction;
+        set
+        {
+            if (SetProperty(ref _patternUnderConstruction, value))
+            {
+                UsePatternCommand?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// What is put between fields as they are picked, an underscore by default.
+    /// </summary>
+    /// <remarks>
+    /// Editable because it is whatever the sending system uses: an underscore, a hyphen, a
+    /// space, or nothing at all. It is only used while building; a layout typed by hand is
+    /// untouched by it.
+    /// </remarks>
+    public string PatternSeparator
+    {
+        get => _patternSeparator;
+        set => SetProperty(ref _patternSeparator, value);
+    }
+
+    /// <summary>Appends a field to the layout being built.</summary>
+    public RelayCommand AddFieldCommand { get; }
+
+    /// <summary>Adds a date format to the list.</summary>
+    public RelayCommand AddDateFormatCommand { get; }
+
+    /// <summary>Moves the built layout into the list of layouts.</summary>
+    public RelayCommand UsePatternCommand { get; }
+
+    /// <summary>Empties the layout being built.</summary>
+    public RelayCommand ClearPatternCommand { get; }
+
+    /// <summary>
+    /// Appends the chosen field, separated from what is already there.
+    /// </summary>
+    /// <remarks>
+    /// The order fields are picked is the order they appear, which is the whole point: the
+    /// layout is built by reading a real file name left to right and pressing the fields
+    /// off in that order.
+    /// </remarks>
+    private void AddField(object? parameter)
+    {
+        if (parameter is not string token || token.Length == 0)
+        {
+            return;
+        }
+
+        string current = PatternUnderConstruction;
+        string separator = current.Length == 0 ? string.Empty : PatternSeparator;
+
+        PatternUnderConstruction = $"{current}{separator}{{{token}}}";
+    }
+
+    /// <summary>
+    /// Adds a date format, unless it is already there.
+    /// </summary>
+    /// <remarks>
+    /// Silently ignoring a duplicate rather than adding it twice. A format listed twice is
+    /// not wrong, just pointless, and the second one can never be reached.
+    /// </remarks>
+    private void AddDateFormat(object? parameter)
+    {
+        if (parameter is not string format || format.Length == 0)
+        {
+            return;
+        }
+
+        List<string> formats = SplitLines(FilenameDateFormatsText);
+
+        if (formats.Contains(format, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        formats.Add(format);
+        FilenameDateFormatsText = string.Join(Environment.NewLine, formats);
+    }
+
+    /// <summary>
+    /// Moves the built layout into the list, and empties the builder.
+    /// </summary>
+    /// <remarks>
+    /// Checked before it is accepted, because a layout the reader will reject is worth
+    /// catching here rather than at the point a document arrives. A duplicate is dropped
+    /// rather than added: the reader would never reach the second copy.
+    /// </remarks>
+    private void UsePattern()
+    {
+        string pattern = PatternUnderConstruction.Trim();
+
+        if (pattern.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            FilenamePattern.Compile(pattern);
+        }
+        catch (FormatException ex)
+        {
+            FilenameTestResult = ex.Message;
+            return;
+        }
+
+        List<string> patterns = SplitLines(FilenamePatternsText);
+
+        if (!patterns.Contains(pattern, StringComparer.Ordinal))
+        {
+            patterns.Add(pattern);
+            FilenamePatternsText = string.Join(Environment.NewLine, patterns);
+        }
+
+        PatternUnderConstruction = string.Empty;
+        FilenameTestResult = string.Empty;
     }
 
     /// <summary>A file name the administrator is trying out.</summary>
@@ -817,6 +986,34 @@ public sealed record ConversionTypeOption(string Code, string ResourceKey)
     /// language, so a Portuguese interface describes them in Portuguese.
     /// </summary>
     public string Display => $"{Code}: {LocalizationSource.Instance[ResourceKey]}";
+}
+
+/// <summary>
+/// A file name field offered in the picker.
+/// </summary>
+/// <param name="Token">What goes inside the braces, for example <c>PatientId</c>.</param>
+/// <param name="ResourceKey">Localization key for the label.</param>
+public sealed record FilenameFieldChoice(string Token, string ResourceKey)
+{
+    /// <summary>What the button shows, in the active language.</summary>
+    public string Display => LocalizationSource.Instance[ResourceKey];
+
+    /// <summary>The token as it appears in a layout, shown as a reminder under the label.</summary>
+    public string Placeholder => Token == "*" ? "{*}" : $"{{{Token}}}";
+}
+
+/// <summary>
+/// A date format offered in the picker, with an example of what it matches.
+/// </summary>
+/// <param name="Format">The .NET format string, for example <c>yyyyMMdd</c>.</param>
+public sealed record DateFormatChoice(string Format)
+{
+    /// <summary>
+    /// The format and a real date written in it, because "ddMMyyyy" means nothing to most
+    /// people and "21051970" is immediately recognisable.
+    /// </summary>
+    public string Display =>
+        $"{Format}      {new DateTime(1970, 5, 21).ToString(Format, CultureInfo.InvariantCulture)}";
 }
 
 /// <summary>An enumeration value paired with a localized label.</summary>

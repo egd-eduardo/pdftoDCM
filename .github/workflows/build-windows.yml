@@ -217,6 +217,11 @@ jobs:
           retention-days: 14
 
       - name: Upload the handover package
+        # The FOLDER, not a zip of it. The build no longer makes a zip by default, because
+        # the folder can be copied to a machine as it stands, and this step does not need
+        # one: actions/upload-artifact archives whatever it is given, so uploading the zip
+        # produced a zip inside a zip for anybody downloading it.
+        #
         # A wildcard on the version, so a version bump does not break this step. The
         # installer upload above already works that way; this one did not, and a rename
         # of the package output broke the build until it was matched.
@@ -224,7 +229,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PdfToDicom-package-${{ matrix.rid }}
-          path: artifacts/PdfToDicom-*-${{ matrix.rid }}.zip
+          path: artifacts/PdfToDicom-*-${{ matrix.rid }}/
           if-no-files-found: error
           retention-days: 7
 

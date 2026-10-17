@@ -288,5 +288,19 @@
   "Worklist.PatientIdHint": "Introduza um número de processo para obter esse doente. Se houver uma única correspondência, é selecionada automaticamente; se houver várias, escolha a correta na lista. Deixe ambos os campos vazios para ver a lista completa.",
   "Worklist.Column.Source": "Lista de trabalho",
   "Status.ConfigurationProblem": "Não foi possível ler as definições",
-  "Settings.CouldNotOpen": "Não foi possível abrir as definições.\n\n{1}\n\nO seu ficheiro de definições é:\n{0}\n\nSe isto continuar a acontecer, feche a aplicação, mude o nome desse ficheiro (não o apague, para que nada se perca) e volte a iniciar. A aplicação arranca com as definições predefinidas e poderá copiar os seus valores a partir do ficheiro renomeado."
+  "Settings.CouldNotOpen": "Não foi possível abrir as definições.\n\n{1}\n\nO seu ficheiro de definições é:\n{0}\n\nSe isto continuar a acontecer, feche a aplicação, mude o nome desse ficheiro (não o apague, para que nada se perca) e volte a iniciar. A aplicação arranca com as definições predefinidas e poderá copiar os seus valores a partir do ficheiro renomeado.",
+
+  "Settings.Import.Build": "Construir um formato escolhendo campos",
+  "Settings.Import.Build.Caption": "Leia um nome de ficheiro real da esquerda para a direita e prima os campos nessa ordem. Cada um é acrescentado à caixa abaixo, separado pelo carácter indicado à direita. Prima Acrescentar para colocar o formato terminado na lista. Também pode escrever ou editar um formato manualmente na caixa seguinte, que é onde fica tudo o que os botões não conseguem expressar.",
+  "Settings.Import.Build.Use": "Acrescentar à lista",
+  "Settings.Import.Build.Clear": "Começar de novo",
+  "Settings.Import.Build.Separator": "Separador entre campos",
+  "Settings.Import.Field.PatientId": "Nº de processo",
+  "Settings.Import.Field.Name": "Nome",
+  "Settings.Import.Field.FamilyName": "Apelido",
+  "Settings.Import.Field.GivenName": "Nome próprio",
+  "Settings.Import.Field.AccessionNumber": "Número de acesso",
+  "Settings.Import.Field.DateOfBirth": "Data de nascimento",
+  "Settings.Import.Field.StudyDescription": "Descrição do estudo",
+  "Settings.Import.Field.Ignore": "Ignorar esta parte"
 }

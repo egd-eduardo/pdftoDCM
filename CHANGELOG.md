@@ -1,5 +1,76 @@
 # Changelog
 
+## 3.4.0
+
+**Naming layouts and date formats can be built by picking from a list, and the build
+produces a folder to hand over rather than a zip.**
+
+### Picking fields instead of typing braces
+
+The File names page now offers every available field as a button. Read a real file name
+from left to right, press the fields off in that order, and the layout is assembled in the
+order they were pressed:
+
+```
+Patient number  →  Name  →  Accession number     gives     {PatientId}_{Name}_{AccessionNumber}
+```
+
+The separator between fields is editable, an underscore by default, because it is whatever
+the sending system uses. **Add to the list** puts the finished layout in the list, and
+refuses a layout the reader could not compile, so a missing brace is caught here rather
+than when a document arrives.
+
+Date of birth formats work the same way, and each button shows the format **and the same
+date written in it**, because `ddMMyyyy` means nothing to most people and `21051970` is
+recognised instantly.
+
+**Both boxes remain editable by hand.** The pickers are for the common case; anything they
+cannot express, a regular expression among other things, is still typed directly. The
+field buttons are generated from the reader's own list of fields, so a field added later
+appears without anybody having to remember.
+
+### The build produces a folder, not a zip
+
+- **No zip unless you ask for one.** The handover folder can be copied to a machine, or
+  onto a stick, exactly as it stands. Pass `ZIP=1` to `build.sh`, or `-Zip` to
+  `build.ps1`, if you want an archive as well.
+- **`build/build.sh ship`** builds 64 bit and ARM in one go into `artifacts/ship/`, one
+  complete folder per architecture, with a note at the top explaining which to use and how
+  to tell. Copy the whole thing, or just the one folder that matches the machine.
+- A subfolder per architecture rather than the executables loose together, because the
+  application is called `PdfToDicom.exe` in both and two of those cannot share a folder,
+  and because what gets copied should be a complete package with its documentation and
+  samples rather than a bare executable.
+- CI now uploads the folder rather than the zip. `actions/upload-artifact` archives
+  whatever it is given, so uploading a zip produced a zip inside a zip.
+
+### build.sh can sign, like BUILD.bat does
+
+`build/build.sh sign`, and signing as part of `ship`, using `osslsigncode` with the
+certificate as a `.pfx` or `.p12` file:
+
+```
+SIGN_PFX=~/keys/codesign.pfx build/build.sh ship
+```
+
+Timestamped against the same three servers `sign.ps1` uses, falling back to an untimestamped
+signature and saying so if none can be reached. The password is never put on a command line
+where the process list would show it: it is read into a file only you can read, and deleted
+immediately afterwards.
+
+**It is opt in, and the reason is worth stating.** `sign.ps1` on Windows takes the
+certificate from the Windows certificate store, where the private key can be marked non
+exportable and never exists as a file. There is no equivalent here, so this needs the key
+*as a file* on the disk, which is a real difference in exposure. Nothing is signed unless
+`SIGN_PFX` names one. If a certificate is given and `osslsigncode` is missing, the build
+fails rather than quietly handing over an unsigned build that was meant to be signed.
+
+### Notes
+
+- 265 tests pass. Signing was verified end to end on a real 45 MB Windows executable with
+  a throwaway certificate: the signature validates against its issuer, and flipping a
+  single byte breaks it.
+
 ## 3.3.1
 
 **Fixes a crash in 3.3.0: Settings would not open at all for anybody with a worklist

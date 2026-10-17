@@ -930,6 +930,27 @@ Folders because it acts on what the monitored folder produces. The patterns and 
 formats are edited as one per line: a list of strings has no sensible editor in a dialog of
 this kind, and a grid for three short lines would be heavier than the thing it edits.
 
+**A layout can be built by picking fields rather than typing braces.** Every field is a
+button, and pressing them appends to the layout in the order pressed, which is how somebody
+actually does it: read a real file name left to right and press the fields off as you go.
+The separator is editable because it is whatever the sending system uses. **Add to the list**
+compiles the layout before accepting it, so `FormatException` surfaces in the dialog rather
+than when a document arrives.
+
+The buttons come from `FilenameField.All` rather than a second list in the view, so a field
+added to the reader appears in the picker without anybody remembering to add it; a label is
+resolved as `Settings.Import.Field.<Token>`, and a missing one would show as that key.
+
+The date format buttons show the format **and the same date written in it**, because
+`ddMMyyyy` means nothing to most people and `21051970` is recognised instantly. They offer
+the two month-first forms as well, which are deliberately absent from the *defaults*: with
+both day-first and month-first in the default list, `03-04-1970` would match whichever came
+first and nobody would know which, whereas picking one here is a statement about what the
+sending system writes.
+
+**Both boxes stay editable.** The pickers are for the common case, and a `regex:` layout or
+anything else they cannot express is typed directly.
+
 That page also carries a **test box**. Type a file name, press the button, and it shows
 what would be read, including which pattern matched and every note the reader produced. It
 reads the settings **as they are being edited** rather than as they were last saved, so a
