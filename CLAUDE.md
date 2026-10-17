@@ -80,6 +80,11 @@ The build fails if they do, and that check is not decoration:
 - `docs/CodeSigning.md`, `docs/BuildingItYourself.md`,
   `docs/ProtectingAgainstUnauthorisedDistribution.md`
 - the test worklist server
+- **any signing material**: `codesign.*`, `*.pfx`, `*.p12`, `*.password`, `*.key`. A
+  certificate is kept in this repository by the owner's decision, and the package is
+  assembled from a named list of files so it cannot reach one today. The check exists so
+  that handing a private signing key to a hospital does not depend on nobody ever writing
+  a wildcard.
 
 ## The protected settings password
 

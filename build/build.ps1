@@ -608,8 +608,15 @@ differs only in case has overwritten it. Windows cannot hold both.
     # signing keys, how to rebuild the product, and the customer. An earlier version
     # copied docs\* wholesale and shipped all three; naming them here means the next
     # document added to that folder has to be considered rather than inherited.
+    #
+    # The signing material is listed for a different reason. The package is assembled from
+    # a named list of files, so a certificate cannot reach it today, and one is kept in
+    # this repository by a deliberate decision of its owner. Both of those are true until
+    # somebody changes the list, and handing a private signing key to a hospital is not a
+    # mistake that should depend on nobody ever writing a wildcard.
     $forbidden = @('BuildingItYourself', 'CodeSigning', 'ProtectingAgainstUnauthorisedDistribution',
-                   'testworklistserver')
+                   'testworklistserver',
+                   'codesign', '.pfx', '.p12', '.password', '.key')
 
     $leaked = $forbidden | Where-Object { $name = $_; $present | Where-Object { $_ -like "*$name*" } }
 
