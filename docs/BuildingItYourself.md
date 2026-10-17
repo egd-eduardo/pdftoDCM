@@ -99,12 +99,13 @@ Nothing hidden, and nothing that touches your system outside this folder:
    Python is checked by asking it for its version, not by looking for the name. Windows
    ships stub files that answer to `python` and `python3` but only advertise the Microsoft
    Store, and anything that merely checks the name is fooled by them.
-4. Runs `build\build.ps1`, which restores, builds, validates, tests, publishes, assembles
-   the handover package and builds the installer.
+4. Runs `build\build.ps1`, which restores, builds, validates, tests, publishes **both 64
+   bit and ARM**, assembles a handover package for each and builds the installer.
 5. **Refuses to continue if any of the 265 tests fails.** A build that fails its tests is
    not one to hand to a hospital.
-6. Offers to sign the files if a code signing certificate exists, and tells you how to
-   create one if not.
+6. Signs what it built, if a code signing certificate is installed for your user, and
+   tells you how to create one if not. It is not asked about, because signing when it is
+   possible is what you want every time.
 7. Offers to open the finished folder.
 
 The build itself lives in `build.ps1` rather than being duplicated in the batch file, so
@@ -121,8 +122,23 @@ This appears under `artifacts\`:
 
 ```
 artifacts\
-  PdfToDicom-3.5.0-win-x64\        <- the folder to hand over
+  PdfToDicom-3.5.0-win-x64\        <- the folder to hand over to a site
   PdfToDicom-3.5.0-win-x64.exe     <- just the application, version in the name
+  PdfToDicom-3.5.0-win-arm64\      <- the same, for Windows on ARM
+  PdfToDicom-3.5.0-win-arm64.exe
+```
+
+**Both architectures, every time.** The machines in service are 64 bit, and the ARM build
+exists because the testing is done on a Windows on ARM virtual machine, where a native
+build avoids the emulation layer. One build, both answers.
+
+**The command line tool is not built unless you ask.** It is a second self contained
+publish, as large and as slow as the application's, and a build you are about to run on a
+test machine has no use for it. The handover folder then has no `Command line` folder in
+it, and the build says so as it goes. Add `-Cli` when the package is for a site:
+
+```powershell
+.\build\build.ps1 -Cli
 ```
 
 **No zip is made.** The folder can be copied to the machine, or onto a stick, exactly as it
@@ -186,19 +202,23 @@ package.
 
 ## Reclaiming the disk afterwards
 
-A build for one architecture occupies about 200 MB, and all three about 640 MB. Nothing
-is committed, so it is all reclaimable: `prune` brings that 640 MB down to 513 MB, and
-`clean` to nothing.
+A default build, which is 64 bit and ARM, occupies about 216 MB. The same files under
+their several names would be 427 MB; they are hard linked where the filesystem allows it,
+so the executable exists once however many folders name it. Nothing is committed, so it
+is all reclaimable: `prune` brings 216 MB down to 143 MB, and `clean` to nothing. Measured
+on a build with no command line tool and no installer.
 
 ```powershell
-.\build\build.ps1 -Task prune     # keep the zip, the exe and the installer
+.\build\build.ps1 -Task prune     # keep the deliverables, drop the working copies
 .\build\build.ps1 -Task clean     # remove everything the build produced
 ```
 
-`prune` keeps the three things worth keeping, the zip, the standalone executable and the
-installer, and removes the working copies: the publish staging folders and the unpacked
-handover folder, whose entire content is already inside the zip. `clean` removes the lot,
-including the compiler's own intermediate output.
+`prune` keeps what is worth keeping, the standalone executable, the installer and any zip
+you asked for, and removes the working copies: the publish staging folders, and the
+unpacked handover folder when there is a zip of it to fall back on. A handover folder with
+no zip beside it is kept and `prune` says so, because it would otherwise be the only copy
+and it is the thing you build for. `clean` removes the lot, including the compiler's own
+intermediate output.
 
 Run `prune` after you have taken the files you wanted. Do not run it between
 `-Task publish` and `-Task package`, because the installer is built from the staging
@@ -357,35 +377,74 @@ Check the connection and run it again; the second attempt reuses whatever downlo
 Report what it said.
 
 **It builds, but the application will not start on another machine** — check the
-architecture matches. A `win-arm64` build will not run on an ordinary 64 bit PC. Build with
-`build\build.ps1 -Runtime win-x64` for that, or take the file from the automated build.
+architecture matches. A `win-arm64` build will not run on an ordinary 64 bit PC, and the
+build produces both, so make sure the file came from the `win-x64` folder.
 
 ---
 
-## Building a different architecture than your own
+## Building one architecture, or a third one
 
-`BUILD.bat` builds for the machine it runs on. For the others:
+Both 64 bit and ARM are built by default. To build just one, or to build the 32 bit one
+that is otherwise left out:
 
 ```powershell
-.\build\build.ps1 -Runtime win-x64
-.\build\build.ps1 -Runtime win-x86
-.\build\build.ps1 -Runtime win-arm64
+.\build\build.ps1 -Runtimes win-x64
+.\build\build.ps1 -Runtimes win-x86
+.\build\build.ps1 -Runtimes win-x64,win-arm64,win-x86
 ```
 
 Right click `build.ps1` and choose **Run with PowerShell**, or open PowerShell in the
 folder and paste one of those lines. Add **Inno Setup 6** and the same script also builds
 the installer.
 
----
+`-Runtime` is still accepted for one architecture, so an older note or script keeps
+working.
 
-## Building both architectures at once, on a Mac or Linux
+## The quickest trip to a running executable
 
-```bash
-build/build.sh ship
+For the loop of change something, build it, run it on the test machine. No tests, no
+handover folder, no installer:
+
+```powershell
+.\build\build.ps1 -Task app
+.\build\build.ps1 -Task app -Runtimes win-arm64
 ```
 
-That builds 64 bit and ARM, runs the tests and the validators first, and leaves one folder
-holding both:
+It leaves `artifacts\win-arm64\app\PdfToDicom.exe`, signed if it can be, and nothing
+else. Run the tests separately when you want them:
+
+```powershell
+.\build\build.ps1 -Task test
+```
+
+---
+
+## On a Mac or Linux
+
+```bash
+build/build.sh              # test, build both architectures, assemble both packages
+build/build.sh app          # the executables only, as fast as it gets
+build/build.sh ship         # both, in one folder to hand over
+build/build.sh test         # the validators and the tests only
+```
+
+Both 64 bit and ARM, in every one of those. For one only, or for the 32 bit one that is
+otherwise left out:
+
+```bash
+RID=win-arm64 build/build.sh app
+RIDS="win-x64 win-x86" build/build.sh publish
+```
+
+The command line tool is left out unless asked for, because it is a second self contained
+publish of its own:
+
+```bash
+CLI=1 build/build.sh
+```
+
+`ship` runs the tests and the validators first, and leaves one folder holding both
+architectures:
 
 ```
 artifacts/ship/
@@ -398,24 +457,35 @@ Copy the whole folder, or just the one that matches the machine. Each is a full 
 the application, the command line tool, the licence, the notices, the manuals and the
 samples. Nothing needs installing on the target machine.
 
-32 bit is deliberately not built by `ship`. Every Windows 10 or 11 machine in service runs
-x64 or ARM64, and a third build is another 80 MB and another thing to pick the wrong one
-of. Build it on its own if a 32 bit machine ever turns up:
-
-```bash
-RID=win-x86 build/build.sh publish
-```
+32 bit is deliberately not among them. Every Windows 10 or 11 machine in service runs x64
+or ARM64, and a third build is another 80 MB and another thing to pick the wrong one of.
 
 The installer is still Windows only, because Inno Setup is.
 
 ### Signing from a Mac or Linux
 
+Leave the certificate at `~/.pdftodicom/codesign.pfx` and **every build signs itself**,
+with no option to remember:
+
+```bash
+mkdir -p ~/.pdftodicom
+cp /somewhere/codesign.pfx ~/.pdftodicom/codesign.pfx
+chmod 600 ~/.pdftodicom/codesign.pfx
+
+# and, if you would rather not be asked for the password each time
+printf '%s' 'the password' > ~/.pdftodicom/codesign.password
+chmod 600 ~/.pdftodicom/codesign.password
+```
+
+A certificate somewhere else, for one build:
+
 ```bash
 SIGN_PFX=~/keys/codesign.pfx build/build.sh ship
 ```
 
-It asks for the certificate password without showing it, signs both architectures, and
-timestamps against the same servers `sign.ps1` uses. It needs `osslsigncode`:
+Either way it signs every architecture it built and timestamps against the same servers
+`sign.ps1` uses, asking for the password once if there is no password file. It needs
+`osslsigncode`:
 
 ```bash
 brew install osslsigncode          # macOS
@@ -438,5 +508,6 @@ Export-PfxCertificate -Cert $c -FilePath codesign.pfx -Password (Read-Host -AsSe
 ```
 
 If it was not exportable, signing stays on the Windows machine, which is the safer place
-for it anyway. Nothing is signed unless `SIGN_PFX` names a file, so an ordinary
-`build/build.sh ship` just builds.
+for it anyway. Nothing is ever created or searched for beyond the one location: a machine
+without that file builds unsigned, says so in a few lines, and carries on, because an
+unsigned build is complete and runs.

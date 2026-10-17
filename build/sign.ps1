@@ -47,6 +47,11 @@
     Sign without a timestamp. Only for when no timestamp server can be reached; the
     signature then stops being valid when the certificate expires.
 
+.PARAMETER IfAvailable
+    Sign when a certificate can be found, and say so and stop cleanly when none can.
+    This is how the build signs by default: a machine that can sign does, and a machine
+    that cannot still produces a complete build rather than failing.
+
 .EXAMPLE
     .\build\sign.ps1 -CreateSelfSigned
     .\build\sign.ps1 -Runtime win-arm64
@@ -63,7 +68,9 @@ param(
 
     [string]$Thumbprint,
 
-    [switch]$NoTimestamp
+    [switch]$NoTimestamp,
+
+    [switch]$IfAvailable
 )
 
 $ErrorActionPreference = 'Stop'
@@ -125,6 +132,11 @@ function Get-SigningCertificate {
 
     if ($existing) {
         return $existing[0]
+    }
+
+    if ($IfAvailable) {
+        # Not an error. The caller asked to sign if it were possible, and it is not.
+        return $null
     }
 
     if (-not $CreateSelfSigned) {
@@ -239,6 +251,15 @@ the certificate expires:
 Assert-Windows
 
 $certificate = Get-SigningCertificate
+
+if (-not $certificate) {
+    # Reached only with -IfAvailable. One line rather than a page: a build that cannot
+    # sign is still a build, and docs/CodeSigning.md says what a signature does buy.
+    Write-Host '    nothing was signed: no code signing certificate is installed for this user'
+    Write-Host '    create one with ".\build\sign.ps1 -CreateSelfSigned"; see docs/CodeSigning.md'
+    exit 0
+}
+
 Write-Host "    signing as $($certificate.Subject), expires $($certificate.NotAfter.ToString('yyyy-MM-dd'))"
 
 # The application and the command line tool for this architecture, plus any installer
@@ -255,10 +276,15 @@ $installers = Get-ChildItem $Artifacts -Filter 'PdfToDicom-Setup*.exe' -ErrorAct
 if ($installers) { $targets += $installers }
 
 if (-not $targets) {
+    if ($IfAvailable) {
+        Write-Host "    nothing has been published for $Runtime yet, so there was nothing to sign"
+        exit 0
+    }
+
     throw @"
 Nothing to sign. Build first:
 
-    .\build\build.ps1 -Runtime $Runtime
+    .\build\build.ps1 -Runtimes $Runtime
 "@
 }
 

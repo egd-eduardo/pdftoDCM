@@ -9,24 +9,33 @@
 # machine.
 #
 # Usage:
-#   build/build.sh              build, test and publish
+#   build/build.sh              build, test, publish and assemble the handover folders
+#   build/build.sh app          the executables only: no tests, no package, no installer
 #   build/build.sh test         run the validators and the tests only
-#   build/build.sh publish      publish only
-#   build/build.sh ship         build 64 bit and ARM into one folder to hand over
+#   build/build.sh publish      publish and assemble the handover folders
+#   build/build.sh ship         both architectures in one folder to hand over
 #   build/build.sh sign         sign what has already been published
 #   build/build.sh prune        keep the deliverables, drop the intermediates
 #   build/build.sh clean        remove build output
 #
-# Set RID to choose the target architecture (win-x86, win-x64, win-arm64):
-#   RID=win-arm64 build/build.sh publish
+# Both 64 bit and ARM are built by default. Every machine this is deployed to is 64 bit,
+# and the ARM build exists because it is tested on a Windows on ARM virtual machine, where
+# a native build avoids the emulation layer. To build one only:
+#   RID=win-arm64 build/build.sh app
+#
+# The command line tool is NOT built unless asked for. It is a second self contained
+# publish, as large and as slow as the application's, and most builds have no use for it:
+#   CLI=1 build/build.sh
 #
 # No zip is produced unless asked for. The handover folder is the deliverable and can be
 # copied to another machine as it stands; a zip is only of use for sending one file:
 #   ZIP=1 build/build.sh publish
 #
-# Signing, from macOS or Linux, needs osslsigncode and the certificate as a .pfx or .p12
-# file. See "build/build.sh sign" and docs/CodeSigning.md:
+# Signing happens by default wherever it can. From macOS or Linux that needs osslsigncode
+# and the certificate as a .pfx or .p12 file. Leave it at ~/.pdftodicom/codesign.pfx and
+# every build signs without being asked; name it explicitly for a one off:
 #   SIGN_PFX=~/keys/codesign.pfx build/build.sh ship
+# See "build/build.sh sign" and docs/CodeSigning.md.
 
 # Arrays, [[ ]] and here strings are used throughout, so this needs bash and not the
 # system /bin/sh. Running it with "sh build/build.sh" fails with a syntax error whose
@@ -42,26 +51,54 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACTS="$REPO_ROOT/artifacts"
 CONFIGURATION="Release"
 
-# Target architecture: win-x86, win-x64 (default) or win-arm64.
-# Windows on ARM can run the x64 build under emulation, but a native arm64 build is faster
-# and is what a Windows on ARM machine should really run.
-#   RID=win-arm64 build/build.sh publish
-RUNTIME="${RID:-win-x64}"
+# Architectures every command builds: 64 bit and ARM.
+#
+# x86 is deliberately not among them. Every Windows 10 or 11 machine in service runs one
+# of these two, and a third build is another 80 MB and another thing to pick the wrong one
+# of. Build it explicitly if a 32 bit machine ever turns up.
+#
+# RID names one architecture, RIDS names several:
+#   RID=win-arm64 build/build.sh app
+#   RIDS="win-x86 win-x64" build/build.sh publish
+# shellcheck disable=SC2206
+RUNTIMES=(${RIDS:-${RID:-win-x64 win-arm64}})
 
-# Architectures "ship" builds. x86 is deliberately not among them: every Windows 10 or 11
-# machine in service runs one of these two, and a third build is another 80 MB and another
-# thing to pick the wrong one of. Build it explicitly if a 32 bit machine ever turns up.
-SHIP_RUNTIMES=(win-x64 win-arm64)
+# The architecture the per architecture functions are working on. Set by the loops below;
+# never read before one of them has set it.
+RUNTIME="${RUNTIMES[0]}"
+
+# Kept under its old name because the signing step and the ship folder both read it.
+SHIP_RUNTIMES=("${RUNTIMES[@]}")
+
+# The command line tool, which is a second self contained publish of its own. Off unless
+# asked for: a developer iterating on the window has no use for it, and the release
+# pipeline passes CLI=1 so that what reaches a site is still complete.
+BUILD_CLI="${CLI:-0}"
 
 # A zip is produced only when asked for. The handover folder can be copied to another
 # machine as it stands, so the zip is of use only for sending one file to somebody.
 MAKE_ZIP="${ZIP:-0}"
 
-# Signing, when a certificate is configured. SIGN_PFX is the certificate with its private
-# key; the password comes from SIGN_PASSWORD_FILE, or is asked for, and is never put on a
-# command line where the process list would show it.
+# Signing, which happens by default wherever it can. SIGN_PFX is the certificate with its
+# private key; the password comes from SIGN_PASSWORD_FILE, or is asked for, and is never
+# put on a command line where the process list would show it.
+#
+# The default location is what makes "signed by default" true in practice. Put the
+# certificate at ~/.pdftodicom/codesign.pfx, with its password in codesign.password beside
+# it if you would rather not be asked, and every build signs itself. Nothing is created
+# here and nothing is looked for anywhere else: a machine without that file builds
+# unsigned and says so.
+SIGN_DEFAULT_DIR="${SIGN_DEFAULT_DIR:-$HOME/.pdftodicom}"
 SIGN_PFX="${SIGN_PFX:-}"
 SIGN_PASSWORD_FILE="${SIGN_PASSWORD_FILE:-}"
+
+if [[ -z "$SIGN_PFX" && -f "$SIGN_DEFAULT_DIR/codesign.pfx" ]]; then
+    SIGN_PFX="$SIGN_DEFAULT_DIR/codesign.pfx"
+fi
+
+if [[ -z "$SIGN_PASSWORD_FILE" && -f "$SIGN_DEFAULT_DIR/codesign.password" ]]; then
+    SIGN_PASSWORD_FILE="$SIGN_DEFAULT_DIR/codesign.password"
+fi
 SIGN_NAME="${SIGN_NAME:-PDF to DICOM}"
 SIGN_URL="${SIGN_URL:-}"
 
@@ -444,7 +481,8 @@ EOF
         { sed -i 's/$/\r/' "$path" 2>/dev/null || sed -i '' -e 's/$/\r/' "$path"; }
 }
 
-do_publish() {
+# Publishes the executables for $RUNTIME. Nothing else: no handover folder, no installer.
+do_publish_app() {
     step "Publishing the desktop application for $RUNTIME"
 
     # Self contained and single file: the runtime, WPF and every dependency are embedded,
@@ -460,6 +498,22 @@ do_publish() {
         -o "$ARTIFACTS/$RUNTIME/app" \
         --nologo -v quiet
 
+    info "produced PdfToDicom.exe ($(human_size "$ARTIFACTS/$RUNTIME/app/PdfToDicom.exe"))"
+
+    if [[ "$BUILD_CLI" == "0" ]]; then
+        info "the command line tool was not built; pass CLI=1 if you want it"
+
+        # An earlier build with CLI=1 would have left one here, and the packaging step
+        # takes whatever it finds. Shipping yesterday's command line tool beside today's
+        # application is worse than shipping none, so the stale output goes.
+        if [[ -d "$ARTIFACTS/$RUNTIME/cli" ]]; then
+            rm -rf "$ARTIFACTS/$RUNTIME/cli"
+            info "removed the command line tool left by an earlier build"
+        fi
+
+        return 0
+    fi
+
     step "Publishing the command line tool for $RUNTIME"
 
     dotnet publish "$REPO_ROOT/src/PdfToDicom.Cli/PdfToDicom.Cli.csproj" \
@@ -471,8 +525,15 @@ do_publish() {
         -p:EnableCompressionInSingleFile=true \
         -o "$ARTIFACTS/$RUNTIME/cli" \
         --nologo -v quiet
+}
 
-    step "Assembling the package to hand over"
+# Assembles the folder that is handed to a site, from what do_publish_app produced.
+#
+# Called after signing, never before. The files here are hard links to the published ones,
+# which is what keeps 80 MB from being copied three times, and signing is what decides the
+# bytes those links point at.
+do_assemble() {
+    step "Assembling the package to hand over for $RUNTIME"
 
     # Mirrors Invoke-Assemble in build.ps1. The two must agree: a package assembled on a
     # Mac and one assembled on Windows should be the same thing.
@@ -549,9 +610,17 @@ do_publish() {
     info "$(find "$package" -type f | wc -l | tr -d ' ') file(s)"
     info "artifacts: $(human_size "$ARTIFACTS") on disk, $(human_size_counting_links "$ARTIFACTS") if every link were a copy"
     info "'build/build.sh prune' drops the staging and the unpacked folder"
+}
 
+# Printed once at the end rather than once per architecture, which is what it became when
+# the build started producing two of them.
+say_where_the_installer_comes_from() {
     step "Result"
-    ls -lh "$ARTIFACTS/$RUNTIME/app/PdfToDicom.exe" | awk '{print "    desktop application: " $9 " (" $5 ")"}'
+
+    local runtime
+    for runtime in "${RUNTIMES[@]}"; do
+        info "$runtime: $ARTIFACTS/$runtime/app/PdfToDicom.exe ($(human_size "$ARTIFACTS/$runtime/app/PdfToDicom.exe"))"
+    done
 
     cat <<'MESSAGE'
 
@@ -570,8 +639,10 @@ MESSAGE
 # PowerShell's Set-AuthenticodeSignature with a certificate from the Windows certificate
 # store, where the private key can be marked non exportable and never exists as a file.
 # There is no equivalent store here, so this needs the certificate AS a file, which is a
-# private key sitting on a disk. That is a real difference in exposure and the reason this
-# is opt in rather than automatic: nothing is signed unless SIGN_PFX names a file.
+# private key sitting on a disk. That is a real difference in exposure, and it is why the
+# certificate is never created or looked for beyond the one location: a build signs when
+# ~/.pdftodicom/codesign.pfx is there, or when SIGN_PFX names a file, and otherwise says
+# so and carries on unsigned.
 #
 # Keep that file out of the repository (.gitignore already covers *.pfx), off shared
 # drives, and on an encrypted disk.
@@ -590,6 +661,23 @@ MESSAGE
 # shown a segmentation fault that is not their problem.
 run_quietly() {
     bash -c '"$@" >/dev/null 2>&1' _ "$@" 2>/dev/null
+}
+
+# Replaces a file's contents without replacing the file.
+#
+# osslsigncode cannot sign in place, so it writes a second file which has to go back over
+# the first. "mv" would NOT do: it unlinks the original and renames the new file into its
+# place, so any hard link to the original keeps pointing at the old, unsigned bytes. The
+# handover folder is built from hard links to exactly these files, and signing it after it
+# had been assembled left the copy that is actually handed to a site unsigned while the
+# staging copy next to it was signed. Writing through the existing inode keeps every name
+# for this file in agreement, whatever order the build does things in.
+write_back_in_place() {
+    local from=$1
+    local to=$2
+
+    cat "$from" > "$to"
+    rm -f "$from"
 }
 
 sign_one() {
@@ -625,7 +713,7 @@ sign_one() {
                   http://timestamp.globalsign.com/tsa/r6advanced1; do
 
         if run_quietly osslsigncode "${base[@]}" -ts "$server" -in "$file" -out "$signed"; then
-            mv -f "$signed" "$file"
+            write_back_in_place "$signed" "$file"
             info "signed $label (timestamped by ${server#http://})"
             return 0
         fi
@@ -637,7 +725,7 @@ sign_one() {
     # without a timestamp is still tamper evidence, it simply stops being verifiable once
     # the certificate expires.
     if run_quietly osslsigncode "${base[@]}" -in "$file" -out "$signed"; then
-        mv -f "$signed" "$file"
+        write_back_in_place "$signed" "$file"
         info "signed $label WITHOUT a timestamp: no timestamp server could be reached"
         info "  the signature will stop being verifiable when the certificate expires"
         return 0
@@ -702,11 +790,20 @@ MESSAGE
     password_file="$(mktemp "${TMPDIR:-/tmp}/pdftodicom-sign.XXXXXX")"
     chmod 600 "$password_file"
 
-    # Removed however this function ends, including on an error or an interrupt. The
-    # RETURN trap covers the normal and the "set -e" paths; INT and TERM cover somebody
-    # pressing Ctrl+C while it is signing. A global EXIT trap is deliberately not set,
-    # because it would silently replace any other EXIT handler this script grows later.
-    trap 'rm -f "$password_file"' RETURN INT TERM
+    # Removed on the way out of this function, and on an interrupt while it is signing.
+    #
+    # This used a RETURN trap, which was wrong in a way that took a restructure to show.
+    # A RETURN trap set inside a function is not lifted when that function returns: it
+    # stays installed and fires again the next time ANY function returns. While signing
+    # was the last thing a build did, nothing returned afterwards and it never showed. The
+    # moment signing moved before the packaging step, the trap fired again with its
+    # variable out of scope and "set -u" failed the whole build after every file had been
+    # produced and signed. Explicit cleanup at each way out, and no RETURN trap.
+    #
+    # A global EXIT trap is deliberately not set either, because it would silently replace
+    # any other EXIT handler this script grows later.
+    trap 'finish_signing; exit 130' INT
+    trap 'finish_signing; exit 143' TERM
 
     if [[ -n "$SIGN_PASSWORD_FILE" ]]; then
         if [[ ! -f "$SIGN_PASSWORD_FILE" ]]; then
@@ -744,17 +841,20 @@ MESSAGE
 
     if (( ${#targets[@]} == 0 )); then
         info "nothing has been published yet, so there was nothing to sign"
+        finish_signing
         return 0
     fi
 
     for runtime in "${targets[@]}"; do
         # The executable inside the handover folder is a hard link to the staging copy, so
-        # signing the staging copy signs the one that is handed over. Replacing the file
-        # rather than editing it in place would break that link, which is why sign_one
-        # moves the result over the original.
+        # signing the staging copy signs the one that is handed over as well. That holds
+        # only because sign_one writes the signed bytes through the existing file rather
+        # than replacing it; see write_back_in_place for what went wrong when it did not.
         sign_one "$ARTIFACTS/$runtime/app/PdfToDicom.exe" "$runtime desktop application" "$password_file" || failures=$((failures + 1))
         sign_one "$ARTIFACTS/$runtime/cli/pdftodicom.exe" "$runtime command line tool" "$password_file" || failures=$((failures + 1))
     done
+
+    finish_signing
 
     if (( failures > 0 )); then
         echo "    ERROR: $failures file(s) could not be signed." >&2
@@ -763,6 +863,16 @@ MESSAGE
 
     info "a signature does not stop Windows warning about an unrecognised publisher;"
     info "see docs/CodeSigning.md for what it does buy"
+}
+
+# Removes the password file and lifts the interrupt handlers.
+#
+# Reads do_sign's local variable, which bash allows: locals are visible to everything the
+# function calls. Written once here rather than at each of do_sign's four ways out, where
+# the one that was forgotten would leave a password on the disk.
+finish_signing() {
+    rm -f "${password_file:-}"
+    trap - INT TERM
 }
 
 # ---------------------------------------------------------------- ship
@@ -799,17 +909,24 @@ do_ship() {
     mkdir -p "$ship"
 
     local runtime
-    for runtime in "${SHIP_RUNTIMES[@]}"; do
+    for runtime in "${RUNTIMES[@]}"; do
         RUNTIME="$runtime"
-        do_publish
+        do_publish_app
     done
 
-    # Signed once, after both are published, so the password is asked for once.
+    # Signed once, after everything is published, so the password is asked for once, and
+    # before the packages are assembled, because those are hard links to what is signed
+    # here.
     do_sign
+
+    for runtime in "${RUNTIMES[@]}"; do
+        RUNTIME="$runtime"
+        do_assemble
+    done
 
     step "Assembling the folder to hand over"
 
-    for runtime in "${SHIP_RUNTIMES[@]}"; do
+    for runtime in "${RUNTIMES[@]}"; do
         link_tree "$ARTIFACTS/PdfToDicom-$version-$runtime" "$ship/$runtime"
         info "$ship/$runtime"
     done
@@ -863,18 +980,61 @@ runtime. Administrator rights are not required to run it.
 TEXT
 }
 
+# Publishes every requested architecture, signs them, then assembles each package.
+#
+# In that order, and not interleaved per architecture: the password is asked for once, and
+# nothing is assembled from an executable that has not been signed yet.
+publish_and_assemble() {
+    local runtime
+
+    for runtime in "${RUNTIMES[@]}"; do
+        RUNTIME="$runtime"
+        do_publish_app
+    done
+
+    do_sign
+
+    for runtime in "${RUNTIMES[@]}"; do
+        RUNTIME="$runtime"
+        do_assemble
+    done
+
+    say_where_the_installer_comes_from
+}
+
+# The shortest trip to a running executable: no tests, no handover folder, no installer.
+# For the loop of change something, build it, copy it to the test machine, run it.
+publish_only() {
+    local runtime
+
+    for runtime in "${RUNTIMES[@]}"; do
+        RUNTIME="$runtime"
+        do_publish_app
+    done
+
+    do_sign
+
+    step "Result"
+
+    for runtime in "${RUNTIMES[@]}"; do
+        info "$ARTIFACTS/$runtime/app/PdfToDicom.exe"
+    done
+}
+
 require_sdk
+info "building for ${RUNTIMES[*]}$( [[ "$BUILD_CLI" == "0" ]] || printf ', with the command line tool' )"
 
 case "${1:-all}" in
     clean)   do_clean ;;
     prune)   do_prune ;;
     test)    do_restore; do_build; do_validate; do_test ;;
-    publish) do_restore; do_publish; do_sign ;;
+    app)     do_restore; publish_only ;;
+    publish) do_restore; publish_and_assemble ;;
     sign)    do_sign ;;
     ship)    do_restore; do_build; do_validate; do_test; do_ship ;;
-    all)     do_restore; do_build; do_validate; do_test; do_publish; do_sign ;;
+    all)     do_restore; do_build; do_validate; do_test; publish_and_assemble ;;
     *)
-        echo "Usage: $0 [all|test|publish|ship|sign|prune|clean]" >&2
+        echo "Usage: $0 [all|app|test|publish|ship|sign|prune|clean]" >&2
         exit 1
         ;;
 esac
