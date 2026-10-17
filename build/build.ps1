@@ -67,8 +67,9 @@ param(
     # Both architectures by default. Every machine this is deployed to is 64 bit, and the
     # ARM build exists because it is tested on a Windows on ARM virtual machine, where a
     # native build avoids the emulation layer. The alias keeps -Runtime win-arm64 working.
+    #
+    # Deliberately no ValidateSet: it is checked below instead. See the note there.
     [Alias('Runtime')]
-    [ValidateSet('win-x86', 'win-x64', 'win-arm64')]
     [string[]]$Runtimes = @('win-x64', 'win-arm64'),
 
     # The command line tool is a second self contained publish, as large and as slow as
@@ -87,6 +88,37 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+<#
+    Normalises and checks the requested architectures.
+
+    Done here rather than with a ValidateSet on the parameter, because the two ways this
+    script is started disagree about what "win-x64,win-arm64" means. Typed at a PowerShell
+    prompt it is an array of two strings. Passed through "pwsh -File build.ps1", which is
+    how BUILD.bat and the CI workflow start it, it arrives as ONE string with a comma in
+    it, and a ValidateSet rejects it outright with a message that reads as though the
+    architecture itself were unknown. Splitting by hand means the same spelling works
+    whichever way the script was started.
+#>
+$Runtimes = @(
+    $Runtimes |
+        Where-Object { $_ } |
+        ForEach-Object { $_ -split '[,;]+' } |
+        ForEach-Object { $_.Trim().ToLowerInvariant() } |
+        Where-Object { $_ } |
+        Select-Object -Unique
+)
+
+$KnownRuntimes = @('win-x86', 'win-x64', 'win-arm64')
+$unknown = @($Runtimes | Where-Object { $KnownRuntimes -notcontains $_ })
+
+if ($unknown) {
+    throw "Not an architecture this builds for: $($unknown -join ', '). Choose from $($KnownRuntimes -join ', ')."
+}
+
+if (-not $Runtimes) {
+    throw "No architecture was given. Choose from $($KnownRuntimes -join ', ')."
+}
 
 $RepoRoot  = Split-Path -Parent $PSScriptRoot
 $Artifacts = Join-Path $RepoRoot 'artifacts'
@@ -792,9 +824,22 @@ function Invoke-Sign {
 
     # Delegated rather than inlined, so signing can also be run on its own against
     # an existing build without repeating it.
-    $arguments = @('-Runtime', $Runtime)
+    #
+    # A hashtable, splatted. An ARRAY splat looked equivalent and is not: its elements are
+    # bound by position, so @('-Runtime', $Runtime) handed sign.ps1 the literal string
+    # "-Runtime" as the value of its first parameter and every packaging job failed with
+    # "the argument '-Runtime' does not belong to the set". A hashtable splat passes
+    # names.
+    $arguments = @{ Runtime = $Runtime }
 
-    if (-not $Sign) { $arguments += '-IfAvailable' }
+    if (-not $Sign) { $arguments['IfAvailable'] = $true }
+
+    # Cleared first, because the check below is only meaningful if the value came from
+    # this call. sign.ps1 is a PowerShell script: it sets $LASTEXITCODE when it exits with
+    # a code and leaves it alone otherwise, so an uncleared value is either whatever the
+    # last dotnet command left or, when signing is the first thing a task does, not set at
+    # all, which Set-StrictMode turns into an error of its own.
+    $global:LASTEXITCODE = 0
 
     & (Join-Path $PSScriptRoot 'sign.ps1') @arguments
     if ($LASTEXITCODE -ne 0) { throw 'Signing failed.' }
