@@ -1659,13 +1659,35 @@ Deploy `config.json` to `%APPDATA%\PdfToDicom\` before first launch. See
 
 ### Code signing
 
-**Signing happens by default wherever it can.** Neither script asks. On Windows, a code
-signing certificate in the current user's store is used; on a Mac or Linux, a certificate
-at `~/.pdftodicom/codesign.pfx`, or wherever `SIGN_PFX` points. A machine with none builds
-unsigned, says so in a few lines, and carries on, because an unsigned build is complete and
-runs. `-Sign` on Windows makes a missing certificate an error instead, for a release build
-where handing over an unsigned executable would be the wrong outcome, and `-NoSign` skips
-signing altogether.
+**Signing happens by default wherever it can.** Neither script asks.
+
+The certificate is looked for in **one folder on both platforms**, `~/.pdftodicom` and
+`%USERPROFILE%\.pdftodicom`, under four names: `codesign.pfx`, `codesign.p12`,
+`certificate.pfx`, `certificate.p12`. `SIGN_PFX`, or `-Pfx` on Windows, names one
+directly. On Windows the certificate store is then consulted as a fallback, so a
+certificate created with `-CreateSelfSigned` works with no file at all; a file placed in
+the folder takes precedence over the store, because somebody who put it there meant it,
+whereas the store may hold something created months ago and forgotten. A machine with
+neither builds unsigned, says so in a few lines, and carries on.
+
+`-Sign` on Windows makes a missing certificate an error instead, for a release build where
+handing over an unsigned executable would be the wrong outcome, and `-NoSign` skips signing
+altogether.
+
+**Both scripts can explain themselves**, which is the part that was missing: the first
+version of the Windows script read only the certificate store, so a `.pfx` placed in that
+folder on a Windows machine was ignored in silence.
+
+```
+.\build\build.ps1 -Task signing        build/build.sh signing
+```
+
+Nothing is built. The report names every path examined, lists what is in the folder when
+the expected name is not there, shows the certificate store's contents on Windows, and says
+which of the two would be used. The password file is read with a `Trim()`, because a file
+written by an editor ends in a newline and the newline is not part of the password: without
+it the certificate fails to open with "the password may be incorrect", which sends somebody
+looking for the wrong problem entirely.
 
 Signing runs **after publishing and before the handover folder is assembled**, and then
 again after the installer exists, because both the folder and the installer take the

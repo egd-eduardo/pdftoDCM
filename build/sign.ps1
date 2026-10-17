@@ -52,6 +52,23 @@
     This is how the build signs by default: a machine that can sign does, and a machine
     that cannot still produces a complete build rather than failing.
 
+.PARAMETER Pfx
+    A certificate file, with its private key, instead of one from the certificate store.
+    Also read from the SIGN_PFX environment variable. Without either, a file in
+    %USERPROFILE%\.pdftodicom is used when one is there: codesign.pfx, codesign.p12,
+    certificate.pfx or certificate.p12, in that order. That is the same folder and the
+    same names build/build.sh reads on a Mac, so one instruction covers both machines.
+
+.PARAMETER PfxPassword
+    The password for that file. Prefer leaving it in codesign.password beside the
+    certificate, or being asked for it; a password on a command line is visible to
+    anything that can list processes.
+
+.PARAMETER Describe
+    Report what signing would do on this machine, and why, then stop. Nothing is signed
+    and nothing is created. This is what answers "I put the certificate in the folder and
+    nothing happened".
+
 .EXAMPLE
     .\build\sign.ps1 -CreateSelfSigned
     .\build\sign.ps1 -Runtime win-arm64
@@ -70,7 +87,13 @@ param(
 
     [switch]$NoTimestamp,
 
-    [switch]$IfAvailable
+    [switch]$IfAvailable,
+
+    [string]$Pfx,
+
+    [string]$PfxPassword,
+
+    [switch]$Describe
 )
 
 $ErrorActionPreference = 'Stop'
@@ -78,6 +101,118 @@ Set-StrictMode -Version Latest
 
 $RepoRoot  = Split-Path -Parent $PSScriptRoot
 $Artifacts = Join-Path $RepoRoot 'artifacts'
+
+<#
+    Where a certificate FILE is looked for, and under which names.
+
+    The same folder and the same names build/build.sh reads on a Mac, so "put the
+    certificate in ~/.pdftodicom" is one instruction that covers both machines. It had
+    better be, because the first version of this read only the Windows certificate store:
+    a .pfx placed in that folder on a Windows machine was ignored in silence, which is
+    exactly the kind of thing somebody spends an evening on.
+
+    Several names, because an export rarely comes out called what a script expects. macOS
+    Keychain writes .p12, Windows writes .pfx, and both spellings mean the same container.
+#>
+$SigningFolder = if ($env:SIGN_DEFAULT_DIR) { $env:SIGN_DEFAULT_DIR } else { Join-Path $HOME '.pdftodicom' }
+
+$CertificateCandidates = @(
+    (Join-Path $SigningFolder 'codesign.pfx'),
+    (Join-Path $SigningFolder 'codesign.p12'),
+    (Join-Path $SigningFolder 'certificate.pfx'),
+    (Join-Path $SigningFolder 'certificate.p12')
+)
+
+$PasswordCandidates = @(
+    (Join-Path $SigningFolder 'codesign.password'),
+    (Join-Path $SigningFolder 'password.txt')
+)
+
+<#
+    The certificate file this run will use, or $null.
+
+    An explicit -Pfx, then SIGN_PFX, then the folder. A file the person put there on
+    purpose outranks whatever happens to be in the certificate store, which may have been
+    left by a self signed certificate created months ago; the report says which was used
+    and whether the other exists, so neither is a silent choice.
+#>
+function Find-CertificateFile {
+    if ($Pfx) {
+        if (-not (Test-Path $Pfx)) { throw "The certificate file '$Pfx' does not exist." }
+        return (Resolve-Path $Pfx).Path
+    }
+
+    if ($env:SIGN_PFX) {
+        if (-not (Test-Path $env:SIGN_PFX)) {
+            throw "SIGN_PFX is set to '$($env:SIGN_PFX)', which is not a file."
+        }
+        return (Resolve-Path $env:SIGN_PFX).Path
+    }
+
+    foreach ($candidate in $CertificateCandidates) {
+        if (Test-Path $candidate) { return $candidate }
+    }
+
+    return $null
+}
+
+<#
+    The password for a certificate file, as a SecureString.
+
+    From -PfxPassword, then SIGN_PASSWORD_FILE, then a file beside the certificate, then
+    the keyboard without being echoed. A password on a command line is visible to anything
+    that can list processes, which is why it is the least preferred of the four.
+#>
+function Get-CertificatePassword {
+    if ($PfxPassword) {
+        return (ConvertTo-SecureString $PfxPassword -AsPlainText -Force)
+    }
+
+    $file = $null
+
+    if ($env:SIGN_PASSWORD_FILE) {
+        if (-not (Test-Path $env:SIGN_PASSWORD_FILE)) {
+            throw "SIGN_PASSWORD_FILE is set to '$($env:SIGN_PASSWORD_FILE)', which is not a file."
+        }
+        $file = $env:SIGN_PASSWORD_FILE
+    }
+    else {
+        foreach ($candidate in $PasswordCandidates) {
+            if (Test-Path $candidate) { $file = $candidate; break }
+        }
+    }
+
+    if ($file) {
+        Write-Host "    password read from $file"
+
+        # Trimmed, because a password file written by an editor ends with a newline and
+        # the newline is not part of the password.
+        $text = (Get-Content $file -Raw).Trim()
+        return (ConvertTo-SecureString $text -AsPlainText -Force)
+    }
+
+    return (Read-Host -Prompt '    Certificate password (not shown)' -AsSecureString)
+}
+
+<#
+    Loads a certificate from a file.
+
+    Not with EphemeralKeySet, deliberately. An ephemeral key never reaches a key
+    container, and Set-AuthenticodeSignature needs one to sign with, so the signature
+    would fail on a certificate that had loaded perfectly.
+#>
+function Import-CertificateFile {
+    param([string]$Path)
+
+    $password = Get-CertificatePassword
+
+    try {
+        return [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($Path, $password)
+    }
+    catch {
+        throw "The certificate '$Path' could not be opened: $($_.Exception.Message)"
+    }
+}
 
 # Tried in order. All are free and public. Several are listed because a signing run
 # should not fail because one company's server is having a bad afternoon.
@@ -113,11 +248,41 @@ Windows PowerShell or PowerShell 7. Nothing needs to be installed beyond that.
 
 # ---------------------------------------------------------------- certificate
 
+<#
+    Code signing certificates in this user's personal store that could actually be used:
+    able to sign code, holding a private key, and not expired.
+
+    Returns nothing rather than failing where there is no such store, so that the report
+    below can run on a Mac and still say something useful about the certificate file.
+#>
+function Get-StoreCertificates {
+    if (-not (Test-Path 'Cert:\CurrentUser\My')) { return @() }
+
+    return @(
+        Get-ChildItem Cert:\CurrentUser\My |
+            Where-Object {
+                $_.HasPrivateKey -and
+                $_.NotAfter -gt (Get-Date) -and
+                ($_.EnhancedKeyUsageList | Where-Object { $_.ObjectId -eq '1.3.6.1.5.5.7.3.3' })
+            } |
+            Sort-Object NotAfter -Descending
+    )
+}
+
 function Get-SigningCertificate {
     if ($Thumbprint) {
         $certificate = Get-Item "Cert:\CurrentUser\My\$Thumbprint" -ErrorAction SilentlyContinue
         if (-not $certificate) { throw "No certificate with thumbprint $Thumbprint was found." }
         return $certificate
+    }
+
+    # A file first. Somebody who put a certificate in the folder meant it to be used, and
+    # the store may hold a self signed certificate created months ago and forgotten.
+    $file = Find-CertificateFile
+
+    if ($file) {
+        Write-Host "    certificate file $file"
+        return Import-CertificateFile -Path $file
     }
 
     # Any certificate in the personal store that can actually sign code, has a private
@@ -141,9 +306,20 @@ function Get-SigningCertificate {
 
     if (-not $CreateSelfSigned) {
         throw @"
-No code signing certificate was found in the current user's store.
+No code signing certificate was found.
 
-To create a self signed one, run:
+Looked in the certificate store of the current user, and for these files:
+
+$($CertificateCandidates -join "`n")
+
+'.\build\sign.ps1 -Describe' explains this machine's state in full.
+
+To use a certificate you already have, put it in $SigningFolder as codesign.pfx, or
+name it directly:
+
+    .\build\sign.ps1 -Pfx C:\path\to\certificate.pfx
+
+To create a self signed one instead:
 
     .\build\sign.ps1 -CreateSelfSigned
 
@@ -248,6 +424,109 @@ the certificate expires:
 
 # ---------------------------------------------------------------- main
 
+<#
+    Reports what signing would do on this machine, and why, without signing anything.
+
+    Exists because "I put the certificate in the folder and nothing happened" is not a
+    question a person should have to read a script to answer. It names every path that
+    was examined, lists what is in the folder when the expected name is not there, and
+    shows what the certificate store holds.
+#>
+function Show-SigningState {
+    Write-Step 'Signing: what this machine would do'
+
+    if (-not (Get-Command Set-AuthenticodeSignature -ErrorAction SilentlyContinue)) {
+        Write-Host '    NOTE: this is not Windows, so nothing here could sign anything. The'
+        Write-Host '    certificate file is still reported, because that part is the same.'
+        Write-Host '    On a Mac, use "build/build.sh signing" instead.'
+        Write-Host ''
+    }
+
+    Write-Host "    certificate folder : $SigningFolder"
+
+    if ($env:SIGN_PFX)           { Write-Host "    SIGN_PFX           : $($env:SIGN_PFX)" }
+    if ($env:SIGN_PASSWORD_FILE) { Write-Host "    SIGN_PASSWORD_FILE : $($env:SIGN_PASSWORD_FILE)" }
+
+    $file = $null
+
+    try { $file = Find-CertificateFile }
+    catch { Write-Host "    certificate file   : $($_.Exception.Message)" -ForegroundColor Yellow }
+
+    $store = @(Get-StoreCertificates)
+
+    if ($file) {
+        Write-Host "    certificate file   : $file  <- this is what would be used"
+    }
+    else {
+        Write-Host '    certificate file   : none found'
+        Write-Host ''
+        Write-Host '    These are the names looked for, in this order:'
+        $CertificateCandidates | ForEach-Object { Write-Host "        $_" }
+
+        if (Test-Path $SigningFolder) {
+            $entries = @(Get-ChildItem $SigningFolder -Force -ErrorAction SilentlyContinue)
+
+            Write-Host ''
+            Write-Host '    The folder exists. What is in it:'
+
+            if ($entries) {
+                $entries | ForEach-Object { Write-Host "        $($_.Name)" }
+                Write-Host ''
+                Write-Host '    If the certificate is one of those, rename it to codesign.pfx, or name it:'
+                Write-Host ''
+                Write-Host "        .\build\sign.ps1 -Pfx $SigningFolder\<the file>"
+            }
+            else {
+                Write-Host '        (empty)'
+            }
+        }
+        else {
+            Write-Host ''
+            Write-Host '    That folder does not exist on this machine. To create it:'
+            Write-Host ''
+            Write-Host "        mkdir $SigningFolder"
+            Write-Host "        copy C:\path\to\certificate.pfx $SigningFolder\codesign.pfx"
+        }
+    }
+
+    Write-Host ''
+
+    if ($store) {
+        Write-Host "    certificate store  : $($store.Count) usable code signing certificate(s)"
+        $store | ForEach-Object {
+            Write-Host "        $($_.Subject), expires $($_.NotAfter.ToString('yyyy-MM-dd')), $($_.Thumbprint)"
+        }
+
+        if ($file) {
+            Write-Host ''
+            Write-Host '    The file above wins: a certificate put in the folder on purpose outranks'
+            Write-Host '    whatever is in the store. Use -Thumbprint to insist on a store certificate.'
+        }
+        else {
+            Write-Host '        the first of those is what would be used'
+        }
+    }
+    else {
+        Write-Host '    certificate store  : no usable code signing certificate'
+    }
+
+    if (-not $file -and -not $store) {
+        Write-Host ''
+        Write-Host '    Nothing would be signed. The build still completes; an unsigned executable'
+        Write-Host '    runs. See docs/CodeSigning.md.'
+    }
+
+    Write-Host ''
+}
+
+# Before the Windows check on purpose: a diagnostic that refuses to run where signing is
+# unavailable is not much of a diagnostic, and the file half of the answer is the same
+# everywhere.
+if ($Describe) {
+    Show-SigningState
+    exit 0
+}
+
 Assert-Windows
 
 $certificate = Get-SigningCertificate
@@ -255,8 +534,9 @@ $certificate = Get-SigningCertificate
 if (-not $certificate) {
     # Reached only with -IfAvailable. One line rather than a page: a build that cannot
     # sign is still a build, and docs/CodeSigning.md says what a signature does buy.
-    Write-Host '    nothing was signed: no code signing certificate is installed for this user'
-    Write-Host '    create one with ".\build\sign.ps1 -CreateSelfSigned"; see docs/CodeSigning.md'
+    Write-Host '    nothing was signed: no code signing certificate was found'
+    Write-Host "    not in the store, and not as a file in $SigningFolder"
+    Write-Host '    ".\build\sign.ps1 -Describe" says exactly what was looked for'
     exit 0
 }
 

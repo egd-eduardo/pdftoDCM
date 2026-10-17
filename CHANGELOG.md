@@ -28,11 +28,27 @@ worse than shipping none.
 
 No tests, no handover folder, no installer. Two signed executables and nothing else.
 
-**Signing happens by default wherever it can**, and is not asked about. On Windows that
-means a certificate in the current user's store; on a Mac, one at
-`~/.pdftodicom/codesign.pfx`, with its password beside it if you would rather not be asked.
-A machine with no certificate builds unsigned, says so, and carries on. `-Sign` turns a
-missing certificate into an error for a release build, and `-NoSign` skips it.
+**Signing happens by default wherever it can**, and is not asked about. The certificate
+goes in **one folder on both machines**, `~/.pdftodicom` or `%USERPROFILE%\.pdftodicom`,
+under any of `codesign.pfx`, `codesign.p12`, `certificate.pfx` or `certificate.p12`, with
+its password in `codesign.password` beside it if you would rather not be asked. On Windows
+the certificate store is used as a fallback, so a self signed certificate still works with
+no file at all. A machine with neither builds unsigned, says so, and carries on. `-Sign`
+turns a missing certificate into an error for a release build, and `-NoSign` skips it.
+
+**Both scripts can now explain themselves**, which they could not when this first shipped:
+the Windows script read only the certificate store, so a certificate placed in that folder
+on a Windows machine was ignored in silence, and neither script said where it had looked.
+
+```
+.\build\build.ps1 -Task signing        build/build.sh signing
+```
+
+It builds nothing and reports every path examined, what is actually in the folder when the
+expected name is not there, the certificate store's contents on Windows, and which of the
+two would be used. The password file is read with a `Trim()`: a file written by an editor
+ends in a newline, and without the trim the certificate fails to open with "the password
+may be incorrect", which is the most misleading error available. Demonstrated both ways.
 
 **A defect found while doing this: a signed build was handing over an unsigned
 executable.** The handover folder's copy is a hard link to the published one, so that 80 MB

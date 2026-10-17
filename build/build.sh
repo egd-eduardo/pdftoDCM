@@ -15,6 +15,7 @@
 #   build/build.sh publish      publish and assemble the handover folders
 #   build/build.sh ship         both architectures in one folder to hand over
 #   build/build.sh sign         sign what has already been published
+#   build/build.sh signing      explain what signing would do on this machine, and why
 #   build/build.sh prune        keep the deliverables, drop the intermediates
 #   build/build.sh clean        remove build output
 #
@@ -84,20 +85,40 @@ MAKE_ZIP="${ZIP:-0}"
 # put on a command line where the process list would show it.
 #
 # The default location is what makes "signed by default" true in practice. Put the
-# certificate at ~/.pdftodicom/codesign.pfx, with its password in codesign.password beside
-# it if you would rather not be asked, and every build signs itself. Nothing is created
-# here and nothing is looked for anywhere else: a machine without that file builds
-# unsigned and says so.
+# certificate in ~/.pdftodicom, with its password in codesign.password beside it if you
+# would rather not be asked, and every build signs itself. Nothing is created here and
+# nothing is looked for anywhere else: a machine without one of these files builds
+# unsigned and says so, naming the paths it looked at.
+#
+# Several names, because an export rarely comes out called what a script expects. macOS
+# Keychain writes .p12, Windows writes .pfx, and both spellings mean the same container.
 SIGN_DEFAULT_DIR="${SIGN_DEFAULT_DIR:-$HOME/.pdftodicom}"
 SIGN_PFX="${SIGN_PFX:-}"
 SIGN_PASSWORD_FILE="${SIGN_PASSWORD_FILE:-}"
 
-if [[ -z "$SIGN_PFX" && -f "$SIGN_DEFAULT_DIR/codesign.pfx" ]]; then
-    SIGN_PFX="$SIGN_DEFAULT_DIR/codesign.pfx"
+SIGN_CANDIDATES=(
+    "$SIGN_DEFAULT_DIR/codesign.pfx"
+    "$SIGN_DEFAULT_DIR/codesign.p12"
+    "$SIGN_DEFAULT_DIR/certificate.pfx"
+    "$SIGN_DEFAULT_DIR/certificate.p12"
+)
+
+if [[ -z "$SIGN_PFX" ]]; then
+    for candidate in "${SIGN_CANDIDATES[@]}"; do
+        if [[ -f "$candidate" ]]; then
+            SIGN_PFX="$candidate"
+            break
+        fi
+    done
 fi
 
-if [[ -z "$SIGN_PASSWORD_FILE" && -f "$SIGN_DEFAULT_DIR/codesign.password" ]]; then
-    SIGN_PASSWORD_FILE="$SIGN_DEFAULT_DIR/codesign.password"
+if [[ -z "$SIGN_PASSWORD_FILE" ]]; then
+    for candidate in "$SIGN_DEFAULT_DIR/codesign.password" "$SIGN_DEFAULT_DIR/password.txt"; do
+        if [[ -f "$candidate" ]]; then
+            SIGN_PASSWORD_FILE="$candidate"
+            break
+        fi
+    done
 fi
 SIGN_NAME="${SIGN_NAME:-PDF to DICOM}"
 SIGN_URL="${SIGN_URL:-}"
@@ -736,22 +757,119 @@ sign_one() {
     return 1
 }
 
+# Reports what signing would do, and why, without building anything.
+#
+# Exists because "I put the certificate in the folder and nothing happened" is not a
+# question a person should have to read a script to answer. It names every path that was
+# examined, says what is in the folder if the expected name is not, and checks the tool
+# that applies the signature.
+do_describe_signing() {
+    step "Signing: what this machine would do"
+
+    info "certificate folder : $SIGN_DEFAULT_DIR"
+
+    if [[ -n "${SIGN_PFX:-}" ]]; then
+        info "certificate        : $SIGN_PFX"
+
+        if [[ -n "${SIGN_PASSWORD_FILE:-}" ]]; then
+            info "password           : read from $SIGN_PASSWORD_FILE"
+        else
+            info "password           : it will be asked for, without being shown"
+        fi
+
+        if command -v osslsigncode >/dev/null 2>&1; then
+            info "osslsigncode       : $(command -v osslsigncode)"
+            info ""
+            info "Every build signs. Nothing further to do."
+        else
+            info "osslsigncode       : NOT INSTALLED, so nothing can be signed"
+            info ""
+            info "  macOS : brew install osslsigncode"
+            info "  Linux : sudo apt-get install osslsigncode"
+        fi
+
+        return 0
+    fi
+
+    info "certificate        : none found"
+    info ""
+    info "These are the names looked for, in this order:"
+
+    local candidate
+    for candidate in "${SIGN_CANDIDATES[@]}"; do
+        info "    ${candidate/#$HOME/~}"
+    done
+
+    if [[ -d "$SIGN_DEFAULT_DIR" ]]; then
+        info ""
+        info "The folder exists. What is in it:"
+
+        local entry
+        local found=0
+        while IFS= read -r entry; do
+            info "    $entry"
+            found=1
+        done < <(ls -A "$SIGN_DEFAULT_DIR" 2>/dev/null)
+
+        if (( found == 0 )); then
+            info "    (empty)"
+        else
+            info ""
+            info "If the certificate is one of those, rename it to codesign.pfx, or point at"
+            info "it directly:"
+            info ""
+            info "    SIGN_PFX=$SIGN_DEFAULT_DIR/<the file> build/build.sh app"
+        fi
+    else
+        info ""
+        info "That folder does not exist on this machine. To create it:"
+        info ""
+        info "    mkdir -p $SIGN_DEFAULT_DIR"
+        info "    cp /somewhere/your-certificate.pfx $SIGN_DEFAULT_DIR/codesign.pfx"
+        info "    chmod 600 $SIGN_DEFAULT_DIR/codesign.pfx"
+    fi
+
+    info ""
+    info "A certificate in the macOS Keychain or the Windows certificate store is not used"
+    info "here: this needs the exported file, because osslsigncode reads a file. On Windows,"
+    info "build\\build.ps1 reads the certificate store as well as this folder."
+
+    return 0
+}
+
 do_sign() {
     step "Signing the published executables"
 
     if [[ -z "$SIGN_PFX" ]]; then
+        info "Nothing was signed, because no certificate was found."
+        info ""
+        info "Looked for, in order:"
+
+        local candidate
+        for candidate in "${SIGN_CANDIDATES[@]}"; do
+            info "    $candidate"
+        done
+
+        if [[ -d "$SIGN_DEFAULT_DIR" ]]; then
+            local others
+            others="$(ls -A "$SIGN_DEFAULT_DIR" 2>/dev/null | tr '\n' ' ')"
+
+            if [[ -n "$others" ]]; then
+                info ""
+                info "That folder exists and holds: $others"
+                info "If one of those is the certificate, rename it to codesign.pfx."
+            fi
+        fi
+
         cat <<'MESSAGE'
-    Nothing was signed, because no certificate was given.
+
+    'build/build.sh signing' explains this machine's state in full.
 
     Signing here needs the certificate as a .pfx or .p12 file, including its private
     key, and osslsigncode to apply it:
 
       macOS   : brew install osslsigncode
       Linux   : sudo apt-get install osslsigncode
-
-    Then point at the certificate:
-
-      SIGN_PFX=~/keys/codesign.pfx build/build.sh ship
 
     To export one from the Windows machine that already signs, in PowerShell:
 
@@ -766,6 +884,8 @@ do_sign() {
 MESSAGE
         return 0
     fi
+
+    info "certificate: $SIGN_PFX"
 
     if [[ ! -f "$SIGN_PFX" ]]; then
         echo "    ERROR: SIGN_PFX is set to '$SIGN_PFX', which is not a file." >&2
@@ -1028,13 +1148,14 @@ case "${1:-all}" in
     clean)   do_clean ;;
     prune)   do_prune ;;
     test)    do_restore; do_build; do_validate; do_test ;;
+    signing) do_describe_signing ;;
     app)     do_restore; publish_only ;;
     publish) do_restore; publish_and_assemble ;;
     sign)    do_sign ;;
     ship)    do_restore; do_build; do_validate; do_test; do_ship ;;
     all)     do_restore; do_build; do_validate; do_test; publish_and_assemble ;;
     *)
-        echo "Usage: $0 [all|app|test|publish|ship|sign|prune|clean]" >&2
+        echo "Usage: $0 [all|app|test|publish|ship|sign|signing|prune|clean]" >&2
         exit 1
         ;;
 esac

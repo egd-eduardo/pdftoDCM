@@ -40,14 +40,16 @@
     test     run the test suite only
     publish  publish the executables and assemble the handover folder
     package  build the installer only, from an existing publish
+    signing  explain what signing would do on this machine, and why; builds nothing
     prune    keep the deliverables, drop the intermediate build output
     clean    remove build output
 
 .NOTES
-    Signing happens by default wherever it can. When a code signing certificate is in the
-    current user's store it is used without being asked for; when there is none the build
-    says so in one line and carries on, because an unsigned build is complete and runs.
-    Pass -Sign to make a missing certificate an error, or -NoSign to skip signing.
+    Signing happens by default wherever it can, and is not asked about. A certificate file
+    in %USERPROFILE%\.pdftodicom is used first, then one from the current user's
+    certificate store; when there is neither, the build says so and carries on, because an
+    unsigned build is complete and runs. Pass -Sign to make a missing certificate an
+    error, or -NoSign to skip signing. "-Task signing" reports which of those it found.
 
 .EXAMPLE
     .\build\build.ps1
@@ -59,7 +61,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('all', 'app', 'test', 'publish', 'package', 'prune', 'clean')]
+    [ValidateSet('all', 'app', 'test', 'publish', 'package', 'signing', 'prune', 'clean')]
     [string]$Task = 'all',
 
     [string]$Configuration = 'Release',
@@ -852,7 +854,7 @@ if ($Sign -and $NoSign) {
 }
 
 # Said once, before anything is built, because it decides what comes out at the end.
-if ($Task -ne 'clean' -and $Task -ne 'prune') {
+if ($Task -notin @('clean', 'prune', 'signing')) {
     Write-Host "    building for $($Runtimes -join ', ')$(if ($Cli) { ', with the command line tool' })"
 }
 
@@ -860,6 +862,13 @@ switch ($Task) {
     'clean'   { Invoke-Clean }
     'prune'   { Invoke-Prune }
     'test'    { Invoke-Restore; Invoke-Build; Invoke-Validate; Invoke-Test }
+
+    # Builds nothing. Answers "I put the certificate in the folder and nothing happened",
+    # which is otherwise a question about the inside of a script.
+    'signing' {
+        & (Join-Path $PSScriptRoot 'sign.ps1') -Describe
+        if ($LASTEXITCODE -ne 0) { throw 'The signing report failed.' }
+    }
 
     # The shortest trip to a running executable: no tests, no handover folder, no
     # installer. For the loop of change something, build it, run it on the test machine.
