@@ -1,8 +1,35 @@
 # Changelog
 
-## 3.4.1
+## 3.5.0
 
-**A clean build: no warnings at all, where there were thirteen.**
+**A clean build, and a visible way out.**
+
+### A door icon that closes the application
+
+The window can be moved or sized so that its own close button sits off the screen, which
+on a shared workstation leaves somebody hunting for a corner that is not there. There is
+now a door icon at the right of the header, set apart from Logs, Settings and About by a
+separator because it is the one button there that ends what you are doing.
+
+It asks before closing, and the question it asks depends on what is happening:
+
+- **Nothing in progress.** It warns that anything typed into the form and not yet sent
+  will be lost.
+- **A conversion or transmission in progress.** It says so plainly, warns that a document
+  part way through being sent may not have been accepted by the archive, and notes that
+  nothing is deleted, so the document can be sent again from the output folder. The
+  default answer here is **No**.
+
+Answer yes and the work in flight is cancelled, the folder watcher and the configuration
+listener are detached, the generated DICOM object, which can run to tens of megabytes, is
+released, the result and validation lists are emptied and the log is flushed to disk
+before the process ends. Cancellation is **requested, not waited for**: blocking the
+window until a network operation notices could hold it open for as long as the association
+timeout, which is exactly what somebody pressing an exit button is trying to escape. The
+process exit ends the work either way.
+
+The window's own close button and Alt+F4 go through the same confirmation, so there is one
+closing path rather than two that could drift apart.
 
 ### The ImageSharp security advisories
 

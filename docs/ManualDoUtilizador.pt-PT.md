@@ -56,7 +56,7 @@ Tudo acontece numa só janela, que se lê de cima para baixo.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  PDF para DICOM                    Registos   Definições   Acerca    │  ← cabeçalho
+│  PDF para DICOM              Registos  Definições  Acerca │ 🚪 Sair   │  ← cabeçalho
 │  Hospital de Exemplo                                                 │
 ├───────────────────────────────────────┬──────────────────────────────┤
 │  1. Selecionar o documento PDF        │  3. PACS de destino          │
@@ -80,6 +80,13 @@ Tudo acontece numa só janela, que se lê de cima para baixo.
 ```
 
 Os campos marcados com asterisco vermelho (**\***) são obrigatórios.
+
+**Fechar a aplicação.** O ícone de porta no canto superior direito fecha a aplicação.
+Utilize-o quando a janela tiver sido movida ou redimensionada de tal forma que o botão de
+fechar habitual, no canto, não esteja visível. Pede sempre confirmação e, se estiver um
+documento a ser gerado ou enviado, avisa antes de interromper. Nada do que já foi escrito
+na pasta de saída é apagado, pelo que um documento interrompido durante o envio pode ser
+enviado de novo.
 
 **O ponto colorido na barra de estado indica em que fase se encontra:**
 

@@ -302,5 +302,10 @@
   "Settings.Import.Field.AccessionNumber": "Número de acesso",
   "Settings.Import.Field.DateOfBirth": "Data de nascimento",
   "Settings.Import.Field.StudyDescription": "Descrição do estudo",
-  "Settings.Import.Field.Ignore": "Ignorar esta parte"
+  "Settings.Import.Field.Ignore": "Ignorar esta parte",
+
+  "Action.Exit": "Sair",
+  "Action.Exit.Tooltip": "Fechar a aplicação. Tudo o que estiver em curso é interrompido e é pedida confirmação.",
+  "Exit.Confirm": "Fechar o PDF to DICOM?\n\nTudo o que estiver preenchido no formulário e não tiver sido enviado será perdido.",
+  "Exit.ConfirmBusy": "Está uma conversão em curso.\n\nFechar agora interrompe-a. Se um documento estava a ser enviado, o arquivo pode não o ter aceitado; nada é apagado, pelo que pode ser enviado de novo a partir da pasta de saída.\n\nFechar mesmo assim?"
 }

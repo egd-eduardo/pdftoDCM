@@ -18,6 +18,7 @@
 8b. [Importing from the file name](#8b-importing-from-the-file-name)
 9. [Validation](#9-validation)
 9a. [The ImageSharp advisories](#9a-the-imagesharp-advisories)
+9b. [Closing the application](#9b-closing-the-application)
 10. [Configuration](#10-configuration)
 11. [Logging and audit](#11-logging-and-audit)
 12. [Building](#12-building)
@@ -1070,6 +1071,56 @@ Obtain a Six Labors licence key, move to 4.1.2 or later, and delete all five sup
 Re-check the reasoning above if this code ever starts **encoding TIFF**, **reading ICC
 profiles**, or calling **`HistogramEqualization`** — three of the four "not reached"
 answers would stop being true.
+
+---
+
+## 9b. Closing the application
+
+A maximised or badly positioned window can put its own close button off the screen, so the
+header carries a door icon bound to `MainViewModel.ExitCommand`.
+
+**One closing path, not two.** The command does nothing more than
+`Application.Current?.MainWindow?.Close()`. Everything that matters happens in
+`MainWindow.OnClosing`, which calls `MainViewModel.ConfirmExit()` and sets `e.Cancel` when
+the answer is no. The door button, the window's own close button and Alt+F4 therefore run
+the same code; had the button confirmed and shut down by itself, there would have been two
+behaviours to keep in step and one of them would eventually have drifted.
+
+`ShutdownMode` is `OnMainWindowClose`, so the non-modal log viewer cannot keep the process
+alive after the main window has gone.
+
+**The command is deliberately always enabled.** Every command that changes the document or
+the form carries `() => !IsBusy`. The exit command carries no guard at all: a door that
+greys itself out during the one operation a person is most likely to want to abandon would
+be the opposite of what it is for.
+
+**Cancellation is requested, not awaited.** `ConfirmExit` calls `_cancellation?.Cancel()`
+and returns. Waiting for a DICOM association to notice could hold the window open for as
+long as the network timeout. The process exit ends the work regardless, and the archive's
+own association handling deals with a half-finished transfer; nothing in the output folder
+is removed, so the document can be sent again.
+
+Two details in `ConfirmExit` are not decoration:
+
+- `_exitConfirmed` makes a second call return true without asking again. Closing twice
+  genuinely happens: pressing the door while the window is already closing, or Windows
+  shutting down behind a confirmation that has already been given.
+- `Cancel()` is wrapped against `ObjectDisposedException`. `MessageBox.Show` pumps
+  messages, so the running task's `finally` block, which disposes and nulls the token
+  source, can complete between the question and the answer.
+
+`Dispose` then detaches the folder monitor and configuration listeners, drops
+`_lastGeneratedFile`, which holds a whole DICOM object and can run to tens of megabytes,
+clears the result and validation collections and flushes the logger. The process would
+release all of this anyway; doing it in order is what makes the window closable while a
+conversion is still running, and the flush is what makes the last log lines survive.
+
+**The header icon needed its own style.** `HeaderButtonStyle` derives from
+`LinkButtonStyle`, whose template puts `Content` straight into a `TextBlock.Text`. Content
+that is not a string, a `Path` among other things, would simply not be drawn. The door
+button uses `HeaderIconButtonStyle`, the same thing built around a `ContentPresenter`,
+which hovers by washing the dark blue header with translucent white rather than by
+underlining.
 
 ---
 

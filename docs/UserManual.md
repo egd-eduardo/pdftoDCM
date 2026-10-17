@@ -56,7 +56,7 @@ Everything happens in one window, and it reads from top to bottom.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  PDF to DICOM                              Logs   Settings   About   │  ← header
+│  PDF to DICOM                     Logs  Settings  About │ 🚪 Exit   │  ← header
 │  Hospital de Exemplo                                                 │
 ├───────────────────────────────────────┬──────────────────────────────┤
 │  1. Select the PDF document           │  3. Destination PACS         │
@@ -81,6 +81,12 @@ Everything happens in one window, and it reads from top to bottom.
 ```
 
 Fields marked with a red asterisk (**\***) are mandatory.
+
+**Closing the application.** The door icon at the top right closes it. Use it when the
+window has been moved or sized so that the usual close button in the corner is not
+visible. It always asks first, and if a document is part way through being generated or
+sent it says so before stopping. Nothing already written to the output folder is deleted,
+so a document interrupted while being sent can be sent again.
 
 **The coloured dot in the status bar tells you where you are:**
 

@@ -302,5 +302,10 @@
   "Settings.Import.Field.AccessionNumber": "Accession number",
   "Settings.Import.Field.DateOfBirth": "Date of birth",
   "Settings.Import.Field.StudyDescription": "Study description",
-  "Settings.Import.Field.Ignore": "Ignore this part"
+  "Settings.Import.Field.Ignore": "Ignore this part",
+
+  "Action.Exit": "Exit",
+  "Action.Exit.Tooltip": "Close the application. Anything in progress is stopped, and you are asked first.",
+  "Exit.Confirm": "Close PDF to DICOM?\n\nAnything typed into the form that has not been sent will be lost.",
+  "Exit.ConfirmBusy": "A conversion is still in progress.\n\nClosing now stops it. If a document was part way through being sent, the archive may not have accepted it; nothing is deleted, so it can be sent again from the output folder.\n\nClose anyway?"
 }
