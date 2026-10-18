@@ -83,6 +83,13 @@ jobs:
         # the feature configured. This shipped once; it does not get to ship twice.
         run: python3 build/validate-viewmodel-commands.py
 
+      - name: Validate the PowerShell count reads
+        # Windows PowerShell under Set-StrictMode will not read .Count from a single
+        # object, and a pipeline that emits one result assigns one object. PowerShell 7,
+        # which is what this runner has, answers the same expression happily, so nothing
+        # here can reproduce the fault; this check is the only thing that sees it.
+        run: python3 build/validate-powershell-strict.py
+
       - name: Parse check the PowerShell scripts
         # These only run on the Windows job, so a syntax error in one would otherwise
         # cost a full Windows build to discover. PowerShell is present on the Linux

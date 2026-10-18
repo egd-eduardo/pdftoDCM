@@ -274,7 +274,7 @@ working_python() {
 }
 
 do_validate() {
-    step "Validating XAML bindings and the installer script"
+    step "Validating the XAML, the view models, the installer script and the build scripts"
 
     # Both catch failures that only appear at runtime on Windows, so they are checked
     # here where they cost nothing rather than on a clinical workstation.
@@ -301,6 +301,10 @@ MESSAGE
     # this script from anywhere checks the same tree it is building.
     "$python" "$REPO_ROOT/build/validate-viewmodel-commands.py" "$REPO_ROOT"
     "$python" "$REPO_ROOT/build/validate-installer-script.py"
+    # Checked from here as well as from build.ps1, because this is the script that runs
+    # on the machine where the fault it catches cannot happen. A Mac or a Linux box is
+    # where these scripts are usually edited; Windows is where the edit fails.
+    "$python" "$REPO_ROOT/build/validate-powershell-strict.py" "$REPO_ROOT"
 }
 
 do_test() {

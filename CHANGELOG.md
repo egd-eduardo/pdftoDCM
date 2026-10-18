@@ -80,6 +80,17 @@ merge the streams and let the exit code decide, which is also how a real failure
 report itself in plain words. PowerShell 7 never behaved that way, which is why no
 automated run saw it.
 
+**Signing stopped on a count it was not allowed to read.** `sign.ps1` asked a list of
+files how many it held, and the list was not a list: the array subexpression wrapped the
+names being filtered rather than the pipeline doing the filtering, so an application only
+build with no installer yet, which is the ordinary case, left one plain string behind.
+Windows PowerShell under `Set-StrictMode` refuses to read `Count` from a single object, so
+the build died immediately after reporting the certificate it was about to sign with.
+PowerShell 7 gives every object a synthetic `Count` and answers `1`, macOS and Linux never
+run that script, and CI has PowerShell 7, so nothing automated could have seen it. Both
+scripts are fixed, and a new check, `build/validate-powershell-strict.py`, now fails the
+build on any `.Count` read of something that may not be a collection.
+
 **`.gitignore` now covers `*.p12`, `codesign.password`, `*.password` and `password.txt`.**
 It covered `*.pfx` only, while the documentation named `.p12` and `codesign.password` as
 the files to create: a name a document tells somebody to use is a name that will eventually
