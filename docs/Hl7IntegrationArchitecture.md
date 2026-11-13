@@ -2,13 +2,16 @@
 
 **Status: proposed, for review. No code has been written.**
 
-This document answers Phase 1 of the brief. It analyses the existing application, analyses
-the supplied conformance statement, and proposes an architecture, a component
-responsibility matrix, a configuration model, the data flows, the security controls and a
-phased plan with its dependencies and risks.
+This document answers Phase 1 of the brief. It analyses the existing application, reads the
+supplied conformance statement as a specimen rather than as a target, and proposes an
+architecture, a component responsibility matrix, a configuration model, the data flows, the
+security controls and a phased plan with its dependencies and risks.
 
-Nothing here is built yet. Section 12 lists the questions whose answers change the design,
-and section 11 says which of them block which phase.
+The engine is generic by mandate. No integration is privileged, and the supplied statement
+serves only as evidence of what a real one demands.
+
+Nothing here is built yet. Section 11 lists the questions whose answers change the design,
+and section 12 says which of them to answer first.
 
 ---
 
@@ -68,92 +71,61 @@ profile configured must behave exactly as today, and that is a test, not an inte
 
 ---
 
-## 2. The conformance statement, as supplied
+## 2. What a real conformance statement demands of the engine
 
-Biotronics3D, 3Dnet, publication HL7_0011, November 2018. Three profiles: ORU, ORM, ADT.
+The supplied Biotronics3D statement is read here as a **specimen, not a target**. It is not
+the integration this work exists to serve, and treating it as one would produce exactly the
+thing the brief forbids: an engine shaped around a single vendor.
 
-### 2.1 What it specifies
+Its value is as evidence. It is a real document describing a real product, and every
+awkward thing in it is a capability the engine must already have before any site can be
+configured by an administrator rather than by a developer. Read that way, it earns its
+place in the design without constraining it.
 
-| Item | Value |
+### 2.1 Observed in the specimen, required of the engine
+
+| Observed | Capability the engine must have |
 |---|---|
-| HL7 version | 2.4 for ORU; versions 2.2, 2.3, 2.3.1 and 2.4 are supported; the ADT examples carry 2.3 |
-| Profile type | Constrainable |
-| Encoding | ER7, field separator `\|`, encoding characters `^~\&` |
-| ORU interaction | ORU^R01, structure ORU_R01 |
-| Acknowledgement | MSH-15 `NE`, MSH-16 `NE`, mode Immediate |
-| Character set | A subset of the Windows ANSI code page, for example ISO 8859/1 |
-| Segments not supported | PD1, NK1, NTE, PV2, CTD, FT1, CTI, DSC |
-| ORC-1 Order Control | `CN` and `RE` only; for several procedures in one report, `CN` for all but the last and `RE` for the last |
-| OBR-32 | Principal Result Interpreter, required, one or two occurrences: the report author, then the responsible or attending physician |
-| OBX-2 Value Type | `TX`, `RP`, `ED` |
-| OBX-5 | The report. `TX` is one line per segment, `FT` carries the whole report with `\.br\` for a newline, `RP` is a file location, `ED` carries an encapsulated binary object |
-| OBX-11 | `P`, `F`, `C` |
-| ORM | ORM^O001 with the order control and status matrix on page 17 |
-| Z segment | `ZDS-1` carries the Study Instance UID |
-| ADT | A04 registration, A08 update, A40 merge, all **received** by 3Dnet from the RIS |
+| Acknowledgement declared `NE` in both MSH-15 and MSH-16, so nothing is returned for ORU | Acknowledgement expectation is a property of the profile, including the value *none*. Transactions keep **sent**, **acknowledged** and **accepted** distinct, and a profile expecting nothing can only ever reach the first |
+| Character set confined to a Windows ANSI subset; UTF-8 explicitly refused | Character set per profile, with a declared policy for a value that cannot be represented in it |
+| Eight segments marked not supported | Usage `X`, and a validator that refuses to emit them rather than trusting the builder |
+| `ZDS-1` carrying a Study Instance UID | Custom and Z segments configurable like any other, and DICOM identifiers mappable into them |
+| `ORC-1` restricted to two values, one of which depends on whether the procedure is the last in the report | Allowed value lists, and conditional values that can depend on position within a repeating group |
+| `OBR-32` required, with no counterpart anywhere in this application | A profile can supply a configured value, and validation reports a mandatory field with no source **before** anything is sent |
+| One PID per message | Cardinality enforced, and a batch of several patients refused rather than truncated |
+| `OBX-5` carrying a report as `TX` lines, as `FT` with escape sequences, as an `RP` reference, or as `ED` Base64 | One field may carry a whole document under several encodings, so transforms include encapsulation and a field's size limit is expressible |
+| One product supporting 2.2, 2.3, 2.3.1 and 2.4, with ADT examples at 2.3 while the ORU profile is 2.4 | HL7 version belongs to the profile, not to the application and not even to the destination |
+| Transport not mentioned anywhere in the document | Transport is a per destination adapter choice with its own settings, because a statement may simply not say, and the engine cannot assume MLLP |
+| The document contradicting itself on `OBX-2` | The preview must show exactly what would go on the wire, because the written statement is not always the authority and an administrator needs to see the real message |
 
-### 2.2 Findings that change the design
+Eleven capabilities, none of them vendor specific, all of them evidenced rather than
+imagined. That is the whole use this document makes of the specimen.
 
-These are the reason the engine must be generic rather than written to this document.
+### 2.2 Two findings that are product decisions, not engine decisions
 
-1. **This interface returns no acknowledgement for ORU.** `NE` in both MSH-15 and MSH-16
-   means none is expected. The engine therefore cannot treat an acknowledgement as
-   universal, and more importantly it must never report "accepted" when all that happened
-   was a successful write to a socket. A profile declares what it expects, and the
-   transaction record distinguishes *sent* from *acknowledged* from *accepted*. The brief
-   asks for this and this interface is the proof that it is needed.
+These two are raised not because of the vendor but because they will recur at nearly every
+site, and the answer should be settled once rather than per integration.
 
-2. **UTF-8 is not supported, and this application uses it.** The DICOM objects this
-   application produces use `ISO_IR 192` precisely so that an accented Portuguese name
-   survives intact, and the interoperability suite tests exactly that. A name that is
-   correct in the DICOM object may have no representation in ISO 8859/1. Silently
-   transliterating a patient's name in one system and not the other is the class of fault
-   this product exists to avoid. **Recommendation: a profile declares its character set, the
-   mapping layer refuses to emit a value it cannot represent, and the operator is told,
-   rather than a name being quietly mangled.** The alternative, configurable
-   transliteration, should be a deliberate choice per destination and never the default.
+1. **The character set clash.** This application sends DICOM with `ISO_IR 192` precisely so
+   that an accented Portuguese name survives, and the interoperability suite tests exactly
+   that. A receiving system restricted to a single byte code page may have no
+   representation for the same name. Sending a correct name to one system and a mangled one
+   to another is the class of fault this product exists to avoid. **The proposal is to
+   refuse and tell the operator, with transliteration available only as a deliberate per
+   destination choice.** This is question 2 in section 11.
 
-3. **3Dnet creates a patient it does not know and never updates one it does.** A wrong
-   demographic accepted once is not corrected by sending it again. This raises the cost of
-   sending an HL7 message with unverified demographics, and argues for the same discipline
-   the file name import already follows: reading fills the form, it never sends.
+2. **Mandatory fields with no source.** The specimen requires a report author and a
+   responsible physician; this application knows only a referring physician. Every
+   integration will produce some version of this. The engine can supply a configured
+   constant, and the validator can refuse before sending, but which of those is right is a
+   product decision. This is question 3 in section 11.
 
-4. **Only one PID per ORU**, so a multi-patient batch is not expressible and the validator
-   must refuse it rather than emit something the receiver will mis-handle.
+### 2.3 Where the specimen goes
 
-5. **A PDF travels in OBX-5 as `ED`.** The worked example on page 15 shows
-   `OBX|1|ED|...|^IM^TIFF^Base64^...`. The subtype for a PDF is not stated anywhere in the
-   document and must be confirmed before Phase 4; `^AP^PDF^Base64` is the likely form but
-   likely is not good enough here.
-
-6. **The document contradicts itself on OBX-2.** The field table lists `TX`, `RP`, `ED` as
-   supported; the note on OBX-5 describes the behaviour of `FT`. One of the two is wrong and
-   the vendor must say which.
-
-7. **`ZDS-1` carries the Study Instance UID**, which is the concrete bridge between the
-   HL7 order and the DICOM object this application already generates. It is also a Z
-   segment, so it is the first real test of whether the configuration model can express a
-   custom segment without a code change. It should be used as that test deliberately.
-
-8. **OBR-32 has no source in this application.** There is a Referring Physician field;
-   there is no report author and no responsible physician. Either the profile supplies a
-   configured static value, or the form grows a field. That is a product decision, not an
-   engineering one.
-
-9. **The transport is not specified anywhere in this document.** No MLLP, no port, no TLS,
-   no connection policy. Only the encoding method, ER7, is given. **Phase 2 can be built
-   against this gap but Phase 4 cannot be validated until Biotronics3D answer it.**
-
-10. **The document is from 2018.** The deployed version of 3Dnet should be confirmed before
-    its contents are treated as current.
-
-### 2.3 What this does not tell us
-
-The ADT profiles describe what 3Dnet receives from a RIS. Whether this application should
-ever send or consume ADT is a scope question for section 12, not something the document
-settles.
-
----
+Into the tests. The worked profile in section 4 is derived from it so that the
+configuration model is exercised against a document somebody really wrote, rather than
+against one invented to fit the model. It lives beside the test fixtures and ships to
+nobody.
 
 ## 3. Proposed architecture
 
@@ -224,12 +196,13 @@ Profiles are JSON, validated against a schema on load, stored at
 `%APPDATA%\PdfToDicom\Hl7\Profiles\`, with previous versions under `versions\` so that a
 rollback is a file copy rather than an archaeology exercise.
 
-A profile sketch, deliberately shown with real values from the supplied statement:
+A profile sketch. The values are taken from the supplied specimen rather than invented,
+so that the model is shown carrying something a real vendor really wrote:
 
 ```json
 {
-  "profileId": "3dnet-oru-r01",
-  "displayName": "3Dnet ORU^R01, report with encapsulated document",
+  "profileId": "example-oru-r01",
+  "displayName": "Example ORU^R01, report with encapsulated document",
   "revision": 1,
   "enabled": true,
   "hl7Version": "2.4",
@@ -311,7 +284,7 @@ Routing is a separate file, a list of ordered rules:
 ```json
 [
   { "when": { "messageType": "ORU", "documentKind": "pdf" },
-    "destinations": ["3dnet-main"], "profile": "3dnet-oru-r01", "stopOnMatch": false }
+    "destinations": ["report-archive"], "profile": "example-oru-r01", "stopOnMatch": false }
 ]
 ```
 
@@ -361,7 +334,8 @@ status and code, any error detail, the attempt number, and the identifier of any
 transaction, including the DICOM SOP Instance UID when the two are linked.
 
 Three states, never collapsed into one: **sent**, **acknowledged**, **accepted**. A profile
-that expects no acknowledgement, as 3Dnet's ORU does, can only ever reach the first, and
+that expects no acknowledgement, which the specimen in section 2 is a real case of, can
+only ever reach the first, and
 the interface must say so rather than show a tick.
 
 Duplicate protection keys on the content hash and the destination, so that a retry after an
@@ -403,18 +377,23 @@ has set:
 
 ## 9. Phases, dependencies and risks
 
+No phase depends on a third party. The specimen profile is a fixture, so Phase 4 can be
+completed and proven without anyone outside this project.
+
 | Phase | Deliverable | Depends on | Principal risk |
 |---|---|---|---|
-| 1 | This document | The conformance statement | Agreeing the wrong scope; mitigated by section 12 |
-| 2 | Engine: codec, model, transport, transaction store | Phase 1 approved, **transport confirmed** | Building MLLP against an unconfirmed assumption |
-| 3 | Profile model, loader, schema, versioning, mapping | Phase 2 | Over-general configuration that nobody can fill in |
-| 4 | Destinations, routing, the 3Dnet profile | Phase 3, **vendor answers on ED subtype and OBX-2** | The character set clash, finding 2.2.2 |
-| 5 | Editor, preview, validation interface | Phase 3 | WPF has no automated coverage; every window is a manual release step |
-| 6 | Acknowledgements, logging, transactions in the interface | Phase 4 | Reporting success that was not success |
-| 7 | Linking to the DICOM workflow | Phase 6 | Regressing the DICOM path; mitigated by the existing 291 tests and the DCMTK suite |
-| 8 | Test endpoint, interoperability script, documentation, packaging | All | Shipping the test server, which the handover check already prevents |
+| 1 | This document | Nothing | Agreeing the wrong scope; mitigated by section 11 |
+| 2 | Engine: codec, model, transport abstraction, MLLP adapter, transaction store | Phase 1 approved | Building transport assumptions into the engine; mitigated by the adapter seam |
+| 3 | Profile model, loader, schema, versioning, mapping, transforms | Phase 2 | Configuration so general that nobody can fill it in; mitigated by filling it in with the specimen |
+| 4 | Destinations, routing, and the worked profile exercising all eleven capabilities of section 2.1 | Phase 3 | A capability that turns out not to be expressible, which is precisely what this phase is for finding |
+| 5 | Message editor, preview, validation interface | Phase 3 | WPF has no automated coverage, so every window is a manual release step |
+| 6 | Acknowledgements, transaction log, interface reporting | Phase 4 | Reporting a success that was not one |
+| 7 | Linking to the DICOM workflow, with independence preserved | Phase 6 | Regressing the DICOM path; mitigated by the 291 tests and the DCMTK suite |
+| 8 | Test endpoint, interoperability script, documentation, packaging | All | Shipping the test endpoint, which the existing handover check already prevents |
 
-Phases 2 and 3 can begin without the vendor. Phase 4 cannot be validated without them.
+The honest risk across all of it is Phase 5. The engine is testable on a build agent and
+the interface is not, and an integration engine whose configuration cannot be driven
+comfortably by an administrator has failed at its one stated purpose.
 
 ---
 
@@ -423,35 +402,41 @@ Phases 2 and 3 can begin without the vendor. Phase 4 cannot be validated without
 - No change to any existing DICOM type, interface or configuration key.
 - No FHIR. The architecture leaves room for it as a separate adapter and nothing more.
 - No scripting language in configuration, for the reason given in section 4.
-- No ADT handling until section 12 settles whether this application has a role in it.
+- No listener, and therefore no inbound messages, until question 4 is settled. A desktop
+  application that accepts connections is a materially different product with a materially
+  different security posture.
 - No version number change. That is the author's decision.
 
 ---
 
 ## 11. Open questions
 
-Answers to these change the design rather than the schedule.
+All six are the author's to answer. None of them is waiting on anybody else.
 
-1. **Transport.** MLLP over TCP? Which port? TLS? The supplied document does not say, and
-   Phase 4 cannot be validated without it.
-2. **The ED subtype for a PDF in OBX-5.** The example shows a TIFF. What exactly does 3Dnet
-   accept for a PDF?
-3. **OBX-2.** The table says `TX`, `RP`, `ED`; the note describes `FT`. Which is correct?
-4. **The character set clash.** The DICOM objects carry UTF-8 so that Portuguese names
-   survive; this interface does not accept UTF-8. Refuse, transliterate, or decide per
-   destination? The recommendation is to refuse and say so.
-5. **OBR-32, the report author and the responsible physician.** A configured static value,
-   or a new field on the form?
-6. **Scope.** Is this application sending reports only, ORU, or is it also expected to send
-   orders, ORM, and to consume ADT? The three have very different weights.
-7. **The deployed 3Dnet version**, given the document is from 2018.
-8. **Sending application and facility.** MSH-3 and MSH-4 values agreed with the site.
+1. **Scope.** Which message types first? Reports outbound, `ORU`, is the smallest useful
+   thing and the obvious starting point. Orders, `ORM`, and patient administration, `ADT`,
+   are each a different weight of work and a different conversation with a site.
+2. **The character set policy.** Refuse, transliterate, or decide per destination? The
+   recommendation is to refuse by default, for the reason in section 2.2.
+3. **Mandatory fields with no source**, such as a report author. Configured constant, a new
+   field on the form, or refuse to send? The engine can do all three.
+4. **Is this application ever a receiver**, or only a sender? Inbound changes the product:
+   a listening port, a service that runs when nobody is logged in, and a security review
+   that the current design does not need.
+5. **Shared configuration.** A department with ten workstations will not want ten copies of
+   a profile maintained by hand. Export and import already exists and would work; a single
+   shared source is a larger piece of work. Which is wanted?
+6. **Coupling.** Should an HL7 failure prevent the DICOM transmission, or are the two
+   independent? The proposal defaults to independent, with coupling available per
+   destination, because that preserves today's behaviour exactly.
 
 ---
 
 ## 12. Recommendation
 
 Approve the separation in section 3 and the configuration model in section 4, then let
-Phases 2 and 3 proceed while questions 1 to 3 go to Biotronics3D. Question 4 should be
-decided before Phase 4 begins, because it is the one question in this document with a
-patient safety answer rather than an engineering one.
+Phases 2 and 3 proceed. They depend on nothing outside this repository.
+
+Answer questions 1 and 4 before Phase 4 begins, since they decide how much of the engine is
+actually built, and question 2 before anything is transmitted anywhere, since it is the one
+question here with a patient safety answer rather than an engineering one.
