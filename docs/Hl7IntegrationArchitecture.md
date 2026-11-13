@@ -178,7 +178,7 @@ the reuse actually is.
 | `Hl7Message` and the ER7 codec | Parsing and serialising any message from the encoding characters alone | Know any message type, segment or profile |
 | `IMessageProfile` | The declared structure, cardinalities, data types, allowed values and mappings | Contain executable code |
 | `IMessageBuilder` | Turning an application subject plus a profile into a message | Hard code a segment or a field |
-| `IMessageValidator` | Checking a message against a profile, inbound or outbound | Repair a message |
+| `IMessageValidator` | Checking a message against a profile, whether built here or parsed from a sample | Repair a message |
 | `IRoutingEngine` | Deciding which destinations receive a message | Send anything |
 | `ITransactionStore` | The record of every attempt, its acknowledgement and its outcome | Decide policy |
 | `Acknowledgement` | Parsing MSA and ERR, classifying AA, AE, AR, CA, CE, CR | Decide whether to retry |
@@ -320,9 +320,16 @@ workflow plan decides the order: DICOM first, HL7 first, in parallel, or indepen
 one combined status, with each leg reported separately and honestly
 ```
 
-**Inbound:** a listener per configured endpoint, framed by the transport, parsed by the
-codec, validated against the profiles that declare themselves inbound, routed to a handler,
-acknowledged according to the profile. Nothing is acted upon before it validates.
+**Inbound is out of scope.** This application sends; it does not listen. No port is opened,
+no profile is marked inbound, and nothing arrives unasked. The decision is recorded in
+section 10.
+
+The seam survives the decision at no cost, because two things that are needed anyway
+already do most of the work. The codec parses as readily as it writes, which is what reads
+an acknowledgement and what lets the message inspector import and parse a sample message
+somebody sends you. The validator already checks a parsed message against a profile. What
+an inbound capability would add later is a listener, a profile direction flag and a
+handler, and none of the three changes anything built before them.
 
 ---
 
@@ -355,7 +362,10 @@ uncertain outcome does not create a second document in the receiving system.
   the transaction store, under a configurable retention policy. A report pasted into a log
   file that is then exported for support is a disclosure, and the existing log export
   feature makes that a real path.
-- Inbound messages are untrusted input until they validate.
+- Anything parsed rather than built here is untrusted input until it validates. With
+  inbound out of scope that means acknowledgements and the sample messages an administrator
+  imports into the inspector, both of which arrive from outside and neither of which may be
+  acted upon before it parses cleanly.
 
 ---
 
@@ -373,6 +383,10 @@ has set:
   generated message is accepted by something we did not write.
 - A test mode producing synthetic messages with no real patient information.
 
+The brief lists inbound message testing. It is not in this plan, because inbound is not in
+scope. The simulated endpoint still exists and still matters: it is what proves the sending
+side behaves when a receiver rejects, stalls, or disappears mid message.
+
 ---
 
 ## 9. Phases, dependencies and risks
@@ -383,7 +397,7 @@ completed and proven without anyone outside this project.
 | Phase | Deliverable | Depends on | Principal risk |
 |---|---|---|---|
 | 1 | This document | Nothing | Agreeing the wrong scope; mitigated by section 11 |
-| 2 | Engine: codec, model, transport abstraction, MLLP adapter, transaction store | Phase 1 approved | Building transport assumptions into the engine; mitigated by the adapter seam |
+| 2 | Engine: codec, model, transport abstraction, outbound MLLP adapter, transaction store | Phase 1 approved | Building transport assumptions into the engine; mitigated by the adapter seam. Smaller than first proposed, since no listener is built |
 | 3 | Profile model, loader, schema, versioning, mapping, transforms | Phase 2 | Configuration so general that nobody can fill it in; mitigated by filling it in with the specimen |
 | 4 | Destinations, routing, and the worked profile exercising all eleven capabilities of section 2.1 | Phase 3 | A capability that turns out not to be expressible, which is precisely what this phase is for finding |
 | 5 | Message editor, preview, validation interface | Phase 3 | WPF has no automated coverage, so every window is a manual release step |
@@ -402,16 +416,22 @@ comfortably by an administrator has failed at its one stated purpose.
 - No change to any existing DICOM type, interface or configuration key.
 - No FHIR. The architecture leaves room for it as a separate adapter and nothing more.
 - No scripting language in configuration, for the reason given in section 4.
-- No listener, and therefore no inbound messages, until question 4 is settled. A desktop
-  application that accepts connections is a materially different product with a materially
-  different security posture.
+- **No listener, and therefore no inbound messages. Decided: inbound is out of scope.**
+  A desktop application that accepts connections is a materially different product with a
+  materially different security posture, and declining it removes a listening port, a
+  service that would have to run when nobody is logged in, and the security review that
+  would have come with both. The architecture keeps the seam, as section 5 describes, so
+  the decision can be revisited without a redesign.
 - No version number change. That is the author's decision.
 
 ---
 
 ## 11. Open questions
 
-All six are the author's to answer. None of them is waiting on anybody else.
+Five remain. All are the author's to answer, and none is waiting on anybody else.
+
+Question 4 of the previous revision, whether this application is ever a receiver, has been
+answered: it is not. Inbound is out of scope and section 10 records it.
 
 1. **Scope.** Which message types first? Reports outbound, `ORU`, is the smallest useful
    thing and the obvious starting point. Orders, `ORM`, and patient administration, `ADT`,
@@ -420,13 +440,10 @@ All six are the author's to answer. None of them is waiting on anybody else.
    recommendation is to refuse by default, for the reason in section 2.2.
 3. **Mandatory fields with no source**, such as a report author. Configured constant, a new
    field on the form, or refuse to send? The engine can do all three.
-4. **Is this application ever a receiver**, or only a sender? Inbound changes the product:
-   a listening port, a service that runs when nobody is logged in, and a security review
-   that the current design does not need.
-5. **Shared configuration.** A department with ten workstations will not want ten copies of
+4. **Shared configuration.** A department with ten workstations will not want ten copies of
    a profile maintained by hand. Export and import already exists and would work; a single
    shared source is a larger piece of work. Which is wanted?
-6. **Coupling.** Should an HL7 failure prevent the DICOM transmission, or are the two
+5. **Coupling.** Should an HL7 failure prevent the DICOM transmission, or are the two
    independent? The proposal defaults to independent, with coupling available per
    destination, because that preserves today's behaviour exactly.
 
@@ -437,6 +454,6 @@ All six are the author's to answer. None of them is waiting on anybody else.
 Approve the separation in section 3 and the configuration model in section 4, then let
 Phases 2 and 3 proceed. They depend on nothing outside this repository.
 
-Answer questions 1 and 4 before Phase 4 begins, since they decide how much of the engine is
+Answer question 1 before Phase 4 begins, since it decides how much of the engine is
 actually built, and question 2 before anything is transmitted anywhere, since it is the one
 question here with a patient safety answer rather than an engineering one.
