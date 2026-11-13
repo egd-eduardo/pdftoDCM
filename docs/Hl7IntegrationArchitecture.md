@@ -1,6 +1,11 @@
 # HL7 integration engine: architecture and implementation plan
 
-**Status: proposed, for review. No code has been written.**
+**Status: approved in outline. Phase 2 under way.**
+
+Decided so far, and recorded in the sections that follow: inbound is out of scope, and the
+first and only message type is **ORU^R01 outbound**. Built so far: the HL7 version 2 message
+model, the ER7 codec and the character set rules, in `src/PdfToDicom.Interop.Hl7V2`, with 90
+tests. Nothing references that assembly yet, so the published application is unchanged.
 
 This document answers Phase 1 of the brief. It analyses the existing application, reads the
 supplied conformance statement as a specimen rather than as a target, and proposes an
@@ -10,8 +15,7 @@ security controls and a phased plan with its dependencies and risks.
 The engine is generic by mandate. No integration is privileged, and the supplied statement
 serves only as evidence of what a real one demands.
 
-Nothing here is built yet. Section 11 lists the questions whose answers change the design,
-and section 12 says which of them to answer first.
+Section 11 lists the questions still open, and section 12 says which to answer first.
 
 ---
 
@@ -416,6 +420,11 @@ comfortably by an administrator has failed at its one stated purpose.
 - No change to any existing DICOM type, interface or configuration key.
 - No FHIR. The architecture leaves room for it as a separate adapter and nothing more.
 - No scripting language in configuration, for the reason given in section 4.
+- **No message type but ORU^R01. Decided: reports outbound only.** Orders, `ORM`, and
+  patient administration, `ADT`, are each a different weight of work and a different
+  conversation with a site, and neither is built. The profile model does not privilege ORU,
+  so adding one later is configuration plus whatever mapping sources it needs, not a
+  redesign.
 - **No listener, and therefore no inbound messages. Decided: inbound is out of scope.**
   A desktop application that accepts connections is a materially different product with a
   materially different security posture, and declining it removes a listening port, a
@@ -428,22 +437,19 @@ comfortably by an administrator has failed at its one stated purpose.
 
 ## 11. Open questions
 
-Five remain. All are the author's to answer, and none is waiting on anybody else.
+Four remain. All are the author's to answer, and none is waiting on anybody else.
 
-Question 4 of the previous revision, whether this application is ever a receiver, has been
-answered: it is not. Inbound is out of scope and section 10 records it.
+Two are settled and section 10 records both. This application is not a receiver, so inbound
+is out of scope. The message type is ORU^R01 outbound, and only that.
 
-1. **Scope.** Which message types first? Reports outbound, `ORU`, is the smallest useful
-   thing and the obvious starting point. Orders, `ORM`, and patient administration, `ADT`,
-   are each a different weight of work and a different conversation with a site.
-2. **The character set policy.** Refuse, transliterate, or decide per destination? The
+1. **The character set policy.** Refuse, transliterate, or decide per destination? The
    recommendation is to refuse by default, for the reason in section 2.2.
-3. **Mandatory fields with no source**, such as a report author. Configured constant, a new
+2. **Mandatory fields with no source**, such as a report author. Configured constant, a new
    field on the form, or refuse to send? The engine can do all three.
-4. **Shared configuration.** A department with ten workstations will not want ten copies of
+3. **Shared configuration.** A department with ten workstations will not want ten copies of
    a profile maintained by hand. Export and import already exists and would work; a single
    shared source is a larger piece of work. Which is wanted?
-5. **Coupling.** Should an HL7 failure prevent the DICOM transmission, or are the two
+4. **Coupling.** Should an HL7 failure prevent the DICOM transmission, or are the two
    independent? The proposal defaults to independent, with coupling available per
    destination, because that preserves today's behaviour exactly.
 
@@ -451,9 +457,9 @@ answered: it is not. Inbound is out of scope and section 10 records it.
 
 ## 12. Recommendation
 
-Approve the separation in section 3 and the configuration model in section 4, then let
-Phases 2 and 3 proceed. They depend on nothing outside this repository.
+Phases 2 and 3 are proceeding and depend on nothing outside this repository.
 
-Answer question 1 before Phase 4 begins, since it decides how much of the engine is
-actually built, and question 2 before anything is transmitted anywhere, since it is the one
-question here with a patient safety answer rather than an engineering one.
+Answer question 1, the character set policy, before anything is transmitted anywhere. It is
+the one question here with a patient safety answer rather than an engineering one, and the
+code already written defaults to refusing rather than to quietly changing a name, so a
+decision to do otherwise is a decision to change that default rather than to fill a gap.

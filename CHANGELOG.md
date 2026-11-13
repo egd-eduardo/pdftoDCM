@@ -110,6 +110,38 @@ machine types checked (0x8664 and 0xAA64), the package sound with and without th
 line tool, the stale tool removed, and a throwaway certificate used to confirm that all
 three copies of the executable carry the signature.
 
+### The beginnings of an HL7 integration engine
+
+Nothing in the application changes. A new assembly,
+`src/PdfToDicom.Interop.Hl7V2`, holds the HL7 version 2 message model, the ER7 codec and
+the character set rules, with 90 tests of its own. Nothing references it yet, so the
+executable that is published and the files the installer carries are exactly what they
+were.
+
+**It knows nothing about message types.** An ORU is a message whose MSH-9 happens to read
+ORU, and the parser cannot tell the difference. A Z segment carrying a Study Instance UID
+is an ordinary segment. That is the whole point: a site specific requirement has to be
+expressible as configuration, and the only way to be sure is for the layer underneath not
+to know what any of it means.
+
+**A name is never quietly changed on its way out.** The DICOM objects carry UTF-8 so that
+an accented Portuguese name survives, and a receiving system confined to a single byte
+code page may have no representation for the same name. Sending a correct name to the
+archive and a mangled one to the record system is the class of fault this product exists to
+avoid, so the default is to refuse and name the character that caused it. Transliteration
+exists, and is something somebody chooses rather than something that happens.
+
+**The message header is not an ordinary segment**, and both directions say so. Its first
+field is the field separator and its second the four encoding characters, so the separator
+that would divide them is the thing being declared. Reading it with the ordinary rule puts
+every field one place out; writing it with the ordinary rule escapes the encoding
+characters into something that declares nothing. A round trip test holds the two halves
+together.
+
+The scope is settled: reports outbound, ORU^R01, and nothing else. The application does not
+listen, and no port is opened. See `docs/Hl7IntegrationArchitecture.md` for the
+architecture, the configuration model and the four questions still open.
+
 ### The dark scheme, and text that could not be read in it
 
 **Text that never asked for a colour stayed black on a dark card.** Seven places took no
