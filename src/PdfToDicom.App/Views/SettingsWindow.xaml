@@ -8,6 +8,7 @@
         MinHeight="600" MinWidth="760"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource PrimaryTextBrush}"
         FontFamily="{StaticResource UiFontFamily}"
         UseLayoutRounding="True">
 
@@ -215,14 +216,14 @@
                     <StackPanel MaxWidth="520" HorizontalAlignment="Left">
                         <TextBlock Text="{loc:Localize Settings.CharacterSet}" Style="{StaticResource FieldLabelTextStyle}" />
                         <ComboBox ItemsSource="{Binding CharacterSets}"
-                                  SelectedValue="{Binding Working.CharacterSet}"
-                                  SelectedValuePath="Value" DisplayMemberPath="Display"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding Working.CharacterSet}" DisplayMemberPath="Display"
                                   Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,14" />
 
                         <TextBlock Text="{loc:Localize Settings.UidStrategy}" Style="{StaticResource FieldLabelTextStyle}" />
                         <ComboBox ItemsSource="{Binding UidStrategies}"
-                                  SelectedValue="{Binding Working.UidStrategy}"
-                                  SelectedValuePath="Value" DisplayMemberPath="Display"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding Working.UidStrategy}" DisplayMemberPath="Display"
                                   Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,14" />
 
                         <TextBlock Text="{loc:Localize Settings.OrganizationUidRoot}" Style="{StaticResource FieldLabelTextStyle}" />
@@ -239,8 +240,8 @@
 
                         <TextBlock Text="{loc:Localize Settings.StudyGrouping}" Style="{StaticResource FieldLabelTextStyle}" />
                         <ComboBox ItemsSource="{Binding StudyGroupingModes}"
-                                  SelectedValue="{Binding Working.StudyGrouping}"
-                                  SelectedValuePath="Value" DisplayMemberPath="Display"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding Working.StudyGrouping}" DisplayMemberPath="Display"
                                   Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,4" />
                         <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,14"
                                    TextWrapping="Wrap"
@@ -440,8 +441,8 @@
 
                         <TextBlock Text="{loc:Localize Settings.Worklist.DateRange}" Style="{StaticResource FieldLabelTextStyle}" />
                         <ComboBox ItemsSource="{Binding WorklistDateRanges}"
-                                  SelectedValue="{Binding SelectedWorklist.DateRange}"
-                                  SelectedValuePath="Value" DisplayMemberPath="Display"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding SelectedWorklist.DateRange}" DisplayMemberPath="Display"
                                   Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,10" />
 
                         <!-- Always visible rather than revealed by the choice above. Hiding
@@ -823,8 +824,8 @@
 
                         <TextBlock Text="{loc:Localize Settings.Import.After}" Style="{StaticResource FieldLabelTextStyle}" />
                         <ComboBox ItemsSource="{Binding ImportedFileDispositions}"
-                                  SelectedValue="{Binding Working.FilenameImport.AfterImport}"
-                                  SelectedValuePath="Value" DisplayMemberPath="Display"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding Working.FilenameImport.AfterImport}" DisplayMemberPath="Display"
                                   Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,4" />
                         <TextBlock Text="{loc:Localize Settings.Import.After.Caption}"
                                    Style="{StaticResource CaptionTextStyle}"

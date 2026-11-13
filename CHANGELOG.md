@@ -110,6 +110,39 @@ machine types checked (0x8664 and 0xAA64), the package sound with and without th
 line tool, the stale tool removed, and a throwaway certificate used to confirm that all
 three copies of the executable carry the signature.
 
+### The dark scheme, and text that could not be read in it
+
+**Text that never asked for a colour stayed black on a dark card.** Seven places took no
+theme colour at all, and in the light scheme that looks exactly right, which is why it went
+unnoticed: the name of the chosen document, the destination names on the send page and in
+the results, the result message itself, the names in the Destinations and Worklist lists in
+Settings, and a heading in the tag viewer. Every window now sets the theme's text colour at
+its root, which those inherit, and so does anything added later.
+
+**Six kinds of control were never styled, because there is no markup to style.** A row in a
+grid, an item in a list, the entries in a dropdown, a grid's column headers and the Settings
+tab labels are created by other controls' templates, so they took their colours from the
+operating system, which stays light while the application goes dark. The worklist results
+and the Settings tab strip were the worst of it. They are styled implicitly now, by type.
+Only the tab needed a template of its own, because its own template paints its chrome from
+the system palette and ignores the colours a setter gives it.
+
+**A validation message kept the colour of the scheme it was born in.** A brush converter
+resolves a brush once and is never asked again, so switching to the dark scheme while the
+window was open left those messages at a light scheme's contrast. The colour comes from a
+trigger now, which follows the scheme.
+
+### The dropdowns that could not show what was already chosen
+
+Six of the seven places that bind a dropdown to a value set `SelectedValue` before
+`SelectedValuePath`. Attributes are applied in the order they are written, so the control
+was asked to match a value against the option objects themselves before it had been told
+which part of an option the value refers to; it finds nothing and clears the selection. The
+seventh was written the other way round, so the correct form was known once. The order is
+now correct in all seven. This is the only defect found in the patient sex selector, whose
+value mapping was checked end to end and writes M, F and O correctly for male, female and
+other.
+
 ### Memory
 
 Measured on a sixty page report, by sampling the process's own resident set rather than by

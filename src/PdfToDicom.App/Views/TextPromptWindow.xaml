@@ -9,6 +9,7 @@
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
         Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource PrimaryTextBrush}"
         FontFamily="{StaticResource UiFontFamily}">
 
     <StackPanel Margin="24">

@@ -10,6 +10,7 @@
         WindowStartupLocation="CenterScreen"
         AllowDrop="True"
         Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource PrimaryTextBrush}"
         FontFamily="{StaticResource UiFontFamily}"
         UseLayoutRounding="True"
         TextOptions.TextRenderingMode="ClearType">
@@ -343,8 +344,8 @@
                                 <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,0,0,12">
                                     <TextBlock Text="{loc:Localize Step2.Sex}" Style="{StaticResource FieldLabelTextStyle}" />
                                     <ComboBox ItemsSource="{Binding SexOptions}"
-                                              SelectedValue="{Binding Sex}"
                                               SelectedValuePath="Value"
+                                              SelectedValue="{Binding Sex}"
                                               DisplayMemberPath="Display"
                                               Style="{StaticResource InputComboBoxStyle}" TabIndex="6" />
                                 </StackPanel>
@@ -468,10 +469,34 @@
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                             <Ellipse Width="7" Height="7" VerticalAlignment="Top" Margin="0,6,8,0"
                                                      Fill="{Binding Severity, Converter={StaticResource SeverityToBrush}}" />
+                                            <!--
+                                                The colour is set by trigger rather than
+                                                by the brush converter beside it. A
+                                                converter resolves a brush once and is
+                                                not asked again, so a message already on
+                                                screen kept the colour of the scheme that
+                                                was active when it appeared, and a switch
+                                                to the dark scheme left it at a light
+                                                scheme's contrast. DynamicResource in a
+                                                setter follows the scheme instead.
+                                            -->
                                             <TextBlock Text="{Binding Message}"
                                                        TextWrapping="Wrap"
-                                                       MaxWidth="300"
-                                                       Foreground="{Binding Severity, Converter={StaticResource SeverityToBrush}}" />
+                                                       MaxWidth="300">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Severity}" Value="Error">
+                                                                <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Severity}" Value="Warning">
+                                                                <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
