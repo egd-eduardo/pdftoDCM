@@ -34,7 +34,7 @@ in that order, and never the third.
 Run all of these. They are fast, and each one exists because something got past the others.
 
 ```bash
-dotnet test "PDF to DICOM.sln" -c Release          # 548 tests, across both test projects
+dotnet test "PDF to DICOM.sln" -c Release          # 563 tests, across both test projects
 python3 build/validate-xaml-bindings.py            # two way bindings to read only properties
 python3 build/validate-viewmodel-commands.py       # unguarded RaiseCanExecuteChanged
 python3 build/validate-installer-script.py         # installer sources and flags

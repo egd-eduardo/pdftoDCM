@@ -195,6 +195,22 @@ the outcome has a name of its own, and the operator is told to check the destina
 resending. It is also recorded as sent, so a later identical message is stopped by the
 duplicate guard just as firmly as one that certainly arrived.
 
+**A message can be laid out against a profile and read.** Segment by segment and field by
+field, with what the profile calls each field, what it requires, and anything wrong attached
+to the field it is about rather than listed separately. A mandatory field that is missing is
+singled out, which is the one thing somebody opens such a screen to find: it is by
+definition not in the message, so an inspection built by walking the message would never
+show it. A segment the profile expects and the message lacks appears too, marked absent,
+rather than being quietly left out of a list.
+
+A message that somebody pasted in can be inspected the same way, which is the other half of
+what this is for: asking why a receiver rejected a sample. Two profiles can be compared
+against one message, and the answer is what they disagree about rather than two lists,
+because the overlap is almost always the uninteresting part.
+
+All of that is logic rather than interface, and is tested. The window that shows it is not
+written yet.
+
 The scope is settled: reports outbound, ORU^R01, and nothing else. The application does not
 listen, and no port is opened. See `docs/Hl7IntegrationArchitecture.md` for the
 architecture, the configuration model and the four questions still open.

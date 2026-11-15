@@ -20,8 +20,14 @@ ORU means, which the tests check by building an ADT from the same code.
 pieces together: build, check, refuse a duplicate, send with retries where retrying is safe,
 and write down every attempt.
 
-Phase 5, the message editor and preview, is next, and is the first phase whose work is in
-the desktop application rather than in the engine.
+**Phase 5 is half done.** The inspector's logic is built and tested: a message laid out
+against a profile, segment by segment and field by field, with the missing mandatory fields
+singled out and two profiles comparable against the same message. The window that displays
+it is not written, and one question in section 11 decides where it lives.
+
+That split is deliberate. The interface has no automated coverage at all, so everything
+that can be decided below it is, and the window binds to a finished answer rather than
+working one out.
 
 This document answers Phase 1 of the brief. It analyses the existing application, reads the
 supplied conformance statement as a specimen rather than as a target, and proposes an
@@ -485,6 +491,12 @@ is out of scope. The message type is ORU^R01 outbound, and only that.
 4. **Coupling.** Should an HL7 failure prevent the DICOM transmission, or are the two
    independent? The proposal defaults to independent, with coupling available per
    destination, because that preserves today's behaviour exactly.
+5. **Where the message inspector lives, and who may open it.** It shows a patient's details
+   and a destination's configuration, which is the same material the Destinations and
+   Worklist pages hold, so the recommendation is a tab in Settings behind the existing
+   protected settings lock rather than a button on the main window. The alternative, a
+   header button beside Logs and Settings, is one click away for an operator who has no
+   reason to see any of it.
 
 ---
 
