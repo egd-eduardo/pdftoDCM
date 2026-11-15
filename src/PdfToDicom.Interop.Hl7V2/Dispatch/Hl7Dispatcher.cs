@@ -1,3 +1,4 @@
+using PdfToDicom.Interop.Hl7V2.Acknowledgement;
 using PdfToDicom.Interop.Hl7V2.Encoding;
 using PdfToDicom.Interop.Hl7V2.Model;
 using PdfToDicom.Interop.Hl7V2.Profiles;
@@ -73,7 +74,8 @@ public sealed class Hl7Dispatcher
                     profile, destination, built.Message, Hl7DispatchOutcome.Refused, attempt: 0,
                     contentHash: string.Empty, relatedSopInstanceUid,
                     detail: string.Join("; ", built.Errors.Select(e => $"{e.Location}: {e.Message}")),
-                    elapsed: TimeSpan.Zero, acknowledgement: string.Empty, cancellationToken)
+                    elapsed: TimeSpan.Zero, acknowledgement: string.Empty,
+                    acknowledgementCode: string.Empty, cancellationToken)
                 .ConfigureAwait(false);
 
             return new Hl7DispatchResult(
@@ -118,7 +120,8 @@ public sealed class Hl7Dispatcher
                     hash, relatedSopInstanceUid,
                     detail: $"Already delivered as {earlier.MessageControlId} on " +
                             $"{earlier.AttemptedUtc:yyyy-MM-dd HH:mm} UTC.",
-                    elapsed: TimeSpan.Zero, acknowledgement: string.Empty, cancellationToken)
+                    elapsed: TimeSpan.Zero, acknowledgement: string.Empty,
+                    acknowledgementCode: string.Empty, cancellationToken)
                 .ConfigureAwait(false);
 
             return new Hl7DispatchResult(
@@ -158,17 +161,19 @@ public sealed class Hl7Dispatcher
             last = await transport.SendAsync(encoded, progress, cancellationToken)
                 .ConfigureAwait(false);
 
-            Hl7DispatchOutcome outcome = OutcomeOf(last);
+            (Hl7DispatchOutcome outcome, string text, Hl7Acknowledgement? reply) =
+                Interpret(last, controlId, destination);
 
             await RecordAsync(
                     profile, destination, message, outcome, attempt, hash, relatedSopInstanceUid,
-                    detail: last.Message, last.Elapsed,
-                    acknowledgement: AcknowledgementText(last), cancellationToken)
+                    detail: text, last.Elapsed,
+                    acknowledgement: AcknowledgementText(last), reply?.Code ?? string.Empty,
+                    cancellationToken)
                 .ConfigureAwait(false);
 
             if (last.WasSent)
             {
-                return Finish(outcome, last.Message, message, issues, attempts, controlId, last);
+                return Finish(outcome, text, message, issues, attempts, controlId, last, reply);
             }
 
             // The rule this whole design exists to express. A failure after the bytes left
@@ -181,7 +186,7 @@ public sealed class Hl7Dispatcher
                     $"{last.Message} It was not sent again, because it may already have " +
                     "arrived and a second copy would be worse than none. Check " +
                     $"{destination.Name} for {controlId} before resending.",
-                    message, issues, attempts, controlId, last);
+                    message, issues, attempts, controlId, last, reply: null);
             }
 
             if (attempt <= destination.RetryCount)
@@ -194,7 +199,7 @@ public sealed class Hl7Dispatcher
         return Finish(
             Hl7DispatchOutcome.Failed,
             $"{last?.Message} Nothing reached {destination.Name} after {attempts} attempt(s).",
-            message, issues, attempts, controlId, last);
+            message, issues, attempts, controlId, last, reply: null);
     }
 
     private static Hl7DispatchResult Finish(
@@ -204,17 +209,68 @@ public sealed class Hl7Dispatcher
         IReadOnlyList<Hl7MessageIssue> issues,
         int attempts,
         string controlId,
-        Hl7SendResult? last) =>
-        new(outcome, text, message, issues, attempts, controlId, AcknowledgementText(last));
+        Hl7SendResult? last,
+        Hl7Acknowledgement? reply) =>
+        new(outcome, text, message, issues, attempts, controlId, AcknowledgementText(last), reply);
 
-    private static Hl7DispatchOutcome OutcomeOf(Hl7SendResult result) => result.State switch
+    /// <summary>
+    /// Works out what actually happened, reading the reply rather than assuming a reply
+    /// means yes.
+    /// </summary>
+    /// <remarks>
+    /// Three ways a message can arrive and still not be in a patient's record, and every
+    /// one of them used to be reported as success: the receiver refused it, the reply could
+    /// not be read, or the reply was about a different message entirely. The last of those
+    /// usually means two conversations have been crossed, which is worth hearing about
+    /// immediately rather than inferring later from a report nobody can find.
+    /// </remarks>
+    private static (Hl7DispatchOutcome Outcome, string Text, Hl7Acknowledgement? Reply) Interpret(
+        Hl7SendResult result, string controlId, Hl7Destination destination)
     {
-        Hl7DeliveryState.Acknowledged => Hl7DispatchOutcome.Acknowledged,
-        Hl7DeliveryState.Sent => Hl7DispatchOutcome.Sent,
-        _ => result.RetryCouldDuplicate
-            ? Hl7DispatchOutcome.SentButUnconfirmed
-            : Hl7DispatchOutcome.Failed
-    };
+        if (result.State == Hl7DeliveryState.Sent)
+        {
+            return (Hl7DispatchOutcome.Sent, result.Message, null);
+        }
+
+        if (result.State != Hl7DeliveryState.Acknowledged || result.Acknowledgement is null)
+        {
+            return result.RetryCouldDuplicate
+                ? (Hl7DispatchOutcome.SentButUnconfirmed, result.Message, null)
+                : (Hl7DispatchOutcome.Failed, result.Message, null);
+        }
+
+        Hl7Acknowledgement reply;
+
+        try
+        {
+            reply = Hl7AcknowledgementReader.Read(
+                System.Text.Encoding.ASCII.GetString(result.Acknowledgement));
+        }
+        catch (Hl7ParseException ex)
+        {
+            return (Hl7DispatchOutcome.SentButUnconfirmed,
+                $"{destination.Name} replied with something that is not an HL7 message, so " +
+                $"whether it accepted {controlId} is not known: {ex.Message}", null);
+        }
+
+        if (!reply.Answers(controlId))
+        {
+            return (Hl7DispatchOutcome.SentButUnconfirmed,
+                $"{destination.Name} replied about message '{reply.AcknowledgedControlId}' " +
+                $"rather than '{controlId}', so this one is unaccounted for. Two conversations " +
+                "may have been crossed; check the destination before resending.", reply);
+        }
+
+        if (reply.IsPositive)
+        {
+            return (Hl7DispatchOutcome.Acknowledged,
+                $"{destination.Name} accepted the message. {reply.Describe()}", reply);
+        }
+
+        return (Hl7DispatchOutcome.Rejected,
+            $"{destination.Name} received the message and did not accept it. {reply.Describe()} " +
+            "Sending it again unchanged would be refused again.", reply);
+    }
 
     private static string AcknowledgementText(Hl7SendResult? result) =>
         result?.Acknowledgement is { Length: > 0 } bytes
@@ -244,6 +300,7 @@ public sealed class Hl7Dispatcher
         string detail,
         TimeSpan elapsed,
         string acknowledgement,
+        string acknowledgementCode,
         CancellationToken cancellationToken)
     {
         string state = outcome switch
@@ -258,6 +315,11 @@ public sealed class Hl7Dispatcher
 
             Hl7DispatchOutcome.AlreadyDelivered => "Duplicate",
             Hl7DispatchOutcome.Refused => "Refused",
+
+            // Deliberately not counted as a delivery. The message arrived and was turned
+            // away, so nothing was stored and a corrected one may follow; the duplicate
+            // guard reads this field and must let that through.
+            Hl7DispatchOutcome.Rejected => "Rejected",
             _ => "Failed"
         };
 
@@ -272,6 +334,7 @@ public sealed class Hl7Dispatcher
             AttemptedUtc = _clock(),
             AttemptNumber = attempt,
             DeliveryState = state,
+            AcknowledgementCode = acknowledgementCode,
             AcknowledgementText = acknowledgement,
             ErrorDetail = outcome is Hl7DispatchOutcome.Acknowledged or Hl7DispatchOutcome.Sent
                 ? string.Empty

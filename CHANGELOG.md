@@ -218,6 +218,19 @@ The logic beneath it is tested. The page itself cannot be, because the interface
 automated coverage, so it was kept as thin as it could be: it binds to a finished answer
 rather than working one out.
 
+**A reply is read, not assumed to mean yes.** The six codes of HL7 table 0008 are
+understood, the explanation in MSA-3 and in every ERR segment is kept, and the control
+identifier the reply answers is checked against the one that was sent.
+
+Three ways a message can arrive and still not be in a patient's record used to be reported
+as success, and each has its own answer now. **The receiver refused it**, which is neither
+a delivery nor a transport failure: retrying it unchanged would earn the same refusal, and
+nothing was stored, so a corrected message may follow and the duplicate guard lets it
+through. **The reply could not be read**, or **the reply was about a different message**,
+which usually means two conversations have been crossed; both leave the outcome unknown and
+say so rather than claiming either way. A code this build does not recognise is never taken
+for a yes.
+
 The scope is settled: reports outbound, ORU^R01, and nothing else. The application does not
 listen, and no port is opened. See `docs/Hl7IntegrationArchitecture.md` for the
 architecture, the configuration model and the four questions still open.

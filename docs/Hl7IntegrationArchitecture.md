@@ -20,6 +20,11 @@ ORU means, which the tests check by building an ADT from the same code.
 pieces together: build, check, refuse a duplicate, send with retries where retrying is safe,
 and write down every attempt.
 
+**Phase 6 is complete.** An acknowledgement is read rather than assumed: the six codes of
+table 0008, the control identifier it answers, and whatever the MSA and ERR segments
+explain. Three ways a message could arrive and still not be in a record used to be reported
+as success, and each now has an outcome of its own.
+
 **Phase 5 is built and needs looking at on real Windows.** The inspector's logic is tested:
 a message laid out against a profile, segment by segment and field by field, with the
 missing mandatory fields singled out and two profiles comparable against the same message.

@@ -35,9 +35,21 @@ internal sealed class ScriptedTransport : IHl7Transport
             : new Hl7SendResult(Hl7DeliveryState.Acknowledged, "ok", BytesWereWritten: true));
     }
 
-    public static Hl7SendResult Acknowledged(string ack = "MSA|AA|1") =>
+    /// <summary>
+    /// A real acknowledgement message, header and all.
+    /// </summary>
+    /// <remarks>
+    /// This used to be the MSA segment on its own, which is not a message and never was.
+    /// It passed only because the dispatcher took any reply at all to mean acceptance.
+    /// MSA-2 is left empty, which the reader accepts deliberately because some interfaces
+    /// leave it empty; the crossed conversation case has a test of its own.
+    /// </remarks>
+    public static Hl7SendResult Acknowledged(string code = "AA", string text = "") =>
+        Replying($"MSH|^~\\&|ARCHIVE|SITE|PDFTODICOM||20261115093000||ACK|9|P|2.4\rMSA|{code}||{text}");
+
+    public static Hl7SendResult Replying(string message) =>
         new(Hl7DeliveryState.Acknowledged, "replied",
-            System.Text.Encoding.ASCII.GetBytes(ack), BytesWereWritten: true);
+            System.Text.Encoding.ASCII.GetBytes(message), BytesWereWritten: true);
 
     public static Hl7SendResult Sent() =>
         new(Hl7DeliveryState.Sent, "sent", BytesWereWritten: true);
@@ -302,13 +314,16 @@ public sealed class Hl7DispatcherTests
         var store = new RecordingStore();
 
         Hl7DispatchResult result = await DispatcherFor(
-                new ScriptedTransport(ScriptedTransport.Acknowledged("MSA|AE|1|Unknown patient")),
+                new ScriptedTransport(ScriptedTransport.Acknowledged("AE", "Unknown patient")),
                 store)
             .SendAsync(Profile(), Destination(), Subject());
 
         Assert.Contains("MSA|AE", result.Acknowledgement, StringComparison.Ordinal);
         Assert.Contains("Unknown patient", store.Written.Last().AcknowledgementText,
             StringComparison.Ordinal);
+
+        // The code itself is recorded now, in a field that existed and was never filled.
+        Assert.Equal("AE", store.Written.Last().AcknowledgementCode);
     }
 
     [Fact]
@@ -349,5 +364,100 @@ public sealed class Hl7DispatcherTests
         Assert.Equal(2575, options.Port);
         Assert.Equal("Report archive", options.Name);
         Assert.False(options.ExpectAcknowledgement);
+    }
+
+    [Fact]
+    public async Task ARefusalIsNotADeliveryAndIsNotRetried()
+    {
+        // The message arrived and was understood, so sending it again unchanged would earn
+        // the same refusal. It is also not a transport failure: nothing is wrong with the
+        // connection and nothing about the destination needs checking.
+        var transport = new ScriptedTransport(
+            ScriptedTransport.Acknowledged("AE", "Unknown patient identifier"),
+            ScriptedTransport.Acknowledged());
+
+        var store = new RecordingStore();
+
+        Hl7DispatchResult result = await DispatcherFor(transport, store)
+            .SendAsync(Profile(), Destination(retries: 3), Subject());
+
+        Assert.Equal(Hl7DispatchOutcome.Rejected, result.Outcome);
+        Assert.Equal(1, transport.Calls);
+        Assert.True(result.NeedsAttention);
+        Assert.Contains("did not accept", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Unknown patient identifier", result.Message, StringComparison.Ordinal);
+        Assert.Equal("Rejected", Assert.Single(store.Written).DeliveryState);
+    }
+
+    [Fact]
+    public async Task ARefusedMessageMayBeSentAgainOnceWhateverWasWrongIsFixed()
+    {
+        // Nothing was stored at the far end, so the duplicate guard must let a later
+        // attempt through. Counting a rejection as a delivery would strand the report.
+        var store = new RecordingStore();
+
+        await DispatcherFor(
+                new ScriptedTransport(ScriptedTransport.Acknowledged("AR", "no such patient")), store)
+            .SendAsync(Profile(), Destination(retries: 0), Subject());
+
+        var second = new ScriptedTransport(ScriptedTransport.Acknowledged());
+
+        Hl7DispatchResult again = await DispatcherFor(second, store)
+            .SendAsync(Profile(), Destination(retries: 0), Subject());
+
+        Assert.Equal(Hl7DispatchOutcome.Acknowledged, again.Outcome);
+        Assert.Equal(1, second.Calls);
+    }
+
+    [Fact]
+    public async Task AnAcceptanceIsReadRatherThanAssumed()
+    {
+        Hl7DispatchResult result = await DispatcherFor(
+                new ScriptedTransport(ScriptedTransport.Acknowledged("AA")), new RecordingStore())
+            .SendAsync(Profile(), Destination(), Subject());
+
+        Assert.Equal(Hl7DispatchOutcome.Acknowledged, result.Outcome);
+        Assert.NotNull(result.Interpreted);
+        Assert.True(result.Interpreted!.IsPositive);
+        Assert.Equal("AA", result.Interpreted.Code);
+    }
+
+    [Fact]
+    public async Task AReplyAboutSomebodyElsesMessageLeavesThisOneUnaccountedFor()
+    {
+        // Two crossed conversations. Reporting this as success would lose a report and
+        // nobody would know where to look.
+        Hl7DispatchResult result = await DispatcherFor(
+                new ScriptedTransport(ScriptedTransport.Replying(
+                    "MSH|^~\\&|A||||||ACK|9|P|2.4\rMSA|AA|SOMEBODY-ELSE")),
+                new RecordingStore())
+            .SendAsync(Profile(), Destination(), Subject());
+
+        Assert.Equal(Hl7DispatchOutcome.SentButUnconfirmed, result.Outcome);
+        Assert.Contains("SOMEBODY-ELSE", result.Message, StringComparison.Ordinal);
+        Assert.Contains("crossed", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AReplyThatIsNotAMessageLeavesTheOutcomeUnknown()
+    {
+        Hl7DispatchResult result = await DispatcherFor(
+                new ScriptedTransport(ScriptedTransport.Replying("thanks very much")),
+                new RecordingStore())
+            .SendAsync(Profile(), Destination(), Subject());
+
+        Assert.Equal(Hl7DispatchOutcome.SentButUnconfirmed, result.Outcome);
+        Assert.Contains("not an HL7 message", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnUnrecognisedCodeIsNeverTakenForAYes()
+    {
+        Hl7DispatchResult result = await DispatcherFor(
+                new ScriptedTransport(ScriptedTransport.Acknowledged("ZZ")), new RecordingStore())
+            .SendAsync(Profile(), Destination(retries: 0), Subject());
+
+        Assert.Equal(Hl7DispatchOutcome.Rejected, result.Outcome);
+        Assert.False(result.Interpreted!.IsPositive);
     }
 }

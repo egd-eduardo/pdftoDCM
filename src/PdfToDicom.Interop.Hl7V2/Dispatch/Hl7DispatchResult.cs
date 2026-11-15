@@ -1,3 +1,4 @@
+using PdfToDicom.Interop.Hl7V2.Acknowledgement;
 using PdfToDicom.Interop.Hl7V2.Model;
 using PdfToDicom.Interop.Hl7V2.Profiles;
 
@@ -20,8 +21,19 @@ public enum Hl7DispatchOutcome
     /// <summary>The bytes left. Whether an application read them is not known.</summary>
     Sent = 3,
 
-    /// <summary>The receiver replied.</summary>
+    /// <summary>The receiver replied and took the message.</summary>
     Acknowledged = 4,
+
+    /// <summary>
+    /// The receiver replied and refused the message.
+    /// </summary>
+    /// <remarks>
+    /// Neither a delivery nor a transport failure, and kept apart from both. The message
+    /// arrived and was understood, so retrying it unchanged would earn the same refusal;
+    /// equally, nothing was stored, so a corrected message may be sent afterwards. The
+    /// duplicate guard therefore does not count a rejection as a delivery.
+    /// </remarks>
+    Rejected = 6,
 
     /// <summary>
     /// The bytes left and then something went wrong, so nobody knows what became of them.
@@ -42,6 +54,7 @@ public enum Hl7DispatchOutcome
 /// <param name="Attempts">How many times it was tried.</param>
 /// <param name="MessageControlId">The identifier written into MSH-10, where there is one.</param>
 /// <param name="Acknowledgement">The reply, where one came back.</param>
+/// <param name="Interpreted">What that reply meant, where it could be read.</param>
 public sealed record Hl7DispatchResult(
     Hl7DispatchOutcome Outcome,
     string Message,
@@ -49,7 +62,8 @@ public sealed record Hl7DispatchResult(
     IReadOnlyList<Hl7MessageIssue>? Issues = null,
     int Attempts = 0,
     string MessageControlId = "",
-    string Acknowledgement = "")
+    string Acknowledgement = "",
+    Hl7Acknowledgement? Interpreted = null)
 {
     /// <summary>Everything the profile objected to.</summary>
     public IReadOnlyList<Hl7MessageIssue> Issues { get; init; } = Issues ?? [];
@@ -71,5 +85,6 @@ public sealed record Hl7DispatchResult(
     public bool NeedsAttention =>
         Outcome is Hl7DispatchOutcome.Failed
             or Hl7DispatchOutcome.Refused
+            or Hl7DispatchOutcome.Rejected
             or Hl7DispatchOutcome.SentButUnconfirmed;
 }
