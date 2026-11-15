@@ -138,6 +138,22 @@ every field one place out; writing it with the ordinary rule escapes the encodin
 characters into something that declares nothing. A round trip test holds the two halves
 together.
 
+**Messages travel over MLLP, and a timeout is never reported as a success.** The transport
+makes one attempt and says exactly how far it got: failed, sent, or acknowledged. Those
+three are kept apart because a successful write to a socket is not acceptance by the
+receiving application, and a product showing one tick for both would be lying to the person
+deciding whether a report reached the record. A destination declaring that it does not
+acknowledge is not waited on, since waiting for a reply that will never come turns every
+success into a timeout. A silent destination that should have answered is reported as a
+timeout whose outcome is unknown, never as a failure to deliver.
+
+The transport is tested against a receiving system that misbehaves on purpose: one that
+accepts a connection and says nothing, one that hangs up halfway, one that replies with
+bytes that are not a frame, one that sends noise first, and one that is not there at all. A
+message of two megabytes, the size an encapsulated report really is, is tested as well,
+because a transport that only works for small messages fails on exactly the ones that
+matter.
+
 The scope is settled: reports outbound, ORU^R01, and nothing else. The application does not
 listen, and no port is opened. See `docs/Hl7IntegrationArchitecture.md` for the
 architecture, the configuration model and the four questions still open.

@@ -3,9 +3,12 @@
 **Status: approved in outline. Phase 2 under way.**
 
 Decided so far, and recorded in the sections that follow: inbound is out of scope, and the
-first and only message type is **ORU^R01 outbound**. Built so far: the HL7 version 2 message
-model, the ER7 codec and the character set rules, in `src/PdfToDicom.Interop.Hl7V2`, with 90
-tests. Nothing references that assembly yet, so the published application is unchanged.
+first and only message type is **ORU^R01 outbound**.
+
+Built so far, all in `src/PdfToDicom.Interop.Hl7V2` and all covered by 121 tests of its own:
+the HL7 version 2 message model, the ER7 codec, the character set rules, MLLP framing and
+the outbound MLLP transport. Still to do in Phase 2: the transaction store. Nothing
+references that assembly yet, so the published application is unchanged.
 
 This document answers Phase 1 of the brief. It analyses the existing application, reads the
 supplied conformance statement as a specimen rather than as a target, and proposes an
