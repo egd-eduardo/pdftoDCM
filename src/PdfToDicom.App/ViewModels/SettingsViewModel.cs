@@ -12,6 +12,9 @@ using PdfToDicom.Core.Models;
 using PdfToDicom.Core.Services;
 using PdfToDicom.Core.Validation;
 using PdfToDicom.Core.Security;
+using PdfToDicom.Interop.Hl7V2.Inspection;
+using PdfToDicom.Interop.Hl7V2.Model;
+using PdfToDicom.Interop.Hl7V2.Profiles;
 
 namespace PdfToDicom.App.ViewModels;
 
@@ -61,6 +64,12 @@ public sealed class SettingsViewModel : ObservableObject
         AddWorklistCommand = new RelayCommand(AddWorklist);
         RemoveWorklistCommand = new RelayCommand(RemoveWorklist, () => SelectedWorklist is not null);
         TestFilenameCommand = new RelayCommand(TestFilename);
+        InspectHl7Command = new RelayCommand(
+            InspectHl7Message,
+            () => Hl7MessageText.Trim().Length > 0 && Hl7ProfileText.Trim().Length > 0);
+        BrowseHl7MessageCommand = new RelayCommand(BrowseForHl7Message);
+        BrowseHl7ProfileCommand = new RelayCommand(BrowseForHl7Profile);
+        ClearHl7Command = new RelayCommand(ClearHl7Inspection);
         AddFieldCommand = new RelayCommand(AddField);
         AddDateFormatCommand = new RelayCommand(AddDateFormat);
         UsePatternCommand = new RelayCommand(UsePattern, () => PatternUnderConstruction.Trim().Length > 0);
@@ -1274,6 +1283,226 @@ public sealed class SettingsViewModel : ObservableObject
         Compare("DestinationCount", _original.Destinations.Count, Working.Destinations.Count);
 
         return changes.Count == 0 ? "No effective change." : string.Join("; ", changes);
+    }
+
+    // ---------------------------------------------------------------- HL7 inspector
+
+    private string _hl7MessageText = string.Empty;
+    private string _hl7ProfileText = string.Empty;
+    private string _hl7Summary = string.Empty;
+    private string _hl7Preview = string.Empty;
+    private bool _hasHl7Inspection;
+    private bool _hasHl7MissingFields;
+
+    /// <summary>The message under inspection, pasted or loaded from a file.</summary>
+    public string Hl7MessageText
+    {
+        get => _hl7MessageText;
+        set
+        {
+            if (SetProperty(ref _hl7MessageText, value))
+            {
+                InspectHl7Command?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>The profile to check it against, as JSON.</summary>
+    public string Hl7ProfileText
+    {
+        get => _hl7ProfileText;
+        set
+        {
+            if (SetProperty(ref _hl7ProfileText, value))
+            {
+                InspectHl7Command?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>One line saying how the message stands against the profile.</summary>
+    public string Hl7Summary
+    {
+        get => _hl7Summary;
+        private set => SetProperty(ref _hl7Summary, value);
+    }
+
+    /// <summary>
+    /// Exactly what would go on the wire.
+    /// </summary>
+    /// <remarks>
+    /// Shown verbatim rather than prettified. A preview is only worth anything if it is the
+    /// thing that would be sent, and a reformatted one invites somebody to count separators
+    /// that are not really there.
+    /// </remarks>
+    public string Hl7Preview
+    {
+        get => _hl7Preview;
+        private set => SetProperty(ref _hl7Preview, value);
+    }
+
+    /// <summary>Whether there is anything to show yet.</summary>
+    public bool HasHl7Inspection
+    {
+        get => _hasHl7Inspection;
+        private set => SetProperty(ref _hasHl7Inspection, value);
+    }
+
+    /// <summary>Whether any mandatory field is empty.</summary>
+    /// <remarks>
+    /// A property rather than a binding to the collection's count with a converter. One use
+    /// does not earn a converter, and a count bound straight to Visibility is the shape
+    /// that quietly stops updating when the collection is replaced rather than cleared.
+    /// </remarks>
+    public bool HasHl7MissingFields
+    {
+        get => _hasHl7MissingFields;
+        private set => SetProperty(ref _hasHl7MissingFields, value);
+    }
+
+    /// <summary>The segments, in the profile's order.</summary>
+    public ObservableCollection<InspectedSegment> Hl7Segments { get; } = new();
+
+    /// <summary>The mandatory fields that are empty, which is what this page is opened for.</summary>
+    public ObservableCollection<InspectedField> Hl7MissingFields { get; } = new();
+
+    /// <summary>Everything the profile objects to.</summary>
+    public ObservableCollection<Hl7MessageIssue> Hl7Issues { get; } = new();
+
+    /// <summary>Checks the message against the profile.</summary>
+    public RelayCommand InspectHl7Command { get; }
+
+    /// <summary>Loads a message from a file.</summary>
+    public RelayCommand BrowseHl7MessageCommand { get; }
+
+    /// <summary>Loads a profile from a file.</summary>
+    public RelayCommand BrowseHl7ProfileCommand { get; }
+
+    /// <summary>Empties the page.</summary>
+    public RelayCommand ClearHl7Command { get; }
+
+    private void InspectHl7Message()
+    {
+        ClearHl7Results();
+
+        ProfileReadResult profile = Hl7ProfileReader.Read(Hl7ProfileText);
+
+        if (!profile.IsUsable)
+        {
+            // The profile is reported first and on its own. Checking a message against a
+            // profile that does not hold together would produce objections that say more
+            // about the profile than about the message, and the reader's messages already
+            // name the place and the remedy.
+            foreach (ProfileIssue issue in profile.Issues)
+            {
+                Hl7Issues.Add(new Hl7MessageIssue(issue.Severity, issue.Location, issue.Message));
+            }
+
+            Hl7Summary = _services.Localizer.Get("Settings.Hl7.ProfileNotUsable");
+            HasHl7Inspection = true;
+            return;
+        }
+
+        Hl7Message message;
+
+        try
+        {
+            message = Hl7Message.Parse(Hl7MessageText);
+        }
+        catch (Exception ex) when (ex is PdfToDicom.Interop.Hl7V2.Hl7ParseException or FormatException)
+        {
+            Hl7Issues.Add(new Hl7MessageIssue(
+                ProfileIssueSeverity.Error, "message", ex.Message));
+
+            Hl7Summary = _services.Localizer.Get("Settings.Hl7.NotAMessage");
+            HasHl7Inspection = true;
+            return;
+        }
+
+        MessageInspection inspection = Hl7MessageInspector.Inspect(message, profile.Profile!);
+
+        foreach (InspectedSegment segment in inspection.Segments)
+        {
+            Hl7Segments.Add(segment);
+        }
+
+        foreach (InspectedField field in inspection.MissingMandatoryFields)
+        {
+            Hl7MissingFields.Add(field);
+        }
+
+        HasHl7MissingFields = Hl7MissingFields.Count > 0;
+
+        foreach (Hl7MessageIssue issue in inspection.Issues)
+        {
+            Hl7Issues.Add(issue);
+        }
+
+        Hl7Preview = inspection.Er7;
+        HasHl7Inspection = true;
+
+        Hl7Summary = inspection.IsSendable
+            ? _services.Localizer.Get("Settings.Hl7.Conforms")
+            : _services.Localizer.Format("Settings.Hl7.DoesNotConform", inspection.Errors.Count);
+    }
+
+    private void BrowseForHl7Message()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = _services.Localizer.Get("Settings.Hl7.OpenMessage"),
+            Filter = "HL7 (*.hl7;*.txt)|*.hl7;*.txt|All files (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            Hl7MessageText = ReadTextOrReport(dialog.FileName);
+        }
+    }
+
+    private void BrowseForHl7Profile()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = _services.Localizer.Get("Settings.Hl7.OpenProfile"),
+            Filter = "Profile (*.json)|*.json|All files (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            Hl7ProfileText = ReadTextOrReport(dialog.FileName);
+        }
+    }
+
+    private string ReadTextOrReport(string path)
+    {
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Hl7Summary = ex.Message;
+            return string.Empty;
+        }
+    }
+
+    private void ClearHl7Inspection()
+    {
+        Hl7MessageText = string.Empty;
+        Hl7ProfileText = string.Empty;
+        ClearHl7Results();
+        Hl7Summary = string.Empty;
+        HasHl7Inspection = false;
+    }
+
+    private void ClearHl7Results()
+    {
+        Hl7Segments.Clear();
+        Hl7MissingFields.Clear();
+        Hl7Issues.Clear();
+        Hl7Preview = string.Empty;
+        HasHl7MissingFields = false;
     }
 }
 

@@ -208,8 +208,15 @@ what this is for: asking why a receiver rejected a sample. Two profiles can be c
 against one message, and the answer is what they disagree about rather than two lists,
 because the overlap is almost always the uninteresting part.
 
-All of that is logic rather than interface, and is tested. The window that shows it is not
-written yet.
+It is reached from a new **HL7 tab in Settings, behind the same password as Destinations
+and Worklist**. An inspection puts a patient's name, identifier and clinical text on screen
+beside a destination's configuration, which is exactly the material that password already
+guards; a button on the main window would have handed all of it to an operator with no
+reason to see any of it. Nothing is sent from the page.
+
+The logic beneath it is tested. The page itself cannot be, because the interface has no
+automated coverage, so it was kept as thin as it could be: it binds to a finished answer
+rather than working one out.
 
 The scope is settled: reports outbound, ORU^R01, and nothing else. The application does not
 listen, and no port is opened. See `docs/Hl7IntegrationArchitecture.md` for the

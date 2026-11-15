@@ -59,6 +59,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PdfToDicom.Core\PdfToDicom.Core.csproj" />
+    <!-- The integration engine. The first reference to it from the application, so
+         from here its assemblies are inside the published single file executable.
+         The installer names only that executable, so its file list is unchanged. -->
+    <ProjectReference Include="..\PdfToDicom.Interop.Hl7V2\PdfToDicom.Interop.Hl7V2.csproj" />
   </ItemGroup>
 
   <ItemGroup>

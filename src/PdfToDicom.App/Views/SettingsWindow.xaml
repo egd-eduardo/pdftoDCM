@@ -883,6 +883,210 @@
             </TabItem>
 
             <!-- ==================================================== Appearance -->
+            <!-- ================================================== HL7 inspector -->
+
+            <TabItem Header="{loc:Localize Settings.Tab.Hl7}">
+                <Grid Margin="0,16,0,0">
+
+                    <!-- Locked, like the pages whose material it shows. An inspection puts
+                         a patient's name, identifier and clinical text on screen beside a
+                         destination's configuration, which is the same material the
+                         Destinations and Worklist pages keep behind this password. Putting
+                         it a click away on the main window would have handed all of it to
+                         an operator with no reason to see any of it. -->
+                    <Border Style="{StaticResource CardBorderStyle}"
+                            MaxWidth="560" HorizontalAlignment="Left" VerticalAlignment="Top"
+                            Visibility="{Binding AreProtectedSettingsLocked, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <TextBlock Text="{loc:Localize Settings.Lock.Locked}"
+                                       Style="{StaticResource SectionHeaderTextStyle}" Margin="0,0,0,6" />
+                            <TextBlock Text="{loc:Localize Settings.Lock.LockedCaption.Hl7}"
+                                       Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,0,0,12" />
+
+                            <TextBlock Text="{loc:Localize Settings.Lock.Password}" Style="{StaticResource FieldLabelTextStyle}" />
+                            <PasswordBox x:Name="Hl7PasswordBox"
+                                         MinHeight="36" Padding="10,0" Margin="0,0,0,10"
+                                         FontSize="{StaticResource BodyFontSize}" />
+
+                            <Button Content="{loc:Localize Settings.Lock.Unlock}"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Click="OnUnlockSettings"
+                                    Tag="{Binding ElementName=Hl7PasswordBox}"
+                                    HorizontalAlignment="Left" MinWidth="130" MinHeight="36" />
+
+                            <TextBlock Text="{Binding LockMessage}"
+                                       Style="{StaticResource CaptionTextStyle}"
+                                       Foreground="{DynamicResource ErrorBrush}"
+                                       TextWrapping="Wrap" Margin="0,10,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Grid Visibility="{Binding AreProtectedSettingsUnlocked, Converter={StaticResource BoolToVisibility}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="1.3*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- What goes in -->
+                        <DockPanel Grid.Column="0">
+                            <TextBlock DockPanel.Dock="Top"
+                                       Text="{loc:Localize Settings.Hl7.Title}"
+                                       Style="{StaticResource SectionHeaderTextStyle}" />
+                            <TextBlock DockPanel.Dock="Top"
+                                       Text="{loc:Localize Settings.Hl7.Caption}"
+                                       Style="{StaticResource CaptionTextStyle}"
+                                       TextWrapping="Wrap" Margin="0,0,0,12" />
+
+                            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
+                                <Button Content="{loc:Localize Settings.Hl7.Inspect}"
+                                        Command="{Binding InspectHl7Command}"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        MinWidth="130" MinHeight="36" Margin="0,0,8,0" />
+                                <Button Content="{loc:Localize Settings.Hl7.Clear}"
+                                        Command="{Binding ClearHl7Command}"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        MinWidth="110" MinHeight="36" />
+                            </StackPanel>
+
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <DockPanel Grid.Row="0" Margin="0,0,0,4">
+                                    <Button DockPanel.Dock="Right"
+                                            Content="{loc:Localize Settings.Hl7.Browse}"
+                                            Command="{Binding BrowseHl7MessageCommand}"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            MinWidth="90" MinHeight="28" />
+                                    <TextBlock Text="{loc:Localize Settings.Hl7.Message}"
+                                               Style="{StaticResource FieldLabelTextStyle}"
+                                               VerticalAlignment="Center" />
+                                </DockPanel>
+
+                                <TextBox Grid.Row="1"
+                                         Text="{Binding Hl7MessageText, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource InputTextBoxStyle}"
+                                         AcceptsReturn="True" TextWrapping="NoWrap"
+                                         VerticalScrollBarVisibility="Auto"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         FontFamily="Consolas, Courier New"
+                                         MinHeight="110" Margin="0,0,0,12" />
+
+                                <DockPanel Grid.Row="2" Margin="0,0,0,4">
+                                    <Button DockPanel.Dock="Right"
+                                            Content="{loc:Localize Settings.Hl7.Browse}"
+                                            Command="{Binding BrowseHl7ProfileCommand}"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            MinWidth="90" MinHeight="28" />
+                                    <TextBlock Text="{loc:Localize Settings.Hl7.Profile}"
+                                               Style="{StaticResource FieldLabelTextStyle}"
+                                               VerticalAlignment="Center" />
+                                </DockPanel>
+
+                                <TextBox Grid.Row="3"
+                                         Text="{Binding Hl7ProfileText, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource InputTextBoxStyle}"
+                                         AcceptsReturn="True" TextWrapping="NoWrap"
+                                         VerticalScrollBarVisibility="Auto"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         FontFamily="Consolas, Courier New"
+                                         MinHeight="110" />
+                            </Grid>
+                        </DockPanel>
+
+                        <!-- What comes out -->
+                        <DockPanel Grid.Column="2"
+                                   Visibility="{Binding HasHl7Inspection, Converter={StaticResource BoolToVisibility}}">
+
+                            <TextBlock DockPanel.Dock="Top"
+                                       Text="{Binding Hl7Summary}"
+                                       Style="{StaticResource SectionHeaderTextStyle}"
+                                       TextWrapping="Wrap" />
+
+                            <Border DockPanel.Dock="Top"
+                                    Style="{StaticResource CardBorderStyle}"
+                                    Margin="0,0,0,12"
+                                    Visibility="{Binding HasHl7MissingFields, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel>
+                                    <TextBlock Text="{loc:Localize Settings.Hl7.Missing}"
+                                               Style="{StaticResource FieldLabelTextStyle}"
+                                               Foreground="{DynamicResource ErrorBrush}" />
+                                    <ItemsControl ItemsSource="{Binding Hl7MissingFields}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,2,0,0">
+                                                    <Run Text="{Binding Path, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding Name, Mode=OneWay}" />
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <TabControl Background="Transparent" BorderThickness="0">
+                                <TabItem Header="{loc:Localize Settings.Hl7.Structure}">
+                                    <TreeView ItemsSource="{Binding Hl7Segments}"
+                                              Background="{DynamicResource CardBackgroundBrush}"
+                                              BorderBrush="{DynamicResource CardBorderBrush}"
+                                              Foreground="{DynamicResource PrimaryTextBrush}"
+                                              Margin="0,8,0,0">
+                                        <TreeView.ItemTemplate>
+                                            <HierarchicalDataTemplate ItemsSource="{Binding Fields}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Label, Mode=OneWay}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="  " />
+                                                    <TextBlock Text="{Binding Group, Mode=OneWay}"
+                                                               Style="{StaticResource CaptionTextStyle}" />
+                                                </StackPanel>
+                                                <HierarchicalDataTemplate.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="{Binding Path, Mode=OneWay}" MinWidth="90" />
+                                                            <TextBlock Text="{Binding Name, Mode=OneWay}"
+                                                                       Style="{StaticResource CaptionTextStyle}" MinWidth="140" />
+                                                            <TextBlock Text="{Binding Value, Mode=OneWay}" TextTrimming="CharacterEllipsis" MaxWidth="260" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </HierarchicalDataTemplate.ItemTemplate>
+                                            </HierarchicalDataTemplate>
+                                        </TreeView.ItemTemplate>
+                                    </TreeView>
+                                </TabItem>
+
+                                <TabItem Header="{loc:Localize Settings.Hl7.Issues}">
+                                    <DataGrid ItemsSource="{Binding Hl7Issues}"
+                                              Style="{StaticResource ReadOnlyDataGridStyle}"
+                                              Margin="0,8,0,0">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="{loc:Localize Settings.Hl7.Where}"
+                                                                Binding="{Binding Location}" Width="130" />
+                                            <DataGridTextColumn Header="{loc:Localize Settings.Hl7.What}"
+                                                                Binding="{Binding Message}" Width="*" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </TabItem>
+
+                                <TabItem Header="{loc:Localize Settings.Hl7.OnTheWire}">
+                                    <TextBox Text="{Binding Hl7Preview, Mode=OneWay}"
+                                             Style="{StaticResource InputTextBoxStyle}"
+                                             IsReadOnly="True"
+                                             AcceptsReturn="True" TextWrapping="NoWrap"
+                                             VerticalScrollBarVisibility="Auto"
+                                             HorizontalScrollBarVisibility="Auto"
+                                             FontFamily="Consolas, Courier New"
+                                             Margin="0,8,0,0" />
+                                </TabItem>
+                            </TabControl>
+                        </DockPanel>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
             <TabItem Header="{loc:Localize Settings.Tab.Appearance}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
                     <StackPanel MaxWidth="420" HorizontalAlignment="Left">
