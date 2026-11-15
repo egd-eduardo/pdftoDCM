@@ -16,7 +16,12 @@ Phase 3 added the profile model, its reader, the closed transform set, the messa
 and the message validator. A profile is a JSON document; nothing in the builder knows what
 ORU means, which the tests check by building an ADT from the same code.
 
-Phase 4, destinations and routing, is next.
+**Phase 4 is complete.** Destinations, the routing engine and the dispatcher that ties the
+pieces together: build, check, refuse a duplicate, send with retries where retrying is safe,
+and write down every attempt.
+
+Phase 5, the message editor and preview, is next, and is the first phase whose work is in
+the desktop application rather than in the engine.
 
 This document answers Phase 1 of the brief. It analyses the existing application, reads the
 supplied conformance statement as a specimen rather than as a target, and proposes an

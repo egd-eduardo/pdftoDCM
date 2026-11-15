@@ -202,6 +202,40 @@ public sealed class MllpTransportTests
         Assert.True(result.Elapsed > TimeSpan.Zero);
     }
 
+    [Fact]
+    public async Task ARefusedConnectionSaysNothingLeftSoARetryIsSafe()
+    {
+        Hl7SendResult result = await new MllpTransport(OptionsFor(port: 9)).SendAsync(Encoded);
+
+        Assert.False(result.BytesWereWritten);
+        Assert.False(result.RetryCouldDuplicate);
+    }
+
+    [Fact]
+    public async Task ATimeoutAfterSendingSaysTheBytesLeftSoARetryIsNot()
+    {
+        // The pair that the dispatcher's no retry rule rests on. If the transport ever
+        // stopped distinguishing these, an automatic retry would quietly duplicate a report.
+        await using FakeMllpServer server = FakeMllpServer.ThatStaysSilent();
+
+        Hl7SendResult result = await new MllpTransport(OptionsFor(server.Port)).SendAsync(Encoded);
+
+        Assert.Equal(Hl7DeliveryState.Failed, result.State);
+        Assert.True(result.BytesWereWritten);
+        Assert.True(result.RetryCouldDuplicate);
+    }
+
+    [Fact]
+    public async Task ASuccessfulSendAlsoRecordsThatTheBytesLeft()
+    {
+        await using FakeMllpServer server = FakeMllpServer.ThatAcknowledges(Acknowledgement);
+
+        Hl7SendResult result = await new MllpTransport(OptionsFor(server.Port)).SendAsync(Encoded);
+
+        Assert.True(result.BytesWereWritten);
+        Assert.False(result.RetryCouldDuplicate);
+    }
+
     [Theory]
     [InlineData("", 1)]
     [InlineData("host", 0)]

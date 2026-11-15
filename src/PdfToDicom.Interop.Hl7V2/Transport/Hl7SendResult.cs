@@ -35,15 +35,32 @@ public enum Hl7DeliveryState
 /// <param name="Acknowledgement">The reply, when one was received and expected.</param>
 /// <param name="Elapsed">How long the attempt took, connection included.</param>
 /// <param name="Error">The underlying failure, when there was one.</param>
+/// <param name="BytesWereWritten">
+/// Whether the message was written to the connection before whatever went wrong.
+/// </param>
 public sealed record Hl7SendResult(
     Hl7DeliveryState State,
     string Message,
     byte[]? Acknowledgement = null,
     TimeSpan Elapsed = default,
-    Exception? Error = null)
+    Exception? Error = null,
+    bool BytesWereWritten = false)
 {
     /// <summary>True when the bytes reached the peer, acknowledged or not.</summary>
     public bool WasSent => State is Hl7DeliveryState.Sent or Hl7DeliveryState.Acknowledged;
+
+    /// <summary>
+    /// Whether sending this message again could put a second copy in the receiving system.
+    /// </summary>
+    /// <remarks>
+    /// The distinction that decides whether a retry is safe, and the reason the transport
+    /// bothers to track it. A refused connection means nothing arrived, so trying again
+    /// costs nothing. A timeout waiting for an acknowledgement means the bytes left and
+    /// nobody knows what became of them, so trying again may put a second copy of a report
+    /// in a patient's record. The two look identical in a result that only says "failed",
+    /// which is how an automatic retry quietly duplicates a document.
+    /// </remarks>
+    public bool RetryCouldDuplicate => !WasSent && BytesWereWritten;
 }
 
 /// <summary>Stages of a transmission, reported in order.</summary>

@@ -178,6 +178,23 @@ the message is needed. An attempt that failed does not count, since the whole po
 retry is to send it again, and a destination that acknowledges nothing still counts as
 delivered, since sending again would put a second copy in the record.
 
+**A message is never sent twice because two routing rules both matched.** Rules are
+considered in order and the first to name a destination wins it; a later rule naming the
+same one is ignored for that destination and still applies to the others. Two overlapping
+conditions are easy to write by accident, and the result otherwise is the same report
+arriving twice at one system, which is a duplicate in a patient's record rather than an
+untidiness.
+
+**A failure after the bytes have left is never retried.** This is the distinction the
+delivery design exists for. A refused connection means nothing arrived, so trying again
+costs nothing. A timeout waiting for an acknowledgement means the message left and nobody
+knows what became of it, so trying again may put a second copy of a report in a patient's
+record. The two look identical to anything that only knows the attempt failed, which is how
+an automatic retry quietly duplicates a document. The transport now says which happened,
+the outcome has a name of its own, and the operator is told to check the destination before
+resending. It is also recorded as sent, so a later identical message is stopped by the
+duplicate guard just as firmly as one that certainly arrived.
+
 The scope is settled: reports outbound, ORU^R01, and nothing else. The application does not
 listen, and no port is opened. See `docs/Hl7IntegrationArchitecture.md` for the
 architecture, the configuration model and the four questions still open.

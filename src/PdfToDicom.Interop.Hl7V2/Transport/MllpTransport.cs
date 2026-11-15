@@ -41,17 +41,18 @@ public sealed class MllpTransport : IHl7Transport
         CancellationToken cancellationToken = default)
     {
         var clock = Stopwatch.StartNew();
+        var written = new Written();
 
         try
         {
-            return await AttemptAsync(encodedMessage, progress, clock, cancellationToken)
+            return await AttemptAsync(encodedMessage, progress, clock, written, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // The operator cancelled. Not a failure of the destination, and reported as
             // what it is so that nobody goes looking for a network fault.
-            return Failed(clock, "The transmission was cancelled.", null);
+            return Failed(clock, "The transmission was cancelled.", null, written);
         }
         catch (OperationCanceledException)
         {
@@ -61,25 +62,25 @@ public sealed class MllpTransport : IHl7Transport
                 clock,
                 $"{_options.Host}:{_options.Port} did not respond within the configured " +
                 "timeout. Nothing is known about whether the message was processed.",
-                null);
+                null, written);
         }
         catch (SocketException ex)
         {
             return Failed(
                 clock,
                 $"{_options.Host}:{_options.Port} could not be reached: {ex.Message}",
-                ex);
+                ex, written);
         }
         catch (MllpProtocolException ex)
         {
-            return Failed(clock, $"The reply was not a valid HL7 frame: {ex.Message}", ex);
+            return Failed(clock, $"The reply was not a valid HL7 frame: {ex.Message}", ex, written);
         }
         catch (IOException ex)
         {
             return Failed(
                 clock,
                 $"The connection to {_options.Host}:{_options.Port} failed: {ex.Message}",
-                ex);
+                ex, written);
         }
     }
 
@@ -87,6 +88,7 @@ public sealed class MllpTransport : IHl7Transport
         ReadOnlyMemory<byte> encodedMessage,
         IProgress<Hl7TransmissionProgress>? progress,
         Stopwatch clock,
+        Written written,
         CancellationToken cancellationToken)
     {
         Report(progress, Hl7TransmissionStage.Connecting,
@@ -121,6 +123,10 @@ public sealed class MllpTransport : IHl7Transport
         await stream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
         await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
+        // From here on, a failure means the bytes left and their fate is unknown. Anything
+        // deciding whether to try again needs that, and only this line knows it.
+        written.Yes = true;
+
         if (!_options.ExpectAcknowledgement)
         {
             // Declared as answering nothing, so the transmission is complete at the point
@@ -132,7 +138,8 @@ public sealed class MllpTransport : IHl7Transport
                 "The message was sent. This destination is configured not to acknowledge, " +
                 "so whether it was processed is not known from here.",
                 Acknowledgement: null,
-                Elapsed: clock.Elapsed);
+                Elapsed: clock.Elapsed,
+                BytesWereWritten: true);
         }
 
         Report(progress, Hl7TransmissionStage.AwaitingAcknowledgement, "Waiting for the acknowledgement");
@@ -150,11 +157,22 @@ public sealed class MllpTransport : IHl7Transport
             Hl7DeliveryState.Acknowledged,
             $"The message was sent and {_options.Name} replied.",
             acknowledgement,
-            clock.Elapsed);
+            clock.Elapsed,
+            BytesWereWritten: true);
     }
 
-    private Hl7SendResult Failed(Stopwatch clock, string message, Exception? error) =>
-        new(Hl7DeliveryState.Failed, message, Acknowledgement: null, clock.Elapsed, error);
+    private static Hl7SendResult Failed(
+        Stopwatch clock, string message, Exception? error, Written written) =>
+        new(Hl7DeliveryState.Failed, message, Acknowledgement: null, clock.Elapsed, error,
+            written.Yes);
+
+    /// <summary>
+    /// Carries one fact out of an async method, which cannot have an out parameter.
+    /// </summary>
+    private sealed class Written
+    {
+        public bool Yes { get; set; }
+    }
 
     private void Report(
         IProgress<Hl7TransmissionProgress>? progress, Hl7TransmissionStage stage, string message) =>
