@@ -107,7 +107,7 @@ public sealed class Hl7Dispatcher
                 MessageControlId: controlId);
         }
 
-        string hash = ContentHash.Of(encoded);
+        string hash = ContentHash.Of(IdentityOf(message, profile));
 
         IntegrationTransaction? earlier = await _transactions
             .FindEarlierDeliveryAsync(hash, destination.Name, cancellationToken)
@@ -281,6 +281,40 @@ public sealed class Hl7Dispatcher
     /// Adds the destination's own identifiers to the subject, so a profile can map them
     /// without the destination having to be known to the mapping language.
     /// </summary>
+    /// <summary>
+    /// The bytes that say which document this message is about, for the duplicate check.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Not the transmitted bytes. MSH-7 is the moment the message was built and MSH-10 is
+    /// the identifier of this particular transmission, so including them makes every message
+    /// unique and the duplicate check unable to answer the only question it is asked: is
+    /// this the same document going to the same place again.
+    /// </para>
+    /// <para>
+    /// That is what it used to do. The check appeared to work because two attempts in the
+    /// same second produced the same control identifier, which was itself a defect; fixing
+    /// the identifier is what exposed this. Everything else is kept, the patient, the
+    /// accession number, the study identifier and the sending and receiving names, because
+    /// a message that differs in any of those is a different message.
+    /// </para>
+    /// </remarks>
+    private static byte[] IdentityOf(Hl7Message message, Hl7Profile profile)
+    {
+        // Re-parsed rather than mutated. The message in hand is the one about to go on the
+        // wire, and clearing two of its fields to compute a hash would send a message with
+        // no timestamp and no control identifier in it.
+        Hl7Message identity = Hl7Message.Parse(message.ToEr7());
+
+        identity.Set(Hl7Path.Parse("MSH-7"), string.Empty);
+        identity.Set(Hl7Path.Parse("MSH-10"), string.Empty);
+
+        return Hl7CharacterSet.Encode(
+            identity.ToEr7(),
+            Hl7CharacterSet.Resolve(profile.Encoding.CharacterSet),
+            UnrepresentableCharacterPolicy.Refuse);
+    }
+
     private static MessageSubject WithDestination(MessageSubject subject, Hl7Destination destination) =>
         subject
             .With("destination.sendingApplication", destination.SendingApplication)

@@ -58,6 +58,11 @@ public sealed class WorkflowStateToBrushConverter : IValueConverter
             {
                 WorkflowState.Completed => "SuccessBrush",
                 WorkflowState.Error => "ErrorBrush",
+
+                // Amber rather than red. The document reached the archive; something else
+                // did not, and the two must not look the same to somebody deciding whether
+                // to send the document again.
+                WorkflowState.NeedsAttention => "WarningBrush",
                 WorkflowState.Ready => "SecondaryTextBrush",
                 _ => "AccentBrush"
             }

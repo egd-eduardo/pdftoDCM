@@ -86,8 +86,35 @@ public sealed record Hl7Destination
             ExpectAcknowledgement = expectAcknowledgement
         };
 
-    /// <summary>Checks the destination, as the settings page would before saving it.</summary>
+    /// <summary>
+    /// Everything worth saying about this destination, advisories included.
+    /// </summary>
+    /// <remarks>
+    /// What a settings page shows. Whatever decides whether to send asks
+    /// <see cref="CheckBlocking"/> instead: the two were one list once, and a caller that
+    /// recognised the advisory by the word it starts with would have changed what gets sent
+    /// the first time somebody reworded a sentence.
+    /// </remarks>
     public IReadOnlyList<string> Check()
+    {
+        var problems = new List<string>(CheckBlocking());
+
+        if (UseTls && AcceptAnyTlsCertificate)
+        {
+            // Allowed, because a hospital's internal certificate may not chain anywhere a
+            // workstation knows. Never silent, because it is a real reduction in what the
+            // encryption proves about who is on the other end. Not blocking, because
+            // commissioning an interface against such a box has to be possible.
+            problems.Add(
+                "Warning: any certificate will be accepted, so the connection is encrypted " +
+                "but the far end is not authenticated.");
+        }
+
+        return problems;
+    }
+
+    /// <summary>The problems that stop this destination being used at all.</summary>
+    public IReadOnlyList<string> CheckBlocking()
     {
         var problems = new List<string>();
 
@@ -114,16 +141,6 @@ public sealed record Hl7Destination
         if (RetryCount < 0)
         {
             problems.Add("A number of retries below zero means nothing.");
-        }
-
-        if (UseTls && AcceptAnyTlsCertificate)
-        {
-            // Allowed, because a hospital's internal certificate may not chain anywhere a
-            // workstation knows. Never silent, because it is a real reduction in what the
-            // encryption proves about who is on the other end.
-            problems.Add(
-                "Warning: any certificate will be accepted, so the connection is encrypted " +
-                "but the far end is not authenticated.");
         }
 
         return problems;

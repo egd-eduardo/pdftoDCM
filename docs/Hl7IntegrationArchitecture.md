@@ -1,19 +1,23 @@
 # HL7 integration engine: architecture and implementation plan
 
-**Status: phases 2 to 8 are built. What is not built is named below, in one place.**
+**Status: phases 2 to 9 are built. What is not built is named below, in one place.**
 
 Decided so far, and recorded in the sections that follow: inbound is out of scope, and the
 first and only message type is **ORU^R01 outbound**.
 
-**What an administrator can do today, and what nobody can do yet.** The engine, the profile
-model, the inspector in Settings and two command line commands exist and are verified. What
-does not exist is the configuration surface: nothing saves a destination, nothing configures
-a routing rule, and no setting makes a conversion announce itself. An interface therefore
-runs by calling `pdftodicom hl7-send` from a script, which works and is not the same as a
-product feature. `docs/Hl7IntegrationGuide.md` says this to the administrator in its own
-first paragraph rather than leaving it to be discovered, and marks the two sections that
-describe what is still to be built. That is the next phase, and it is mostly interface work,
-which is the part that cannot be written or tested here.
+**Phase 9 is complete, and with it the configuration surface.** Destinations, routing rules
+and profiles are configured on the HL7 page in Settings, kept in a file of their own beside
+the profiles, and read by a plan factory that turns the configuration into the plan phase 7
+takes. A conversion announces itself when the switch on the Routing page is on, which it is
+not by default. What an administrator cannot do from the page: name several destinations in
+one rule, and carry the HL7 configuration with Export settings. Both are stated in the
+guide, in the sections where somebody would look for them.
+
+The settings deliberately do not live in `AppConfiguration`. Putting them there would have
+given Core a reference to the engine, a reason to be rebuilt whenever the engine changes, and
+a shape its 291 tests would have to cover. The cost of the separate file is that the settings
+transfer does not carry it and a second workstation needs one more file copied, which is a
+smaller price than the coupling.
 
 **Phases 2 and 3 are complete.** `src/PdfToDicom.Interop.Hl7V2` holds the message model, the ER7
 codec, the character set rules, MLLP framing and the outbound transport.

@@ -14,14 +14,11 @@ way and what was decided against. You do not need it to configure an interface.
 Current scope: **outbound ORU^R01 only**, over MLLP. Inbound messages and FHIR are
 deliberately out of scope for now; section 11 says what that means for you.
 
-> **Read this before anything else. What exists today is the engine, the profile model, the
-> inspector in Settings and the two command line commands. There is no page yet on which a
-> destination is saved, no routing configuration, and no switch that makes a conversion send
-> a notification by itself.** Everything in sections 3 to 5 and 8 to 12 works now, from the
-> command line and from the inspector, and is how a profile is written and commissioned.
-> Sections 6 and 7 describe what is still to be built and say so in place. Until then an
-> interface runs by calling `pdftodicom hl7-send` from a script, which is a real way to
-> operate one and is not the same as a product feature.
+> **One limitation worth knowing before you start.** A routing rule sends to one
+> destination on the Routing page. The settings file itself supports several per rule, and a
+> rule edited by hand to name several keeps them, but the page offers one, so two
+> destinations for the same message means two rules. Everything else in this document is
+> configured on the HL7 page in Settings, behind the protected settings password.
 
 ---
 
@@ -43,16 +40,19 @@ Two things it deliberately does **not** do:
 
 ## 2. The three things an interface is made of
 
-| What | Who provides it | Where it lives today |
+| What | Who provides it | Where it is configured |
 | --- | --- | --- |
-| A **profile**: the message, its fields and where each value comes from | The receiving system's conformance statement | A JSON file you keep under change control |
-| A **destination**: a host, a port and the four application and facility names | The receiving system's administrator | Arguments to `hl7-send`. Not yet saved anywhere |
-| A **routing rule**: which destination gets which message | You, from local policy | Not yet built. One profile and one destination per command |
+| A **profile**: the message, its fields and where each value comes from | The receiving system's conformance statement | A JSON file you write and then import on the Profiles page |
+| A **destination**: a host, a port and the four application and facility names | The receiving system's administrator | The Destinations page |
+| A **routing rule**: which destination gets which message | You, from local policy | The Routing page |
 
-The profile is the part that takes the work and the part that matters, and it is finished:
-what you write today is what the application will read once the rest is in place. A
-destination is four names, a host and a port, and retyping them in a script until there is a
-page for them is tedious rather than difficult.
+All three live behind the same password as the Destinations and Worklist pages, and in two
+files you can copy to the next workstation: the settings file itself, and the profile files
+beside it. Both paths are shown on the pages.
+
+Nothing is sent until the switch at the top of the Routing page is on. A destination that
+exists and is not yet trusted sits there doing nothing, which is what commissioning an
+interface on a machine that also does real work requires.
 
 ---
 
@@ -314,7 +314,11 @@ In order, because each step rules out the next step's commonest cause of confusi
    the patient.
 4. **Send a message with a real accented name**, because character set problems are
    invisible until they are not. A name like Gonçalves or Sofía will show them.
-5. **Only then configure the destination in Settings** and enable the profile.
+5. **Import the profile and configure the destination in Settings**, as in sections 6 and
+   7, leaving the announcement switch off. Press Check the configuration and Test the
+   connection; both touch the network at most to open a socket.
+6. **Only then turn the switch on**, and convert one real document while somebody at the
+   receiving system is watching for it.
 
 Where no test endpoint exists, `tools/PdfToDicom.Hl7TestServer` is a listener you can run
 on your own machine that answers in each of the ways a real receiver can, including the
@@ -332,11 +336,9 @@ handed to a site.
 
 ---
 
-## 6. The destination (not yet a settings page)
+## 6. Configuring a destination
 
-**This section describes what is still to be built.** Today a destination is given to
-`hl7-send` as `--to host:port`, and the four names are given as values, exactly as in
-section 5. What follows is what each one is for, which is the same either way.
+Settings, HL7 page, Destinations. Add an entry per receiving system.
 
 | Field | What to put in it |
 | --- | --- |
@@ -344,11 +346,16 @@ section 5. What follows is what each one is for, which is the same either way.
 | Host and port | From the receiving system's administrator. 2575 is the usual MLLP port |
 | Sending application and facility | What **this** application calls itself, for MSH-3 and MSH-4 |
 | Receiving application and facility | What the **receiver** calls itself, for MSH-5 and MSH-6 |
-| Connect and receive timeouts | 10 and 30 seconds suit almost everything. `--timeout` sets the second one |
-| Retries | See the warning below. The command line never retries |
-| Profiles | Which profiles may be sent here |
+| Connection and acknowledgement timeouts | 10 and 30 seconds suit almost everything |
+| Further attempts | See the warning below. Zero unless you have a reason |
+| Accept only these profiles | Empty accepts any. A list restricts this destination, and a rule that sends it something else is reported rather than quietly skipped |
 
-From a script, the four names are values like any others:
+**Test the connection** opens a connection to the destination and closes it. It sends
+nothing, deliberately: a test message from a settings dialog would put a document in a
+patient's record to answer the question of whether a port is open. Send a real test message
+from the command line, with `--test-data`, as in section 5.
+
+The same destination from a script, for a scripted interface or for commissioning:
 
 ```
 pdftodicom hl7-send --profile p.json --to ris.hospital.local:2575 \
@@ -368,22 +375,66 @@ far end, because a message that was received but not acknowledged looks exactly 
 that never arrived. The application always says which case it is in; see
 `SentButUnconfirmed` in section 8. A retry count above 0 is a decision that duplicate
 notifications are preferable to missing ones, which is true for some receivers and false for
-others. Ask before setting it. The command line does not retry at all, for that reason: from
-a script, trying again is a decision somebody takes deliberately rather than a default they
-inherit.
+others. Ask before setting it. The command line does not retry at all, for the same reason:
+from a script, trying again is a decision somebody takes deliberately rather than a default
+they inherit.
 
 ---
 
-## 7. Routing (not yet built)
+## 7. Routing, and the switch that makes it live
 
-**This section describes what is still to be built.** The engine has a routing component and
-nothing configures it yet; today a command names one profile and one destination, which is
-all the routing there is.
+Settings, HL7 page, Routing. Three things live here.
 
-The intended behaviour, for when it is: a rule says which destination receives which
-message, the first rule that names a destination wins it, so order matters and a rule that
-matches everything belongs last, and a message that no rule matches is not sent, with the
-log saying so rather than passing over it in silence.
+**The switch: "Announce a conversion to these systems".** Off until an interface has been
+commissioned. While it is off, destinations and rules can be configured, checked and
+connection tested, and nothing is sent. Turning it on is the moment the interface becomes
+live, and it is the first thing to look at when asking why nothing is being sent.
+
+**The order.** What happens if one half fails:
+
+| Order | What it means | When to choose it |
+| --- | --- | --- |
+| Convert and announce independently | Both happen; neither can stop the other | The default and the careful answer. A record system that is down cannot stop a report reaching the archive |
+| Announce only what the archive accepted | The message is sent after a successful transmission | A receiver whose message refers to the study, since an ORU carrying a Study Instance UID no archive holds points at nothing |
+| Announce first, convert if the message landed | A failed message cancels the conversion | A receiver that will not file an image until an order exists. The only order in which an HL7 failure stops a report reaching the archive, which is why it has to be chosen rather than arrived at |
+
+**The rules.** Each one has a name, a profile, a destination and a list of conditions, all of
+which must hold. Rules are considered in order, which the Earlier and Later buttons change,
+and the first rule to name a destination wins it, so a rule that matches everything belongs
+last. Two overlapping rules can never mean two messages to the same destination: that would
+be a duplicate in a patient's record rather than a tidiness problem.
+
+A condition matches on one of these, and nothing else:
+
+| Matches on | Holds |
+| --- | --- |
+| `messageType`, `triggerEvent` | From the rule's own profile, so `ORU` and `R01` |
+| `modality` | The configured modality |
+| `studyDescription`, `documentTitle` | As entered on the form |
+| `hasAccessionNumber` | `yes` or `no` |
+| `source` | `operator` for a conversion somebody started by hand |
+
+A value matches exactly; `*` matches anything that is present; alternatives are separated by
+commas, as `ORU,ADT`. An empty condition list matches every message.
+
+**There is deliberately no patient identifier to match on.** Routing on one is not routing:
+it is one patient's reports going somewhere different from everybody else's, which is a
+mistake nobody should be able to configure.
+
+**Check the configuration** reports everything that would stop a message being sent: a rule
+naming a destination that no longer exists, a profile that is not installed, a destination
+that is disabled, two destinations sharing an identifier, or the switch being on with nothing
+enabled to send. The same check runs when the dialog is saved, and a configuration that is
+both live and broken cannot be saved: correct it, or switch announcements off while you work
+on it.
+
+**What the operator sees.** When a conversion will announce itself, the confirmation that
+reads the patient's identity back also names the record systems that are about to be told.
+After the run, the result keeps the two halves apart: a report that did not reach the archive
+is not where a clinician will look for it, and a message that did not reach a record system
+is a report that is safely filed and that somebody has not been told about. The second turns
+the status amber rather than red, because sending the document again would duplicate it in
+the archive to fix a problem that is not there.
 
 ---
 
@@ -450,6 +501,11 @@ the successes is the one worth having and the one nobody keeps.
   model carries the message type and structure as data, so another type is a profile and
   not a release. It has not been commissioned against a real receiver, so treat the first
   one as development rather than configuration.
+- **Several destinations in one rule, from the page.** The file supports it; the page offers
+  one destination per rule. Two destinations for the same message means two rules.
+- **Carrying the HL7 configuration with Export settings.** That transfer carries the
+  archives and the worklist servers, and not these. Copy the settings file and the profile
+  folder, whose paths both pages show.
 - **FHIR.** The engine's internals are kept free of HL7 v2 vocabulary precisely so that a
   FHIR transport can be added beside MLLP rather than instead of it. Nothing of the sort
   ships today.

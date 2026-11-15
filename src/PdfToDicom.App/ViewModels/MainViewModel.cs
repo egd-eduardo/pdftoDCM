@@ -10,6 +10,9 @@ using FellowOakDicom;
 using Microsoft.Win32;
 using PdfToDicom.App.Infrastructure;
 using PdfToDicom.App.Views;
+using PdfToDicom.Integration;
+using PdfToDicom.Integration.Configuration;
+using PdfToDicom.Interop.Hl7V2.Dispatch;
 using PdfToDicom.Core.Abstractions;
 using PdfToDicom.Core.Configuration;
 using PdfToDicom.Core.Importing;
@@ -40,7 +43,18 @@ public enum WorkflowState
     Completed,
 
     /// <summary>The run failed.</summary>
-    Error
+    Error,
+
+    /// <summary>
+    /// The document was handled and something still needs a person.
+    /// </summary>
+    /// <remarks>
+    /// Added for the one case that is neither: the archive took the report and a message to
+    /// a record system is unconfirmed. Reporting that as an error would invite somebody to
+    /// convert and send the document again, which duplicates it in the archive to fix a
+    /// problem that is not there; reporting it as completed hides the half that is not.
+    /// </remarks>
+    NeedsAttention
 }
 
 /// <summary>
@@ -50,6 +64,16 @@ public enum WorkflowState
 public sealed class MainViewModel : ObservableObject, IDisposable
 {
     private readonly ApplicationServices _services;
+
+    /// <summary>
+    /// The HL7 half, or null when nothing is configured.
+    /// </summary>
+    /// <remarks>
+    /// Created once and reloaded when the settings dialog saves. Built here rather than in
+    /// ApplicationServices because that lives in Core, which knows nothing about HL7 and is
+    /// deliberately being kept that way.
+    /// </remarks>
+    private readonly Hl7Announcer _announcer;
     private readonly Dispatcher _dispatcher;
 
     private CancellationTokenSource? _cancellation;
@@ -128,6 +152,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         // to be able to stop it, and the confirmation says what is in progress rather than
         // the button refusing to be pressed.
         ExitCommand = new RelayCommand(RequestExit);
+
+        _announcer = new Hl7Announcer(
+            _services.Workflow,
+            _services.Logger,
+            Path.Combine(_services.AppLogger.LogFolder, "hl7"));
 
         StatusMessage = Localize("Status.Ready");
         PopulateDefaultsFromConfiguration();
@@ -798,9 +827,26 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // ------------------------------------------------ What would be announced
+        // Worked out before the confirmation, so the operator is told which record systems
+        // are about to hear about this document rather than finding out afterwards. Only
+        // when the document is going to the archive: announcing a study no archive holds
+        // would point a record system at nothing.
+        Hl7PlanResult announcement = transmit && _announcer.IsAnnouncing
+            ? _announcer.Plan(demographics, _services.ConfigurationService.Current.Modality, "operator")
+            : Hl7PlanResult.Nothing;
+
+        foreach (string problem in announcement.Problems)
+        {
+            // Reported and not fatal. A record system that cannot be reached must not stop
+            // a report reaching the archive, and an operator who is told nothing would
+            // assume the message went.
+            _services.Logger.Warning($"HL7 routing: {problem}");
+        }
+
         // ------------------------------------------------ Confirm with the operator
         if (transmit && _services.ConfigurationService.Current.ConfirmBeforeSending &&
-            !ConfirmSend(demographics))
+            !ConfirmSend(demographics, announcement))
         {
             SetState(WorkflowState.Ready, Localize("Status.Ready"));
             return;
@@ -819,15 +865,47 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            ConversionResult result = await _services.Workflow.RunAsync(
-                PdfPath,
-                demographics,
-                new ConversionOptions(transmit),
-                progress,
-                _cancellation.Token);
+            if (announcement.WillSend)
+            {
+                // Both halves, in the order the site chose. The plan is the one that was
+                // worked out before the operator confirmed, not a fresh evaluation of the
+                // configuration: what they agreed to and what is sent must be the same.
+                IntegratedConversionResult both = await _announcer.RunAsync(
+                    PdfPath,
+                    demographics,
+                    announcement.Plan,
+                    new ConversionOptions(transmit),
+                    progress,
+                    _cancellation.Token);
 
-            ApplyResult(result, transmit);
-            FileSourceDocument(result, transmit);
+                if (both.Dicom is not null)
+                {
+                    ApplyResult(both.Dicom, transmit);
+                    FileSourceDocument(both.Dicom, transmit);
+                }
+                else
+                {
+                    // The only way here is the order that announces first and converts only
+                    // if the message landed. Nothing was converted, so nothing is filed, and
+                    // the operator is told why rather than being shown an empty result.
+                    SetState(WorkflowState.Error, Localize("Status.Error"));
+                    ResultMessage = both.Summary;
+                }
+
+                ReportHl7Outcomes(both);
+            }
+            else
+            {
+                ConversionResult result = await _services.Workflow.RunAsync(
+                    PdfPath,
+                    demographics,
+                    new ConversionOptions(transmit),
+                    progress,
+                    _cancellation.Token);
+
+                ApplyResult(result, transmit);
+                FileSourceDocument(result, transmit);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -1159,11 +1237,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// anything leaves the workstation is the last practical defence against a document
     /// being filed against the wrong patient.
     /// </summary>
-    private bool ConfirmSend(PatientDemographics demographics)
+    private bool ConfirmSend(PatientDemographics demographics, Hl7PlanResult announcement)
     {
         string destinations = string.Join(
             Environment.NewLine,
             _services.ConfigurationService.Current.EnabledDestinations.Select(d => "   - " + d.DisplaySummary));
+
+        // The record systems that are about to be told, named in the same breath as the
+        // archives. An operator confirming a patient's identity is entitled to know every
+        // system that is about to hear about this document, not only the archive.
+        string announcements = announcement.WillSend
+            ? Environment.NewLine + Environment.NewLine +
+              Localize("Confirm.Announcing") + ":" + Environment.NewLine +
+              string.Join(
+                  Environment.NewLine,
+                  announcement.Plan.Deliveries.Select(d => "   - " + d.Destination.DisplaySummary))
+            : string.Empty;
 
         string message =
             Localize("Confirm.Message") + Environment.NewLine + Environment.NewLine +
@@ -1175,7 +1264,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             (SourceKind == SourceDocumentKind.Image
                 ? SourceDescription + Environment.NewLine
                 : string.Empty) + Environment.NewLine +
-            Localize("Step3.Header") + ":" + Environment.NewLine + destinations;
+            Localize("Step3.Header") + ":" + Environment.NewLine + destinations +
+            announcements;
 
         return MessageBox.Show(
             message,
@@ -1183,6 +1273,56 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             MessageBoxButton.OKCancel,
             MessageBoxImage.Question,
             MessageBoxResult.Cancel) == MessageBoxResult.OK;
+    }
+
+    /// <summary>
+    /// Tells the operator what became of each message, keeping it apart from the archive.
+    /// </summary>
+    /// <remarks>
+    /// Separate from the DICOM result because the two are acted on completely differently.
+    /// A report that did not reach the archive is not where a clinician will look for it; a
+    /// message that did not reach a record system is a report that is safely filed and that
+    /// somebody has not been told about. Reading one verdict over both would hide which.
+    /// </remarks>
+    private void ReportHl7Outcomes(IntegratedConversionResult result)
+    {
+        if (result.Hl7.Count == 0)
+        {
+            return;
+        }
+
+        foreach (Hl7DispatchResult message in result.Hl7)
+        {
+            string line =
+                $"{message.Outcome}: {message.Message} ({Localize("Result.Hl7ControlId")} {message.MessageControlId})";
+
+            if (message.NeedsAttention)
+            {
+                _services.Logger.Warning($"HL7: {line}");
+            }
+            else
+            {
+                _services.Logger.Information($"HL7: {line}");
+            }
+        }
+
+        string summary = string.Join(
+            Environment.NewLine,
+            result.Hl7.Select(m => "   - " + m.Message));
+
+        ResultMessage = (ResultMessage.Length > 0
+                ? ResultMessage + Environment.NewLine + Environment.NewLine
+                : string.Empty)
+            + Localize("Result.Hl7Header") + ":" + Environment.NewLine + summary;
+
+        // An unconfirmed message is the one an operator has to act on, so it moves the whole
+        // run out of the completed state even when the archive took the document. "The
+        // report is filed and we do not know whether the record system was told" is not a
+        // finished piece of work.
+        if (result.Hl7.Any(m => m.NeedsAttention) && State != WorkflowState.Error)
+        {
+            SetState(WorkflowState.NeedsAttention, Localize("Status.Hl7NeedsAttention"));
+        }
     }
 
     private void ShowTagViewer()
@@ -1333,6 +1473,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             RefreshDestinations();
             RefreshTemplates();
             StartOrStopFolderMonitoring();
+
+            // The HL7 settings are a separate file with a separate service, so a save in
+            // the dialog is not seen here until it is read again. Without this, switching
+            // announcements on would appear to do nothing until the application restarted.
+            _announcer.Reload();
 
             OnPropertyChanged(nameof(InstitutionHeader));
             OnPropertyChanged(nameof(ShowAdvancedFields));

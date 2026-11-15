@@ -301,6 +301,87 @@ rejections correctly, having never sent one; it now refuses what it does not rec
 test fixture was also a separator short, which had put the message type in MSH-8 where
 nothing asserted on it.
 
+**An interface can now be configured on screen, and a conversion can announce itself.** The
+HL7 page in Settings, behind the same password as Destinations and Worklist, gained three
+pages beside the inspector. **Destinations** holds one entry per receiving system, including
+the four application and facility names that a receiver reads from the header and whose being
+wrong is the commonest reason a first message is rejected without explanation. **Routing**
+holds the rules, in the order they are considered, with the conditions each one matches on.
+**Profiles** installs a profile from a file, refusing one that cannot build a message rather
+than listing a name no rule could ever use, and showing a profile broken by a hand edit with
+the reader's objection beside it instead of leaving it out of the list.
+
+**Nothing is sent until one switch is turned on**, and it is off by default. Commissioning an
+interface means configuring a destination on a machine that also does real work, so a
+destination that exists and is not yet trusted has to be able to sit there with nothing
+reaching it. The switch is at the top of the Routing page rather than buried, because it is
+the first thing somebody should find when asking why nothing is being sent.
+
+**Test the connection opens a socket and sends nothing.** A test message from a settings
+dialog would put a document in a patient's record to answer the question of whether a port is
+open, which is not a trade anybody would make knowingly. A real test message is sent from the
+command line, deliberately, with data that is recognisable as a test.
+
+**The routing offers no patient identifier to match on.** Routing on one is not routing: it
+is one patient's reports going somewhere different from everybody else's, which is a mistake
+nobody should be able to configure. A rule matches on the message type and trigger event, the
+modality, the study description, the document title, whether there is an accession number,
+and where the document came from.
+
+**A configuration that is both live and broken cannot be saved.** The check that runs when
+the page is saved reports a rule naming a destination that no longer exists, a profile that
+is not installed, a destination that is disabled, two destinations sharing an identifier, and
+the switch being on with nothing enabled to send. A site part way through commissioning can
+still save a configuration that does not work yet, because the switch is off and nothing is
+being sent; a site that has switched it on and whose routing can send nothing has a problem
+it would otherwise discover when a report went missing.
+
+**The operator is told, in both directions.** The confirmation that reads a patient's
+identity back before anything leaves the workstation now also names the record systems that
+are about to be told. Afterwards the result keeps the two halves apart, and a message that
+needs attention turns the status amber rather than red: a report that reached the archive and
+a record system that may not have been told is not an error to be fixed by converting and
+sending the document again, which would duplicate it in the archive to solve a problem that
+is not there.
+
+**The settings are a file of their own, and that was the decision.** Putting them in the main
+configuration would have given the core assembly a reference to the HL7 engine, a reason to
+be rebuilt whenever the engine changes, and a shape its 291 tests would have to cover. The
+price is that Export settings does not carry them, so a second workstation needs the settings
+file and the profile folder copied; both paths are shown on the pages. The editable form of a
+destination and a rule mirrors the engine's own immutable types, which no WPF editor can bind
+to, and a pair of tests compares the two property by property so that one gaining a setting
+the other lacks fails on the day it happens rather than silently doing nothing.
+
+**Two messages could be sent under the same identifier, and the duplicate guard could not
+tell one document from another.** Both were found by the interoperability script, one after
+the other, and both were in code that had passed its own tests.
+
+The message control identifier was a timestamp to the second followed by a counter starting
+at zero. Two processes starting in the same second therefore both produced `...0001`: two
+workstations, or two runs of the command line a moment apart, could send different documents
+under the same identifier, and a receiver that discards a repeated MSH-10, which is a
+reasonable thing for a receiver to do, would drop the second report. The counter now starts
+somewhere random, and the sequence is four characters of base 36 rather than four digits:
+both fit the twenty character field, and the second leaves one chance in 1,679,616 that two
+processes in the same second agree rather than one in ten thousand.
+
+Fixing that exposed the larger one. The duplicate guard hashed the bytes that were
+transmitted, which include the moment the message was built and the identifier of that
+particular transmission, so every message was unique and the check could only ever match two
+attempts built in the same second with the same control identifier. In other words it worked
+only by virtue of the defect above, and in a hospital it would have matched nothing at all.
+It now hashes the message with those two fields cleared, which is the question it was always
+meant to answer: is this the same document going to the same place again. The test that
+covers it pins two clocks and two sequences rather than pausing for a second, so the reason
+it passes is visible.
+
+Two further defects were found by compiling the view models against reference assemblies
+rather than waiting for the Windows runner: a missing import, and a status state that did not
+exist. The scratch project that did it is not part of the solution and is not committed; the
+technique is worth recording, because on this repository a view model mistake otherwise waits
+four minutes for CI to find it.
+
 The scope is settled: reports outbound, ORU^R01, and nothing else. The application does not
 listen, and no port is opened. See `docs/Hl7IntegrationGuide.md` for how to configure one and
 `docs/Hl7IntegrationArchitecture.md` for the architecture, the configuration model and the

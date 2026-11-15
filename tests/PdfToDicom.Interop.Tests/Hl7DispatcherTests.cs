@@ -124,10 +124,16 @@ public sealed class Hl7DispatcherTests
     private static MessageSubject Subject() => new MessageSubject().With("patient.id", "1234567");
 
     private static Hl7Dispatcher DispatcherFor(
-        ScriptedTransport transport, RecordingStore store) =>
+        ScriptedTransport transport, RecordingStore store, Hl7MessageBuilder? builder = null) =>
         new(store,
             (_, expectAck) => { transport.ExpectedAcknowledgement = expectAck; return transport; },
+            builder,
             delay: (_, _) => Task.CompletedTask);
+
+    /// <summary>A builder whose clock and sequence are both pinned, standing in for another
+    /// moment or another workstation.</summary>
+    private static Hl7MessageBuilder BuilderAt(DateTimeOffset moment, int startAt) =>
+        new(new Hl7ControlIdGenerator(() => moment, startAt), () => moment);
 
     [Fact]
     public async Task AGoodMessageGoesOutAndIsWrittenDown()
@@ -289,6 +295,36 @@ public sealed class Hl7DispatcherTests
         Assert.Equal(0, second.Calls);
         Assert.Contains(first.MessageControlId, again.Message, StringComparison.Ordinal);
         Assert.Equal("Duplicate", store.Written.Last().DeliveryState);
+    }
+
+    [Fact]
+    public async Task TheSameDocumentIsRecognisedEvenThoughEveryTransmissionIsUnique()
+    {
+        // The defect this covers: the duplicate check hashed the transmitted bytes, which
+        // include the moment the message was built and the identifier of that particular
+        // transmission. Every message is therefore unique, so the check could only ever
+        // match two attempts that happened to be built in the same second with the same
+        // control identifier, which is not what anybody meant by "the same document".
+        var store = new RecordingStore();
+
+        // Two moments and two starting points, rather than a real pause. Waiting for the
+        // clock to move would make this test slow and the reason it passes invisible.
+        var moment = new DateTimeOffset(2026, 11, 15, 9, 30, 0, TimeSpan.Zero);
+        DateTimeOffset later = moment.AddSeconds(1);
+
+        Hl7DispatchResult first = await DispatcherFor(
+                new ScriptedTransport(ScriptedTransport.Acknowledged()), store,
+                BuilderAt(moment, startAt: 0))
+            .SendAsync(Profile(), Destination(), Subject());
+
+        var second = new ScriptedTransport(ScriptedTransport.Acknowledged());
+
+        Hl7DispatchResult again = await DispatcherFor(second, store, BuilderAt(later, startAt: 500))
+            .SendAsync(Profile(), Destination(), Subject());
+
+        Assert.NotEqual(first.MessageControlId, again.MessageControlId);
+        Assert.Equal(Hl7DispatchOutcome.AlreadyDelivered, again.Outcome);
+        Assert.Equal(0, second.Calls);
     }
 
     [Fact]

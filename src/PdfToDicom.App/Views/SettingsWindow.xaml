@@ -921,12 +921,430 @@
                         </StackPanel>
                     </Border>
 
-                    <Grid Visibility="{Binding AreProtectedSettingsUnlocked, Converter={StaticResource BoolToVisibility}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="16" />
-                            <ColumnDefinition Width="1.3*" />
-                        </Grid.ColumnDefinitions>
+                    <TabControl Visibility="{Binding AreProtectedSettingsUnlocked, Converter={StaticResource BoolToVisibility}}">
+
+                        <!-- ============================================ Destinations -->
+
+                        <TabItem Header="{loc:Localize Settings.Hl7.Tab.Destinations}">
+                            <Grid Margin="0,12,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="240" />
+                                    <ColumnDefinition Width="16" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <DockPanel Grid.Column="0">
+                                    <StackPanel DockPanel.Dock="Top">
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.Destinations.Title}"
+                                                   Style="{StaticResource SectionHeaderTextStyle}" />
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.Destinations.Caption}"
+                                                   Style="{StaticResource CaptionTextStyle}"
+                                                   TextWrapping="Wrap" Margin="0,0,0,10" />
+                                    </StackPanel>
+
+                                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
+                                        <Button Content="{loc:Localize Settings.Hl7.AddDestination}"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Command="{Binding AddHl7DestinationCommand}"
+                                                MinWidth="96" Margin="0,0,6,0" />
+                                        <Button Content="{loc:Localize Settings.Hl7.RemoveDestination}"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Command="{Binding RemoveHl7DestinationCommand}"
+                                                MinWidth="96" />
+                                    </StackPanel>
+
+                                    <ListBox ItemsSource="{Binding Hl7.Destinations}"
+                                             SelectedItem="{Binding SelectedHl7Destination}"
+                                             Background="{DynamicResource CardBackgroundBrush}"
+                                             BorderBrush="{DynamicResource CardBorderBrush}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="2,5">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                    <TextBlock Style="{StaticResource CaptionTextStyle}">
+                                                        <Run Text="{Binding Host, Mode=OneWay}" /><Run Text=":" /><Run Text="{Binding Port, Mode=OneWay}" />
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </DockPanel>
+
+                                <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto"
+                                              Visibility="{Binding HasSelectedHl7Destination, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel>
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.DestinationName}" Style="{StaticResource FieldLabelTextStyle}" />
+                                        <TextBox Text="{Binding SelectedHl7Destination.Name, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,12" />
+
+                                        <Grid Margin="0,0,0,12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="12" />
+                                                <ColumnDefinition Width="110" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="{loc:Localize Settings.Host}" Style="{StaticResource FieldLabelTextStyle}" />
+                                                <TextBox Text="{Binding SelectedHl7Destination.Host, UpdateSourceTrigger=PropertyChanged}"
+                                                         Style="{StaticResource InputTextBoxStyle}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="{loc:Localize Settings.Port}" Style="{StaticResource FieldLabelTextStyle}" />
+                                                <TextBox Text="{Binding SelectedHl7Destination.Port, UpdateSourceTrigger=PropertyChanged}"
+                                                         Style="{StaticResource InputTextBoxStyle}" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <CheckBox Content="{loc:Localize Settings.Hl7.DestinationEnabled}"
+                                                  IsChecked="{Binding SelectedHl7Destination.IsEnabled}"
+                                                  Style="{StaticResource SettingCheckBoxStyle}" />
+
+                                        <!-- The four names. Grouped together because they are
+                                             read as a set by the receiver, and because one of
+                                             them being wrong is the commonest reason a first
+                                             message is rejected without explanation. -->
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.SendingApplication}" Style="{StaticResource FieldLabelTextStyle}" />
+                                        <TextBox Text="{Binding SelectedHl7Destination.SendingApplication, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,10" />
+
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.SendingFacility}" Style="{StaticResource FieldLabelTextStyle}" />
+                                        <TextBox Text="{Binding SelectedHl7Destination.SendingFacility, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,10" />
+
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.ReceivingApplication}" Style="{StaticResource FieldLabelTextStyle}" />
+                                        <TextBox Text="{Binding SelectedHl7Destination.ReceivingApplication, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,10" />
+
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.ReceivingFacility}" Style="{StaticResource FieldLabelTextStyle}" />
+                                        <TextBox Text="{Binding SelectedHl7Destination.ReceivingFacility, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,14" />
+
+                                        <Grid Margin="0,0,0,12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="12" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="{loc:Localize Settings.Hl7.ConnectTimeout}" Style="{StaticResource FieldLabelTextStyle}" />
+                                                <TextBox Text="{Binding SelectedHl7Destination.ConnectTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}"
+                                                         Style="{StaticResource InputTextBoxStyle}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="{loc:Localize Settings.Hl7.ReceiveTimeout}" Style="{StaticResource FieldLabelTextStyle}" />
+                                                <TextBox Text="{Binding SelectedHl7Destination.ReceiveTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}"
+                                                         Style="{StaticResource InputTextBoxStyle}" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid Margin="0,0,0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="12" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="{loc:Localize Settings.Hl7.Retries}" Style="{StaticResource FieldLabelTextStyle}" />
+                                                <TextBox Text="{Binding SelectedHl7Destination.RetryCount, UpdateSourceTrigger=PropertyChanged}"
+                                                         Style="{StaticResource InputTextBoxStyle}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="{loc:Localize Settings.Hl7.RetryDelay}" Style="{StaticResource FieldLabelTextStyle}" />
+                                                <TextBox Text="{Binding SelectedHl7Destination.RetryDelaySeconds, UpdateSourceTrigger=PropertyChanged}"
+                                                         Style="{StaticResource InputTextBoxStyle}" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.RetriesCaption}"
+                                                   Style="{StaticResource CaptionTextStyle}"
+                                                   TextWrapping="Wrap" Margin="0,0,0,14" />
+
+                                        <CheckBox Content="{loc:Localize Settings.Hl7.UseTls}"
+                                                  IsChecked="{Binding SelectedHl7Destination.UseTls}"
+                                                  Style="{StaticResource SettingCheckBoxStyle}" />
+                                        <CheckBox Content="{loc:Localize Settings.Hl7.AcceptAnyCertificate}"
+                                                  IsChecked="{Binding SelectedHl7Destination.AcceptAnyTlsCertificate}"
+                                                  Style="{StaticResource SettingCheckBoxStyle}" />
+
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.RestrictProfiles}" Style="{StaticResource FieldLabelTextStyle}" />
+                                        <TextBox Text="{Binding Hl7RestrictToProfiles, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource InputTextBoxStyle}" />
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.RestrictProfilesCaption}"
+                                                   Style="{StaticResource CaptionTextStyle}"
+                                                   TextWrapping="Wrap" Margin="0,2,0,14" />
+
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Content="{loc:Localize Settings.Hl7.Test}"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Command="{Binding TestHl7DestinationCommand}"
+                                                    MinWidth="150" MinHeight="36" />
+                                        </StackPanel>
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.TestCaption}"
+                                                   Style="{StaticResource CaptionTextStyle}"
+                                                   TextWrapping="Wrap" Margin="0,6,0,0" />
+                                        <TextBlock Text="{Binding Hl7DestinationStatus}"
+                                                   Style="{StaticResource CaptionTextStyle}"
+                                                   TextWrapping="Wrap" Margin="0,6,0,0" />
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- ================================================= Routing -->
+
+                        <TabItem Header="{loc:Localize Settings.Hl7.Tab.Routing}">
+                            <DockPanel Margin="0,12,0,0">
+                                <StackPanel DockPanel.Dock="Top">
+                                    <TextBlock Text="{loc:Localize Settings.Hl7.Routing.Title}"
+                                               Style="{StaticResource SectionHeaderTextStyle}" />
+                                    <TextBlock Text="{loc:Localize Settings.Hl7.Routing.Caption}"
+                                               Style="{StaticResource CaptionTextStyle}"
+                                               TextWrapping="Wrap" Margin="0,0,0,10" />
+
+                                    <!-- The switch that makes any of this live. Off by
+                                         default, and at the top of the page rather than
+                                         buried, because somebody looking for why nothing is
+                                         being sent should find it first. -->
+                                    <CheckBox Content="{loc:Localize Settings.Hl7.Announce}"
+                                              IsChecked="{Binding Hl7.AnnounceConversions}"
+                                              Style="{StaticResource SettingCheckBoxStyle}" />
+                                    <TextBlock Text="{loc:Localize Settings.Hl7.AnnounceCaption}"
+                                               Style="{StaticResource CaptionTextStyle}"
+                                               TextWrapping="Wrap" Margin="24,0,0,10" />
+
+                                    <TextBlock Text="{loc:Localize Settings.Hl7.Sequence}" Style="{StaticResource FieldLabelTextStyle}" />
+                                    <ComboBox ItemsSource="{Binding Hl7Sequences}"
+                                              SelectedValuePath="Value"
+                                              SelectedValue="{Binding Hl7.Sequence}" DisplayMemberPath="Display"
+                                              Style="{StaticResource InputComboBoxStyle}" MaxWidth="520"
+                                              HorizontalAlignment="Left" Margin="0,0,0,4" />
+                                    <TextBlock Text="{loc:Localize Settings.Hl7.SequenceCaption}"
+                                               Style="{StaticResource CaptionTextStyle}"
+                                               TextWrapping="Wrap" Margin="0,0,0,12" />
+                                </StackPanel>
+
+                                <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                                    <Button Content="{loc:Localize Settings.Hl7.Check}"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Command="{Binding CheckHl7ConfigurationCommand}"
+                                            HorizontalAlignment="Left" MinWidth="170" MinHeight="36" />
+                                    <TextBlock Text="{Binding Hl7ConfigurationStatus}"
+                                               Style="{StaticResource CaptionTextStyle}"
+                                               TextWrapping="Wrap" Margin="0,8,0,0" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,8,0,0" TextWrapping="Wrap">
+                                        <Run Text="{loc:Localize Settings.Hl7.SettingsFile}" /><Run Text=": " /><Run Text="{Binding Hl7SettingsFilePath, Mode=OneWay}" />
+                                    </TextBlock>
+                                </StackPanel>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="260" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <DockPanel Grid.Column="0">
+                                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
+                                            <Button Content="{loc:Localize Settings.Hl7.AddRule}"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Command="{Binding AddHl7RuleCommand}"
+                                                    MinWidth="80" Margin="0,0,6,0" />
+                                            <Button Content="{loc:Localize Settings.Hl7.RemoveRule}"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Command="{Binding RemoveHl7RuleCommand}"
+                                                    MinWidth="80" Margin="0,0,6,0" />
+                                            <Button Content="{loc:Localize Settings.Hl7.MoveUp}"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Command="{Binding MoveHl7RuleUpCommand}"
+                                                    MinWidth="70" Margin="0,0,6,0" />
+                                            <Button Content="{loc:Localize Settings.Hl7.MoveDown}"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Command="{Binding MoveHl7RuleDownCommand}"
+                                                    MinWidth="70" />
+                                        </StackPanel>
+
+                                        <ListBox ItemsSource="{Binding Hl7.Rules}"
+                                                 SelectedItem="{Binding SelectedHl7Rule}"
+                                                 Background="{DynamicResource CardBackgroundBrush}"
+                                                 BorderBrush="{DynamicResource CardBorderBrush}">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Margin="2,5">
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                        <TextBlock Text="{Binding DisplayConditions, Mode=OneWay}"
+                                                                   Style="{StaticResource CaptionTextStyle}" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </DockPanel>
+
+                                    <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto"
+                                                  Visibility="{Binding HasSelectedHl7Rule, Converter={StaticResource BoolToVisibility}}">
+                                        <StackPanel>
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.RuleName}" Style="{StaticResource FieldLabelTextStyle}" />
+                                            <TextBox Text="{Binding SelectedHl7Rule.Name, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource InputTextBoxStyle}" Margin="0,0,0,12" />
+
+                                            <CheckBox Content="{loc:Localize Settings.Hl7.RuleEnabled}"
+                                                      IsChecked="{Binding SelectedHl7Rule.Enabled}"
+                                                      Style="{StaticResource SettingCheckBoxStyle}" />
+
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.RuleProfile}" Style="{StaticResource FieldLabelTextStyle}" />
+                                            <ComboBox ItemsSource="{Binding Hl7ProfileIdsForRules}"
+                                                      SelectedItem="{Binding SelectedHl7Rule.ProfileId}"
+                                                      IsEditable="True"
+                                                      Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,12" />
+
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.RuleDestination}" Style="{StaticResource FieldLabelTextStyle}" />
+                                            <ComboBox ItemsSource="{Binding Hl7.Destinations}"
+                                                      SelectedValuePath="Id"
+                                                      SelectedValue="{Binding SelectedHl7RuleDestinationId}" DisplayMemberPath="DisplaySummary"
+                                                      Style="{StaticResource InputComboBoxStyle}" Margin="0,0,0,12" />
+
+                                            <CheckBox Content="{loc:Localize Settings.Hl7.RuleStopOnMatch}"
+                                                      IsChecked="{Binding SelectedHl7Rule.StopOnMatch}"
+                                                      Style="{StaticResource SettingCheckBoxStyle}" />
+
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.Conditions}"
+                                                       Style="{StaticResource SectionHeaderTextStyle}" Margin="0,8,0,4" />
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.ConditionsCaption}"
+                                                       Style="{StaticResource CaptionTextStyle}"
+                                                       TextWrapping="Wrap" Margin="0,0,0,6" />
+                                            <TextBlock Text="{Binding Hl7ConditionKeysText, Mode=OneWay}"
+                                                       Style="{StaticResource CaptionTextStyle}"
+                                                       FontFamily="Consolas, Courier New"
+                                                       TextWrapping="Wrap" Margin="0,0,0,8" />
+
+                                            <DataGrid ItemsSource="{Binding SelectedHl7Rule.When}"
+                                                      SelectedItem="{Binding SelectedHl7Condition}"
+                                                      AutoGenerateColumns="False"
+                                                      CanUserAddRows="False"
+                                                      HeadersVisibility="Column"
+                                                      GridLinesVisibility="Horizontal"
+                                                      Background="{DynamicResource CardBackgroundBrush}"
+                                                      BorderBrush="{DynamicResource CardBorderBrush}"
+                                                      MinHeight="120" MaxHeight="220">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="{loc:Localize Settings.Hl7.ConditionKey}"
+                                                                        Binding="{Binding Key}" Width="*" />
+                                                    <DataGridTextColumn Header="{loc:Localize Settings.Hl7.ConditionValue}"
+                                                                        Binding="{Binding Value}" Width="*" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+
+                                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                                <Button Content="{loc:Localize Settings.Hl7.AddCondition}"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Command="{Binding AddHl7ConditionCommand}"
+                                                        MinWidth="150" Margin="0,0,6,0" />
+                                                <Button Content="{loc:Localize Settings.Hl7.RemoveCondition}"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Command="{Binding RemoveHl7ConditionCommand}"
+                                                        MinWidth="96" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                </Grid>
+                            </DockPanel>
+                        </TabItem>
+
+                        <!-- ================================================ Profiles -->
+
+                        <TabItem Header="{loc:Localize Settings.Hl7.Tab.Profiles}">
+                            <DockPanel Margin="0,12,0,0">
+                                <StackPanel DockPanel.Dock="Top">
+                                    <TextBlock Text="{loc:Localize Settings.Hl7.Profiles.Title}"
+                                               Style="{StaticResource SectionHeaderTextStyle}" />
+                                    <TextBlock Text="{loc:Localize Settings.Hl7.Profiles.Caption}"
+                                               Style="{StaticResource CaptionTextStyle}"
+                                               TextWrapping="Wrap" Margin="0,0,0,10" />
+                                </StackPanel>
+
+                                <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="{loc:Localize Settings.Hl7.ImportProfile}"
+                                                Style="{StaticResource PrimaryButtonStyle}"
+                                                Command="{Binding ImportHl7ProfileCommand}"
+                                                MinWidth="150" MinHeight="36" Margin="0,0,6,0" />
+                                        <Button Content="{loc:Localize Settings.Hl7.RemoveProfile}"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Command="{Binding RemoveHl7ProfileCommand}"
+                                                MinWidth="96" MinHeight="36" Margin="0,0,6,0" />
+                                        <Button Content="{loc:Localize Settings.Hl7.RefreshProfiles}"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Command="{Binding RefreshHl7ProfilesCommand}"
+                                                MinWidth="150" MinHeight="36" />
+                                    </StackPanel>
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,8,0,0" TextWrapping="Wrap">
+                                        <Run Text="{loc:Localize Settings.Hl7.ProfileFolder}" /><Run Text=": " /><Run Text="{Binding Hl7ProfileFolder, Mode=OneWay}" />
+                                    </TextBlock>
+                                </StackPanel>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <ListBox Grid.Column="0"
+                                             ItemsSource="{Binding Hl7Profiles}"
+                                             SelectedItem="{Binding SelectedHl7Profile}"
+                                             Background="{DynamicResource CardBackgroundBrush}"
+                                             BorderBrush="{DynamicResource CardBorderBrush}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="2,5">
+                                                    <TextBlock Text="{Binding DisplaySummary, Mode=OneWay}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding ProfileId, Mode=OneWay}"
+                                                               Style="{StaticResource CaptionTextStyle}" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+
+                                    <!-- A profile that cannot be used is listed with the
+                                         reader's objection rather than hidden, so one broken
+                                         by a hand edit is visible here instead of simply
+                                         absent from the list. -->
+                                    <DockPanel Grid.Column="2">
+                                        <TextBlock DockPanel.Dock="Top"
+                                                   Text="{loc:Localize Settings.Hl7.ProfileObjections}"
+                                                   Style="{StaticResource FieldLabelTextStyle}" />
+                                        <TextBlock DockPanel.Dock="Top"
+                                                   Style="{StaticResource CaptionTextStyle}"
+                                                   TextWrapping="Wrap" Margin="0,0,0,8">
+                                            <Run Text="{loc:Localize Settings.Hl7.ProfileFile}" /><Run Text=": " /><Run Text="{Binding SelectedHl7Profile.Path, Mode=OneWay}" />
+                                        </TextBlock>
+
+                                        <DataGrid ItemsSource="{Binding SelectedHl7Profile.Issues}"
+                                                  AutoGenerateColumns="False"
+                                                  IsReadOnly="True"
+                                                  HeadersVisibility="Column"
+                                                  GridLinesVisibility="Horizontal"
+                                                  Background="{DynamicResource CardBackgroundBrush}"
+                                                  BorderBrush="{DynamicResource CardBorderBrush}">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="{loc:Localize Settings.Hl7.Where}"
+                                                                    Binding="{Binding Location}" Width="150" />
+                                                <DataGridTextColumn Header="{loc:Localize Settings.Hl7.What}"
+                                                                    Binding="{Binding Message}" Width="*" />
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </DockPanel>
+                                </Grid>
+                            </DockPanel>
+                        </TabItem>
+
+                        <!-- =============================================== Inspector -->
+
+                        <TabItem Header="{loc:Localize Settings.Hl7.Tab.Inspector}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="16" />
+                                    <ColumnDefinition Width="1.3*" />
+                                </Grid.ColumnDefinitions>
 
                         <!-- What goes in -->
                         <DockPanel Grid.Column="0">
@@ -1083,7 +1501,9 @@
                                 </TabItem>
                             </TabControl>
                         </DockPanel>
-                    </Grid>
+                            </Grid>
+                        </TabItem>
+                    </TabControl>
                 </Grid>
             </TabItem>
 

@@ -115,6 +115,45 @@ public sealed class Hl7MessageBuilderTests
     }
 
     [Fact]
+    public void TwoProcessesStartingInTheSameSecondDoNotAgreeOnAControlIdentifier()
+    {
+        // The defect this replaced: the counter started at zero in every process, so two
+        // workstations, or two runs of the command line a moment apart, both produced
+        // "...0001". A receiver that discards a repeated MSH-10 would then drop the second
+        // report. Proved with explicit starting points rather than by generating many
+        // identifiers and hoping, because a test that passes 1,679,615 times out of
+        // 1,679,616 is not a test.
+        var one = new Hl7ControlIdGenerator(() => FixedMoment, startAt: 0);
+        var two = new Hl7ControlIdGenerator(() => FixedMoment, startAt: 5000);
+
+        Assert.NotEqual(one.Next(), two.Next());
+    }
+
+    [Fact]
+    public void TheStartingPointIsNotTheSameInEveryProcess()
+    {
+        // The guard on the fix itself. Fifty generators agreeing would mean the starting
+        // point had gone back to being fixed, which is the defect returning.
+        var identifiers = Enumerable
+            .Range(0, 50)
+            .Select(_ => new Hl7ControlIdGenerator(() => FixedMoment).Next())
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.True(identifiers.Count > 1, "every generator produced the same identifier");
+    }
+
+    [Fact]
+    public void AControlIdentifierFitsTheFieldItGoesIn()
+    {
+        // MSH-10 is twenty characters in version 2.4. Fourteen for the timestamp and four
+        // for the sequence leaves two for a profile's prefix, which is worth knowing before
+        // somebody writes a longer one.
+        string identifier = new Hl7ControlIdGenerator(() => FixedMoment).Next("XY");
+
+        Assert.Equal(20, identifier.Length);
+    }
+
+    [Fact]
     public void ValuesArriveWhereTheMappingsPutThem()
     {
         Hl7Message message = Builder().Build(Profile(ReportProfile), CompleteSubject()).Message!;
