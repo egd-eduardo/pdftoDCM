@@ -34,12 +34,13 @@ in that order, and never the third.
 Run all of these. They are fast, and each one exists because something got past the others.
 
 ```bash
-dotnet test "PDF to DICOM.sln" -c Release          # 291 tests
+dotnet test "PDF to DICOM.sln" -c Release          # 646 tests, across three test projects
 python3 build/validate-xaml-bindings.py            # two way bindings to read only properties
 python3 build/validate-viewmodel-commands.py       # unguarded RaiseCanExecuteChanged
 python3 build/validate-installer-script.py         # installer sources and flags
 python3 build/validate-powershell-strict.py        # .Count on something that is not a collection
 bash build/verify-against-dcmtk.sh                 # 94 interoperability checks, needs DCMTK
+bash build/verify-hl7-interop.sh                   # 47 HL7 checks, needs python3 only
 ```
 
 **The desktop project cannot be built on Linux or macOS**, and the view models have no
@@ -80,19 +81,34 @@ The build fails if they do, and that check is not decoration:
 
 - `docs/CodeSigning.md`, `docs/BuildingItYourself.md`,
   `docs/ProtectingAgainstUnauthorisedDistribution.md`
-- the test worklist server
-- **any signing material**: `codesign.*`, `*.pfx`, `*.p12`, `*.password`, `*.key`. A
-  certificate is kept in this repository by the owner's decision, and the package is
-  assembled from a named list of files so it cannot reach one today. The check exists so
-  that handing a private signing key to a hospital does not depend on nobody ever writing
-  a wildcard.
+- the test worklist server, the HL7 test receiver (`hl7testserver`) and
+  `build/hl7/mllp-receiver.py`. All three are commissioning tools, and a listener handed to
+  a hospital is a listener somebody will eventually point a live system at
+- **any signing material**: `codesign.*`, `*.pfx`, `*.p12`, `*.password`, `*.key`. The
+  package is assembled from a named list of files so none can reach one today. The check
+  exists so that handing a private signing key to a hospital does not depend on nobody
+  ever writing a wildcard.
+
+**Signing material must never be committed, and once was.** `codesign.p12` and
+`codesign.password` were added in `6f46f59` and deleted in `f6714ef`. The deletion removed
+them from the working tree and not from the history, and the repository is now public, so
+**that key and its password are published and the certificate must be treated as
+compromised.** Anything signed with it proves nothing about who produced it. The key belongs
+in `~/.pdftodicom` or `%USERPROFILE%\.pdftodicom`, which is where both build scripts look
+for it, and `.gitignore` covers those names.
 
 ## The protected settings password
 
-One password guards the Destinations, Worklist and Backup pages. It is stored as a PBKDF2
-verifier, and the plaintext appears in exactly **one** place: the comment on
-`ProtectedSettingsLock.Verifier`, pinned by a test so that the two cannot drift apart.
+One password guards the Destinations, Worklist and Backup pages, stored as a PBKDF2
+verifier.
 
-**If this repository is ever shared or made public, change the password and delete that
-line.** `pdftodicom settings-password` turns a new password into a verifier without the
-password itself ever being written down.
+**This repository is public, and the password is outstanding.** The plaintext used to be in
+a comment on `ProtectedSettingsLock.Verifier` and has been removed from the working tree,
+along with the two mentions in the changelog and the test that named it. None of that
+unpublishes it: it is in the history, so the old password must be treated as known to
+everybody and the verifier replaced.
+
+To replace it: run `pdftodicom settings-password`, which turns a new password into a
+verifier without the password itself ever being written down, and paste the single line it
+prints over the constant. Do not write the new password into the source, a comment, a
+commit message or the changelog.

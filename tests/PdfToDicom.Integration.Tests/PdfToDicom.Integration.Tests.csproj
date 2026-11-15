@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests for the one assembly that knows about both halves. Separate from the other two
+    suites because it is the only place a DICOM type and an HL7 type appear together, and
+    keeping it apart is what lets the engine's own suite prove, by compiling, that the
+    engine knows nothing about DICOM.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>PdfToDicom.Integration.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PdfToDicom.Integration\PdfToDicom.Integration.csproj" />
+  </ItemGroup>
+
+</Project>

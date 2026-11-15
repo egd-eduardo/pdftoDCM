@@ -334,8 +334,25 @@ do_test() {
         info "install it for a like for like run: https://dotnet.microsoft.com/download/dotnet/$target.0"
     fi
 
-    dotnet test "$REPO_ROOT/tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj" \
-        -c "$CONFIGURATION" --nologo --verbosity minimal
+    # Every test project under tests/, found rather than listed. Naming one meant that for
+    # two releases this ran a third of the suite while reporting that the tests had passed.
+    # The solution file is not used instead, because it holds the WPF project, which cannot
+    # be loaded on Linux or macOS at all.
+    local -a projects=()
+    while IFS= read -r project; do
+        projects+=("$project")
+    done < <(find "$REPO_ROOT/tests" -name '*.csproj' | sort)
+
+    if (( ${#projects[@]} == 0 )); then
+        printf 'No test projects were found under tests/.\n' >&2
+        exit 1
+    fi
+
+    local project
+    for project in "${projects[@]}"; do
+        info "$(basename "$project" .csproj)"
+        dotnet test "$project" -c "$CONFIGURATION" --nologo --verbosity minimal
+    done
 }
 
 # Checks the assembled folder before anything is zipped or sent.
@@ -396,7 +413,7 @@ assert_package_is_sound() {
     # somebody changes the list, and handing a private signing key to a hospital is not a
     # mistake that should depend on nobody ever writing a wildcard.
     local forbidden=("BuildingItYourself" "CodeSigning" "ProtectingAgainstUnauthorisedDistribution"
-                     "testworklistserver"
+                     "testworklistserver" "hl7testserver" "mllp-receiver"
                      "codesign" ".pfx" ".p12" ".password" ".key")
     local leaked=()
     local secret
@@ -612,8 +629,15 @@ do_assemble() {
     cp "$REPO_ROOT/docs/WorklistSetup.md" \
        "$package/Documentation/Worklist Setup (for IT).md"
 
+    # Added in 4.0.0, with the pages that make it usable. It was deliberately held back
+    # while the engine had no configuration surface, because a guide to something a site
+    # cannot switch on describes a product they do not have.
+    cp "$REPO_ROOT/docs/Hl7IntegrationGuide.md" \
+       "$package/Documentation/HL7 Integration (for IT).md"
+
     cp "$REPO_ROOT/samples/config.sample.json" "$package/Samples/"
     cp "$REPO_ROOT/samples/example-report.pdf" "$package/Samples/"
+    cp "$REPO_ROOT/samples/hl7-oru-r01.sample.json" "$package/Samples/"
 
     write_start_here "$package/READ ME FIRST.txt" "$version"
 

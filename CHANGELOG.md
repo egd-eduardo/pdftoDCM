@@ -1,9 +1,17 @@
 # Changelog
 
-## 3.5.0
+## 4.0.0
 
-**A clean build, a visible way out, settings that can be carried to the next machine, a
-fifth of the memory, and a build that produces both architectures and signs them.**
+**An HL7 version 2 integration engine: a report can now tell a record system that it
+exists, configured on screen rather than written into the source. Plus a clean build, a
+visible way out, settings that can be carried to the next machine, a fifth of the memory,
+and a build that produces both architectures and signs them.**
+
+The major version is for the HL7 engine. Nothing about the existing behaviour changes, and
+a site that configures no interface takes the same path through the same code it did in
+3.4: the switch that makes any of it live is off until somebody turns it on. The number
+went up because the product now does something it did not do before, and because a reader
+deciding whether to upgrade should be told that rather than finding it in a minor release.
 
 ### The build
 
@@ -109,6 +117,320 @@ Everything above was exercised end to end on a real build of both architectures:
 machine types checked (0x8664 and 0xAA64), the package sound with and without the command
 line tool, the stale tool removed, and a throwaway certificate used to confirm that all
 three copies of the executable carry the signature.
+
+### The beginnings of an HL7 integration engine
+
+Nothing in the application changes. A new assembly,
+`src/PdfToDicom.Interop.Hl7V2`, holds the HL7 version 2 message model, the ER7 codec and
+the character set rules, with 90 tests of its own. Nothing references it yet, so the
+executable that is published and the files the installer carries are exactly what they
+were.
+
+**It knows nothing about message types.** An ORU is a message whose MSH-9 happens to read
+ORU, and the parser cannot tell the difference. A Z segment carrying a Study Instance UID
+is an ordinary segment. That is the whole point: a site specific requirement has to be
+expressible as configuration, and the only way to be sure is for the layer underneath not
+to know what any of it means.
+
+**A name is never quietly changed on its way out.** The DICOM objects carry UTF-8 so that
+an accented Portuguese name survives, and a receiving system confined to a single byte
+code page may have no representation for the same name. Sending a correct name to the
+archive and a mangled one to the record system is the class of fault this product exists to
+avoid, so the default is to refuse and name the character that caused it. Transliteration
+exists, and is something somebody chooses rather than something that happens.
+
+**The message header is not an ordinary segment**, and both directions say so. Its first
+field is the field separator and its second the four encoding characters, so the separator
+that would divide them is the thing being declared. Reading it with the ordinary rule puts
+every field one place out; writing it with the ordinary rule escapes the encoding
+characters into something that declares nothing. A round trip test holds the two halves
+together.
+
+**Messages travel over MLLP, and a timeout is never reported as a success.** The transport
+makes one attempt and says exactly how far it got: failed, sent, or acknowledged. Those
+three are kept apart because a successful write to a socket is not acceptance by the
+receiving application, and a product showing one tick for both would be lying to the person
+deciding whether a report reached the record. A destination declaring that it does not
+acknowledge is not waited on, since waiting for a reply that will never come turns every
+success into a timeout. A silent destination that should have answered is reported as a
+timeout whose outcome is unknown, never as a failure to deliver.
+
+The transport is tested against a receiving system that misbehaves on purpose: one that
+accepts a connection and says nothing, one that hangs up halfway, one that replies with
+bytes that are not a frame, one that sends noise first, and one that is not there at all. A
+message of two megabytes, the size an encapsulated report really is, is tested as well,
+because a transport that only works for small messages fails on exactly the ones that
+matter.
+
+**Every attempt is written down, and the same report is never sent twice by accident.** A
+second assembly, `src/PdfToDicom.Interop`, holds a record of each attempt: which message,
+which destination, which profile and revision built it, how far it got, what came back, how
+long it took, and which DICOM object it accompanies. That last field is the only thing that
+ties the two halves of a conversion together, and without it an archive holding a document
+and a record system that never heard of it cannot be reconciled.
+
+Records go to one file per day, one line each, which is readable by anybody with a text
+editor at three in the morning, needs no database engine and no administrator rights, and
+cannot be left half updated by a power cut. A truncated last line costs that line and not
+the day.
+
+**The report itself is not kept unless a site asks for it.** The body of an ORU is a
+patient's name, their identifier and the clinical text, and a file holding it is a file that
+may later be attached to a support request. Keeping it helps while an interface is being
+commissioned and is a disclosure waiting to happen afterwards, so it is something somebody
+turns on rather than something that happens.
+
+Duplicate protection asks the question that matters: has this exact document already reached
+this exact destination? It is answered from a hash of the transmitted bytes, so no copy of
+the message is needed. An attempt that failed does not count, since the whole point of a
+retry is to send it again, and a destination that acknowledges nothing still counts as
+delivered, since sending again would put a second copy in the record.
+
+**A message is never sent twice because two routing rules both matched.** Rules are
+considered in order and the first to name a destination wins it; a later rule naming the
+same one is ignored for that destination and still applies to the others. Two overlapping
+conditions are easy to write by accident, and the result otherwise is the same report
+arriving twice at one system, which is a duplicate in a patient's record rather than an
+untidiness.
+
+**A failure after the bytes have left is never retried.** This is the distinction the
+delivery design exists for. A refused connection means nothing arrived, so trying again
+costs nothing. A timeout waiting for an acknowledgement means the message left and nobody
+knows what became of it, so trying again may put a second copy of a report in a patient's
+record. The two look identical to anything that only knows the attempt failed, which is how
+an automatic retry quietly duplicates a document. The transport now says which happened,
+the outcome has a name of its own, and the operator is told to check the destination before
+resending. It is also recorded as sent, so a later identical message is stopped by the
+duplicate guard just as firmly as one that certainly arrived.
+
+**A message can be laid out against a profile and read.** Segment by segment and field by
+field, with what the profile calls each field, what it requires, and anything wrong attached
+to the field it is about rather than listed separately. A mandatory field that is missing is
+singled out, which is the one thing somebody opens such a screen to find: it is by
+definition not in the message, so an inspection built by walking the message would never
+show it. A segment the profile expects and the message lacks appears too, marked absent,
+rather than being quietly left out of a list.
+
+A message that somebody pasted in can be inspected the same way, which is the other half of
+what this is for: asking why a receiver rejected a sample. Two profiles can be compared
+against one message, and the answer is what they disagree about rather than two lists,
+because the overlap is almost always the uninteresting part.
+
+It is reached from a new **HL7 tab in Settings, behind the same password as Destinations
+and Worklist**. An inspection puts a patient's name, identifier and clinical text on screen
+beside a destination's configuration, which is exactly the material that password already
+guards; a button on the main window would have handed all of it to an operator with no
+reason to see any of it. Nothing is sent from the page.
+
+The logic beneath it is tested. The page itself cannot be, because the interface has no
+automated coverage, so it was kept as thin as it could be: it binds to a finished answer
+rather than working one out.
+
+**A reply is read, not assumed to mean yes.** The six codes of HL7 table 0008 are
+understood, the explanation in MSA-3 and in every ERR segment is kept, and the control
+identifier the reply answers is checked against the one that was sent.
+
+Three ways a message can arrive and still not be in a patient's record used to be reported
+as success, and each has its own answer now. **The receiver refused it**, which is neither
+a delivery nor a transport failure: retrying it unchanged would earn the same refusal, and
+nothing was stored, so a corrected message may follow and the duplicate guard lets it
+through. **The reply could not be read**, or **the reply was about a different message**,
+which usually means two conversations have been crossed; both leave the outcome unknown and
+say so rather than claiming either way. A code this build does not recognise is never taken
+for a yes.
+
+**A document can now be converted and announced in one step, and the conversion itself was
+not altered to do it.** The order is a site's choice. By default the two are independent:
+both happen and neither can stop the other, because the object reaching the archive and the
+message reaching the record system are separate pieces of value, and letting a record system
+that is down prevent an archive receiving a report turns one failure into two. A site may
+instead announce only what the archive accepted, since a message carrying a Study Instance
+UID that no archive holds points at nothing; or announce first and convert only once the
+message landed, for a receiver that will not file an image until an order exists. That last
+one is the only arrangement where an HL7 failure stops a DICOM transmission, which is why
+it has to be chosen rather than arrived at.
+
+**An HL7 failure cannot fail a conversion**, and neither can an HL7 defect: everything the
+engine can throw is caught and turned into a result. A report reaching the archive matters
+more than the record system hearing about it, and an exception escaping would cost both.
+
+The conversion workflow is untouched, and that was deliberate. It is the heart of a product
+in clinical use, so the new ordering lives in an assembly above it that calls it exactly as
+the front ends do. A build with no HL7 destination configured takes one call with no
+branches and behaves as it did before any of this existed.
+
+**An interface can now be commissioned from a command line, and a profile written without
+reading any source.** `pdftodicom hl7-check` lays a message out against a profile and names
+everything the profile objects to, touching no network. `pdftodicom hl7-send` builds a
+message from a profile and sends it, reporting the control identifier, the outcome and the
+reason. `--no-send` prints what would go on the wire and stops, and that output feeds
+straight back into `hl7-check`, so a profile can be checked against itself before anybody is
+asked for a test endpoint. `--test-data` fills a message with values that are recognisable
+as a test by whoever finds them: the invented patient is named ZZZTEST, because a message
+that escapes into a real system during commissioning should not look like a patient nobody
+can find. The command line never retries, since a retry can duplicate a document at the far
+end and that is a decision somebody takes rather than a default they inherit.
+
+`samples/hl7-oru-r01.sample.json` is a worked ORU^R01 to start from, and
+`docs/Hl7IntegrationGuide.md` is the administrator's guide: every key of the profile model,
+the values available as a source, the closed transform set, the character set policy with a
+recommendation per region, the acknowledgement policy, what each outcome means and what to
+do about it, and a table of symptoms against the first place to look.
+
+**The guide ships, and it says what is not built.** It was written when nothing configured
+the engine, and its first paragraph said so; the settings pages described further down this
+entry are what made that paragraph wrong, and it now records the one limitation that
+remains, which is that a rule sends to one destination from the page while the file supports
+several. The guide and the worked profile are in the handover package and in the installer.
+They were held back while there was no configuration surface, because a guide to something a
+site cannot switch on describes a product they do not have. Where the guide points at a
+commissioning tool, the simulated receiver and the verification script, it now says that a
+site does not receive it, since a shipped document must not send somebody looking for
+something they were not given.
+
+**A simulated receiver, and a verification that does not mark its own work.**
+`tools/PdfToDicom.Hl7TestServer` answers in each of the seven ways a real receiver can,
+including answering nothing, hanging up, replying with bytes that are not a message and
+acknowledging a message it was never sent. `build/verify-hl7-interop.sh` runs 47 checks
+driving the command line front end against an MLLP receiver written from the standard in the
+Python standard library, independently of this code: that the frame is one an unrelated
+reader can find the edges of, that segments are separated by a carriage return and nothing
+else, that an accented name is encoded in the character set the message declares, that
+control identifiers are unique, that a refusal never reaches the wire, and that none of the
+six unhappy endings is reported as success. It is weaker evidence than the DICOM side's
+verification against DCMTK, which answers to an independent and widely deployed
+implementation, and the script says so when it passes rather than implying otherwise.
+
+It earned its place immediately by finding two defects that 299 unit tests did not. **A
+field with components was displayed as its first component alone**, so MSH-9 read as `ORU`
+and the trigger event appeared to be missing, in the command line listing and in the
+Settings inspector both; somebody checking a profile against a vendor's document would have
+concluded a value was absent when it was present. The delimiter fields are the exception and
+are still shown raw, because encoding MSH-1 renders the field separator as the escape
+sequence that stands for it. **The simulated receiver answered AA on a mistyped behaviour**,
+so `--answer silnt` would have accepted every message and told somebody their sender handles
+rejections correctly, having never sent one; it now refuses what it does not recognise. One
+test fixture was also a separator short, which had put the message type in MSH-8 where
+nothing asserted on it.
+
+**An interface can now be configured on screen, and a conversion can announce itself.** The
+HL7 page in Settings, behind the same password as Destinations and Worklist, gained three
+pages beside the inspector. **Destinations** holds one entry per receiving system, including
+the four application and facility names that a receiver reads from the header and whose being
+wrong is the commonest reason a first message is rejected without explanation. **Routing**
+holds the rules, in the order they are considered, with the conditions each one matches on.
+**Profiles** installs a profile from a file, refusing one that cannot build a message rather
+than listing a name no rule could ever use, and showing a profile broken by a hand edit with
+the reader's objection beside it instead of leaving it out of the list.
+
+**Nothing is sent until one switch is turned on**, and it is off by default. Commissioning an
+interface means configuring a destination on a machine that also does real work, so a
+destination that exists and is not yet trusted has to be able to sit there with nothing
+reaching it. The switch is at the top of the Routing page rather than buried, because it is
+the first thing somebody should find when asking why nothing is being sent.
+
+**Test the connection opens a socket and sends nothing.** A test message from a settings
+dialog would put a document in a patient's record to answer the question of whether a port is
+open, which is not a trade anybody would make knowingly. A real test message is sent from the
+command line, deliberately, with data that is recognisable as a test.
+
+**The routing offers no patient identifier to match on.** Routing on one is not routing: it
+is one patient's reports going somewhere different from everybody else's, which is a mistake
+nobody should be able to configure. A rule matches on the message type and trigger event, the
+modality, the study description, the document title, whether there is an accession number,
+and where the document came from.
+
+**A configuration that is both live and broken cannot be saved.** The check that runs when
+the page is saved reports a rule naming a destination that no longer exists, a profile that
+is not installed, a destination that is disabled, two destinations sharing an identifier, and
+the switch being on with nothing enabled to send. A site part way through commissioning can
+still save a configuration that does not work yet, because the switch is off and nothing is
+being sent; a site that has switched it on and whose routing can send nothing has a problem
+it would otherwise discover when a report went missing.
+
+**The operator is told, in both directions.** The confirmation that reads a patient's
+identity back before anything leaves the workstation now also names the record systems that
+are about to be told. Afterwards the result keeps the two halves apart, and a message that
+needs attention turns the status amber rather than red: a report that reached the archive and
+a record system that may not have been told is not an error to be fixed by converting and
+sending the document again, which would duplicate it in the archive to solve a problem that
+is not there.
+
+**The settings are a file of their own, and that was the decision.** Putting them in the main
+configuration would have given the core assembly a reference to the HL7 engine, a reason to
+be rebuilt whenever the engine changes, and a shape its 291 tests would have to cover. The
+price is that Export settings does not carry them, so a second workstation needs the settings
+file and the profile folder copied; both paths are shown on the pages. The editable form of a
+destination and a rule mirrors the engine's own immutable types, which no WPF editor can bind
+to, and a pair of tests compares the two property by property so that one gaining a setting
+the other lacks fails on the day it happens rather than silently doing nothing.
+
+**Two messages could be sent under the same identifier, and the duplicate guard could not
+tell one document from another.** Both were found by the interoperability script, one after
+the other, and both were in code that had passed its own tests.
+
+The message control identifier was a timestamp to the second followed by a counter starting
+at zero. Two processes starting in the same second therefore both produced `...0001`: two
+workstations, or two runs of the command line a moment apart, could send different documents
+under the same identifier, and a receiver that discards a repeated MSH-10, which is a
+reasonable thing for a receiver to do, would drop the second report. The counter now starts
+somewhere random, and the sequence is four characters of base 36 rather than four digits:
+both fit the twenty character field, and the second leaves one chance in 1,679,616 that two
+processes in the same second agree rather than one in ten thousand.
+
+Fixing that exposed the larger one. The duplicate guard hashed the bytes that were
+transmitted, which include the moment the message was built and the identifier of that
+particular transmission, so every message was unique and the check could only ever match two
+attempts built in the same second with the same control identifier. In other words it worked
+only by virtue of the defect above, and in a hospital it would have matched nothing at all.
+It now hashes the message with those two fields cleared, which is the question it was always
+meant to answer: is this the same document going to the same place again. The test that
+covers it pins two clocks and two sequences rather than pausing for a second, so the reason
+it passes is visible.
+
+Two further defects were found by compiling the view models against reference assemblies
+rather than waiting for the Windows runner: a missing import, and a status state that did not
+exist. The scratch project that did it is not part of the solution and is not committed; the
+technique is worth recording, because on this repository a view model mistake otherwise waits
+four minutes for CI to find it.
+
+The scope is settled: reports outbound, ORU^R01, and nothing else. The application does not
+listen, and no port is opened. See `docs/Hl7IntegrationGuide.md` for how to configure one and
+`docs/Hl7IntegrationArchitecture.md` for the architecture, the configuration model and the
+questions still open.
+
+### The dark scheme, and text that could not be read in it
+
+**Text that never asked for a colour stayed black on a dark card.** Seven places took no
+theme colour at all, and in the light scheme that looks exactly right, which is why it went
+unnoticed: the name of the chosen document, the destination names on the send page and in
+the results, the result message itself, the names in the Destinations and Worklist lists in
+Settings, and a heading in the tag viewer. Every window now sets the theme's text colour at
+its root, which those inherit, and so does anything added later.
+
+**Six kinds of control were never styled, because there is no markup to style.** A row in a
+grid, an item in a list, the entries in a dropdown, a grid's column headers and the Settings
+tab labels are created by other controls' templates, so they took their colours from the
+operating system, which stays light while the application goes dark. The worklist results
+and the Settings tab strip were the worst of it. They are styled implicitly now, by type.
+Only the tab needed a template of its own, because its own template paints its chrome from
+the system palette and ignores the colours a setter gives it.
+
+**A validation message kept the colour of the scheme it was born in.** A brush converter
+resolves a brush once and is never asked again, so switching to the dark scheme while the
+window was open left those messages at a light scheme's contrast. The colour comes from a
+trigger now, which follows the scheme.
+
+### The dropdowns that could not show what was already chosen
+
+Six of the seven places that bind a dropdown to a value set `SelectedValue` before
+`SelectedValuePath`. Attributes are applied in the order they are written, so the control
+was asked to match a value against the option objects themselves before it had been told
+which part of an option the value refers to; it finds nothing and clears the selection. The
+seventh was written the other way round, so the correct form was known once. The order is
+now correct in all seven. This is the only defect found in the patient sex selector, whose
+value mapping was checked end to end and writes M, F and O correctly for male, female and
+other.
 
 ### Memory
 
@@ -437,7 +759,12 @@ take that seriously rather than as advice.
 ## 3.3.0
 
 **Several worklist servers, chosen when the worklist is opened; the destinations are now
-behind the same password as the worklist; and that password is `Odraude`.**
+behind the same password as the worklist; and that password was set.**
+
+> The password was named here when this repository was private. It has been removed from
+> this file because the repository is now public. Removing it does not unpublish it: it is
+> in the history, so the password named in those commits must be treated as known and
+> replaced.
 
 ### Several worklist servers
 
@@ -469,7 +796,7 @@ DCMTK over a real association, because a worklist connection is agreed with anot
 department and tested against a live server; losing it silently would mean somebody
 retyping an AE Title from memory, and a wrong AE Title offers the wrong patients.
 
-### The destinations are protected too, and the password is now Odraude
+### The destinations are protected too, and a password is now set
 
 The one password now guards **both** the Worklist and the Destinations pages. They are the
 same kind of setting: addresses and AE Titles that decide where patient data comes from and

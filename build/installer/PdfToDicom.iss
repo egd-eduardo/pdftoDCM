@@ -23,7 +23,7 @@
 
 #define AppName        "PDF to DICOM"
 #define AppShortName   "PdfToDicom"
-#define AppVersion     "3.5.0"
+#define AppVersion     "4.0.0"
 #define AppPublisher   "Eduardo Dias"
 #define AppExeName     "PdfToDicom.exe"
 #define CliExeName     "pdftodicom.exe"
@@ -132,6 +132,9 @@ Source: "..\..\docs\ManualDoUtilizador.pt-PT.md";   DestDir: "{app}\docs"; Flags
 Source: "..\..\docs\DicomConformanceStatement.md";  DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\docs\TechnicalDocumentation.md";     DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\docs\WorklistSetup.md";            DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
+; Added in 4.0.0, with the settings pages that make the engine usable.
+Source: "..\..\docs\Hl7IntegrationGuide.md";       DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\..\samples\hl7-oru-r01.sample.json";   DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\CHANGELOG.md";                       DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\samples\config.sample.json";      DestDir: "{app}\samples"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\..\samples\example-report.pdf";      DestDir: "{app}\samples"; Flags: ignoreversion skipifsourcedoesntexist

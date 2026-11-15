@@ -12,6 +12,11 @@ using PdfToDicom.Core.Models;
 using PdfToDicom.Core.Services;
 using PdfToDicom.Core.Validation;
 using PdfToDicom.Core.Security;
+using PdfToDicom.Integration;
+using PdfToDicom.Integration.Configuration;
+using PdfToDicom.Interop.Hl7V2.Inspection;
+using PdfToDicom.Interop.Hl7V2.Model;
+using PdfToDicom.Interop.Hl7V2.Profiles;
 
 namespace PdfToDicom.App.ViewModels;
 
@@ -40,6 +45,7 @@ public sealed class SettingsViewModel : ObservableObject
     private bool _transferWorklists = true;
     private bool _importReplaces;
     private string _transferStatus = string.Empty;
+    private readonly Hl7SettingsService _hl7Settings;
 
     /// <summary>Creates the view model over a working copy of the current configuration.</summary>
     public SettingsViewModel(ApplicationServices services)
@@ -61,6 +67,12 @@ public sealed class SettingsViewModel : ObservableObject
         AddWorklistCommand = new RelayCommand(AddWorklist);
         RemoveWorklistCommand = new RelayCommand(RemoveWorklist, () => SelectedWorklist is not null);
         TestFilenameCommand = new RelayCommand(TestFilename);
+        InspectHl7Command = new RelayCommand(
+            InspectHl7Message,
+            () => Hl7MessageText.Trim().Length > 0 && Hl7ProfileText.Trim().Length > 0);
+        BrowseHl7MessageCommand = new RelayCommand(BrowseForHl7Message);
+        BrowseHl7ProfileCommand = new RelayCommand(BrowseForHl7Profile);
+        ClearHl7Command = new RelayCommand(ClearHl7Inspection);
         AddFieldCommand = new RelayCommand(AddField);
         AddDateFormatCommand = new RelayCommand(AddDateFormat);
         UsePatternCommand = new RelayCommand(UsePattern, () => PatternUnderConstruction.Trim().Length > 0);
@@ -72,11 +84,49 @@ public sealed class SettingsViewModel : ObservableObject
         ExportSettingsCommand = new RelayCommand(ExportSettings, () => ChosenParts != SettingsTransferParts.None);
         ImportSettingsCommand = new RelayCommand(ImportSettings, () => ChosenParts != SettingsTransferParts.None);
 
+        AddHl7DestinationCommand = new RelayCommand(AddHl7Destination);
+        RemoveHl7DestinationCommand = new RelayCommand(
+            RemoveHl7Destination, () => SelectedHl7Destination is not null);
+        TestHl7DestinationCommand = new AsyncRelayCommand(
+            TestHl7DestinationAsync, () => SelectedHl7Destination is not null && !IsTestingHl7);
+        AddHl7RuleCommand = new RelayCommand(AddHl7Rule);
+        RemoveHl7RuleCommand = new RelayCommand(RemoveHl7Rule, () => SelectedHl7Rule is not null);
+        MoveHl7RuleUpCommand = new RelayCommand(() => MoveHl7Rule(-1), () => CanMoveHl7Rule(-1));
+        MoveHl7RuleDownCommand = new RelayCommand(() => MoveHl7Rule(1), () => CanMoveHl7Rule(1));
+        AddHl7ConditionCommand = new RelayCommand(AddHl7Condition, () => SelectedHl7Rule is not null);
+        RemoveHl7ConditionCommand = new RelayCommand(
+            RemoveHl7Condition, () => SelectedHl7Condition is not null);
+        ImportHl7ProfileCommand = new RelayCommand(ImportHl7Profile);
+        RemoveHl7ProfileCommand = new RelayCommand(
+            RemoveHl7Profile, () => SelectedHl7Profile is not null);
+        RefreshHl7ProfilesCommand = new RelayCommand(RefreshHl7Profiles);
+        CheckHl7ConfigurationCommand = new RelayCommand(CheckHl7Configuration);
+
         Destinations = new ObservableCollection<PacsDestination>(Working.Destinations);
         SelectedDestination = Destinations.FirstOrDefault();
 
         Worklists = new ObservableCollection<WorklistConfiguration>(Working.Worklists ?? new List<WorklistConfiguration>());
         SelectedWorklist = Worklists.FirstOrDefault();
+
+        // Read from its own file, and edited as a copy like everything else on this dialog,
+        // so that Cancel discards HL7 changes as completely as it discards the rest.
+        _hl7Settings = new Hl7SettingsService();
+        Hl7 = _hl7Settings.Load().Clone();
+
+        if (_hl7Settings.LoadProblem.Length > 0)
+        {
+            Hl7ConfigurationStatus = _hl7Settings.LoadProblem;
+        }
+
+        RefreshHl7Profiles();
+
+        if (_hl7Settings.LoadProblem.Length == 0)
+        {
+            CheckHl7Configuration();
+        }
+
+        SelectedHl7Destination = Hl7.Destinations.FirstOrDefault();
+        SelectedHl7Rule = Hl7.Rules.FirstOrDefault();
 
         Languages = services.Localizer.AvailableLanguages;
         SelectedLanguage = Languages.FirstOrDefault(l =>
@@ -1115,6 +1165,14 @@ public sealed class SettingsViewModel : ObservableObject
 
         EnsureFoldersExist();
 
+        if (!SaveHl7Settings())
+        {
+            // Nothing is written. Writing the main settings and then refusing the HL7 half
+            // would leave the dialog open over a configuration that is half saved, and the
+            // operator with no way to tell which half.
+            return false;
+        }
+
         _services.ConfigurationService.Save(Working);
         _services.Localizer.SetLanguage(Working.Language);
         ThemeManager.Apply(Working.DarkMode);
@@ -1274,6 +1332,819 @@ public sealed class SettingsViewModel : ObservableObject
         Compare("DestinationCount", _original.Destinations.Count, Working.Destinations.Count);
 
         return changes.Count == 0 ? "No effective change." : string.Join("; ", changes);
+    }
+
+    // ---------------------------------------------------------------- HL7 inspector
+
+    private string _hl7MessageText = string.Empty;
+    private string _hl7ProfileText = string.Empty;
+    private string _hl7Summary = string.Empty;
+    private string _hl7Preview = string.Empty;
+    private bool _hasHl7Inspection;
+    private bool _hasHl7MissingFields;
+
+    /// <summary>The message under inspection, pasted or loaded from a file.</summary>
+    public string Hl7MessageText
+    {
+        get => _hl7MessageText;
+        set
+        {
+            if (SetProperty(ref _hl7MessageText, value))
+            {
+                InspectHl7Command?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>The profile to check it against, as JSON.</summary>
+    public string Hl7ProfileText
+    {
+        get => _hl7ProfileText;
+        set
+        {
+            if (SetProperty(ref _hl7ProfileText, value))
+            {
+                InspectHl7Command?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>One line saying how the message stands against the profile.</summary>
+    public string Hl7Summary
+    {
+        get => _hl7Summary;
+        private set => SetProperty(ref _hl7Summary, value);
+    }
+
+    /// <summary>
+    /// Exactly what would go on the wire.
+    /// </summary>
+    /// <remarks>
+    /// Shown verbatim rather than prettified. A preview is only worth anything if it is the
+    /// thing that would be sent, and a reformatted one invites somebody to count separators
+    /// that are not really there.
+    /// </remarks>
+    public string Hl7Preview
+    {
+        get => _hl7Preview;
+        private set => SetProperty(ref _hl7Preview, value);
+    }
+
+    /// <summary>Whether there is anything to show yet.</summary>
+    public bool HasHl7Inspection
+    {
+        get => _hasHl7Inspection;
+        private set => SetProperty(ref _hasHl7Inspection, value);
+    }
+
+    /// <summary>Whether any mandatory field is empty.</summary>
+    /// <remarks>
+    /// A property rather than a binding to the collection's count with a converter. One use
+    /// does not earn a converter, and a count bound straight to Visibility is the shape
+    /// that quietly stops updating when the collection is replaced rather than cleared.
+    /// </remarks>
+    public bool HasHl7MissingFields
+    {
+        get => _hasHl7MissingFields;
+        private set => SetProperty(ref _hasHl7MissingFields, value);
+    }
+
+    /// <summary>The segments, in the profile's order.</summary>
+    public ObservableCollection<InspectedSegment> Hl7Segments { get; } = new();
+
+    /// <summary>The mandatory fields that are empty, which is what this page is opened for.</summary>
+    public ObservableCollection<InspectedField> Hl7MissingFields { get; } = new();
+
+    /// <summary>Everything the profile objects to.</summary>
+    public ObservableCollection<Hl7MessageIssue> Hl7Issues { get; } = new();
+
+    /// <summary>Checks the message against the profile.</summary>
+    public RelayCommand InspectHl7Command { get; }
+
+    /// <summary>Loads a message from a file.</summary>
+    public RelayCommand BrowseHl7MessageCommand { get; }
+
+    /// <summary>Loads a profile from a file.</summary>
+    public RelayCommand BrowseHl7ProfileCommand { get; }
+
+    /// <summary>Empties the page.</summary>
+    public RelayCommand ClearHl7Command { get; }
+
+    private void InspectHl7Message()
+    {
+        ClearHl7Results();
+
+        ProfileReadResult profile = Hl7ProfileReader.Read(Hl7ProfileText);
+
+        if (!profile.IsUsable)
+        {
+            // The profile is reported first and on its own. Checking a message against a
+            // profile that does not hold together would produce objections that say more
+            // about the profile than about the message, and the reader's messages already
+            // name the place and the remedy.
+            foreach (ProfileIssue issue in profile.Issues)
+            {
+                Hl7Issues.Add(new Hl7MessageIssue(issue.Severity, issue.Location, issue.Message));
+            }
+
+            Hl7Summary = _services.Localizer.Get("Settings.Hl7.ProfileNotUsable");
+            HasHl7Inspection = true;
+            return;
+        }
+
+        Hl7Message message;
+
+        try
+        {
+            message = Hl7Message.Parse(Hl7MessageText);
+        }
+        catch (Exception ex) when (ex is PdfToDicom.Interop.Hl7V2.Hl7ParseException or FormatException)
+        {
+            Hl7Issues.Add(new Hl7MessageIssue(
+                ProfileIssueSeverity.Error, "message", ex.Message));
+
+            Hl7Summary = _services.Localizer.Get("Settings.Hl7.NotAMessage");
+            HasHl7Inspection = true;
+            return;
+        }
+
+        MessageInspection inspection = Hl7MessageInspector.Inspect(message, profile.Profile!);
+
+        foreach (InspectedSegment segment in inspection.Segments)
+        {
+            Hl7Segments.Add(segment);
+        }
+
+        foreach (InspectedField field in inspection.MissingMandatoryFields)
+        {
+            Hl7MissingFields.Add(field);
+        }
+
+        HasHl7MissingFields = Hl7MissingFields.Count > 0;
+
+        foreach (Hl7MessageIssue issue in inspection.Issues)
+        {
+            Hl7Issues.Add(issue);
+        }
+
+        Hl7Preview = inspection.Er7;
+        HasHl7Inspection = true;
+
+        Hl7Summary = inspection.IsSendable
+            ? _services.Localizer.Get("Settings.Hl7.Conforms")
+            : _services.Localizer.Format("Settings.Hl7.DoesNotConform", inspection.Errors.Count);
+    }
+
+    private void BrowseForHl7Message()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = _services.Localizer.Get("Settings.Hl7.OpenMessage"),
+            Filter = "HL7 (*.hl7;*.txt)|*.hl7;*.txt|All files (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            Hl7MessageText = ReadTextOrReport(dialog.FileName);
+        }
+    }
+
+    private void BrowseForHl7Profile()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = _services.Localizer.Get("Settings.Hl7.OpenProfile"),
+            Filter = "Profile (*.json)|*.json|All files (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            Hl7ProfileText = ReadTextOrReport(dialog.FileName);
+        }
+    }
+
+    private string ReadTextOrReport(string path)
+    {
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Hl7Summary = ex.Message;
+            return string.Empty;
+        }
+    }
+
+    private void ClearHl7Inspection()
+    {
+        Hl7MessageText = string.Empty;
+        Hl7ProfileText = string.Empty;
+        ClearHl7Results();
+        Hl7Summary = string.Empty;
+        HasHl7Inspection = false;
+    }
+
+    private void ClearHl7Results()
+    {
+        Hl7Segments.Clear();
+        Hl7MissingFields.Clear();
+        Hl7Issues.Clear();
+        Hl7Preview = string.Empty;
+        HasHl7MissingFields = false;
+    }
+
+    // ------------------------------------------- HL7 destinations, routing and profiles
+
+    private Hl7DestinationSettings? _selectedHl7Destination;
+    private Hl7RoutingRuleSettings? _selectedHl7Rule;
+    private Hl7ConditionSettings? _selectedHl7Condition;
+    private StoredProfile? _selectedHl7Profile;
+    private string _hl7ConfigurationStatus = string.Empty;
+    private string _hl7DestinationStatus = string.Empty;
+    private bool _isTestingHl7;
+
+    /// <summary>
+    /// The HL7 configuration being edited, which is a copy until Save runs.
+    /// </summary>
+    /// <remarks>
+    /// A separate file from the rest of the settings, for the reason the type itself gives:
+    /// Core knows nothing about HL7 and putting these in its configuration would have
+    /// changed that. The consequence here is that Save writes two files, and a failure to
+    /// write the second must not be mistaken for a failure to write the first.
+    /// </remarks>
+    public Hl7IntegrationSettings Hl7 { get; private set; } = new();
+
+    /// <summary>The profiles installed on this machine.</summary>
+    public ObservableCollection<StoredProfile> Hl7Profiles { get; } = new();
+
+    /// <summary>The orders a conversion and its message can run in.</summary>
+    public IReadOnlyList<EnumOption<IntegrationSequence>> Hl7Sequences { get; } =
+    [
+        new(IntegrationSequence.Independent, "Settings.Hl7.Sequence.Independent"),
+        new(IntegrationSequence.DicomThenHl7, "Settings.Hl7.Sequence.DicomThenHl7"),
+        new(IntegrationSequence.Hl7ThenDicom, "Settings.Hl7.Sequence.Hl7ThenDicom")
+    ];
+
+    /// <summary>
+    /// The things a rule can match on, taken from the factory rather than listed here.
+    /// </summary>
+    /// <remarks>
+    /// Published by the factory so that the page cannot offer a key the routing does not
+    /// supply, which would be a rule that silently never matches.
+    /// </remarks>
+    public IReadOnlyList<string> Hl7ConditionKeys => Hl7PlanFactory.ConditionKeys;
+
+    /// <summary>The same keys on one line, because XAML cannot join a list.</summary>
+    public string Hl7ConditionKeysText => string.Join(", ", Hl7PlanFactory.ConditionKeys);
+
+    /// <summary>Where the HL7 settings file is, so somebody can find it.</summary>
+    public string Hl7SettingsFilePath => _hl7Settings.SettingsFilePath;
+
+    /// <summary>Where the profiles live.</summary>
+    public string Hl7ProfileFolder => _hl7Settings.Profiles.Folder;
+
+    /// <summary>The destination being edited.</summary>
+    public Hl7DestinationSettings? SelectedHl7Destination
+    {
+        get => _selectedHl7Destination;
+        set
+        {
+            if (SetProperty(ref _selectedHl7Destination, value))
+            {
+                RemoveHl7DestinationCommand?.RaiseCanExecuteChanged();
+                TestHl7DestinationCommand?.RaiseCanExecuteChanged();
+                Hl7DestinationStatus = string.Empty;
+                OnPropertyChanged(nameof(HasSelectedHl7Destination));
+                OnPropertyChanged(nameof(Hl7RestrictToProfiles));
+            }
+        }
+    }
+
+    /// <summary>The rule being edited.</summary>
+    public Hl7RoutingRuleSettings? SelectedHl7Rule
+    {
+        get => _selectedHl7Rule;
+        set
+        {
+            if (SetProperty(ref _selectedHl7Rule, value))
+            {
+                SelectedHl7Condition = null;
+                RemoveHl7RuleCommand?.RaiseCanExecuteChanged();
+                MoveHl7RuleUpCommand?.RaiseCanExecuteChanged();
+                MoveHl7RuleDownCommand?.RaiseCanExecuteChanged();
+                AddHl7ConditionCommand?.RaiseCanExecuteChanged();
+                OnPropertyChanged(nameof(SelectedHl7RuleDestinationId));
+                OnPropertyChanged(nameof(HasSelectedHl7Rule));
+            }
+        }
+    }
+
+    /// <summary>The condition row being edited.</summary>
+    public Hl7ConditionSettings? SelectedHl7Condition
+    {
+        get => _selectedHl7Condition;
+        set
+        {
+            if (SetProperty(ref _selectedHl7Condition, value))
+            {
+                RemoveHl7ConditionCommand?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>The profile selected in the list.</summary>
+    public StoredProfile? SelectedHl7Profile
+    {
+        get => _selectedHl7Profile;
+        set
+        {
+            if (SetProperty(ref _selectedHl7Profile, value))
+            {
+                RemoveHl7ProfileCommand?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// The destination the selected rule sends to.
+    /// </summary>
+    /// <remarks>
+    /// A rule can name several destinations and the file supports that; the page offers one,
+    /// because a multiple selection list is the kind of interface element that cannot be
+    /// tested on a build agent and this one has no automated coverage at all. A rule that
+    /// names several keeps them: this writes the first and leaves the rest alone.
+    /// </remarks>
+    public string SelectedHl7RuleDestinationId
+    {
+        get => SelectedHl7Rule?.Destinations.FirstOrDefault() ?? string.Empty;
+        set
+        {
+            if (SelectedHl7Rule is null || value is null)
+            {
+                return;
+            }
+
+            if (SelectedHl7Rule.Destinations.Count == 0)
+            {
+                SelectedHl7Rule.Destinations.Add(value);
+            }
+            else
+            {
+                SelectedHl7Rule.Destinations[0] = value;
+            }
+
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Whether a destination is selected, for the editor's visibility.</summary>
+    public bool HasSelectedHl7Destination => SelectedHl7Destination is not null;
+
+    /// <summary>Whether a rule is selected.</summary>
+    public bool HasSelectedHl7Rule => SelectedHl7Rule is not null;
+
+    /// <summary>
+    /// The profiles the selected destination accepts, written as a list for a text box.
+    /// </summary>
+    /// <remarks>
+    /// The destination itself holds a list, which no text box can edit. The conversion lives
+    /// here rather than on the settings type so that the mirror of the engine's own
+    /// destination stays a mirror, and the pair of tests that compares the two keeps working.
+    /// Empty means any profile, which is what a site gets without doing anything.
+    /// </remarks>
+    public string Hl7RestrictToProfiles
+    {
+        get => SelectedHl7Destination is null
+            ? string.Empty
+            : string.Join(", ", SelectedHl7Destination.ProfileIds);
+        set
+        {
+            if (SelectedHl7Destination is null)
+            {
+                return;
+            }
+
+            SelectedHl7Destination.ProfileIds = (value ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList();
+
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>What the configuration check last said, shown on the page.</summary>
+    public string Hl7ConfigurationStatus
+    {
+        get => _hl7ConfigurationStatus;
+        private set => SetProperty(ref _hl7ConfigurationStatus, value);
+    }
+
+    /// <summary>What the last connection test said.</summary>
+    public string Hl7DestinationStatus
+    {
+        get => _hl7DestinationStatus;
+        private set => SetProperty(ref _hl7DestinationStatus, value);
+    }
+
+    /// <summary>Whether a connection test is running.</summary>
+    public bool IsTestingHl7
+    {
+        get => _isTestingHl7;
+        private set
+        {
+            if (SetProperty(ref _isTestingHl7, value))
+            {
+                TestHl7DestinationCommand?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>Adds a destination.</summary>
+    public RelayCommand AddHl7DestinationCommand { get; }
+
+    /// <summary>Removes the selected destination.</summary>
+    public RelayCommand RemoveHl7DestinationCommand { get; }
+
+    /// <summary>Opens a connection to the selected destination and sends nothing.</summary>
+    public AsyncRelayCommand TestHl7DestinationCommand { get; }
+
+    /// <summary>Adds a routing rule.</summary>
+    public RelayCommand AddHl7RuleCommand { get; }
+
+    /// <summary>Removes the selected rule.</summary>
+    public RelayCommand RemoveHl7RuleCommand { get; }
+
+    /// <summary>Moves the selected rule earlier, since order decides.</summary>
+    public RelayCommand MoveHl7RuleUpCommand { get; }
+
+    /// <summary>Moves the selected rule later.</summary>
+    public RelayCommand MoveHl7RuleDownCommand { get; }
+
+    /// <summary>Adds a condition to the selected rule.</summary>
+    public RelayCommand AddHl7ConditionCommand { get; }
+
+    /// <summary>Removes the selected condition.</summary>
+    public RelayCommand RemoveHl7ConditionCommand { get; }
+
+    /// <summary>Installs a profile from a file.</summary>
+    public RelayCommand ImportHl7ProfileCommand { get; }
+
+    /// <summary>Removes the selected profile.</summary>
+    public RelayCommand RemoveHl7ProfileCommand { get; }
+
+    /// <summary>Reads the profile folder again.</summary>
+    public RelayCommand RefreshHl7ProfilesCommand { get; }
+
+    /// <summary>Checks the whole HL7 configuration and reports what is wrong with it.</summary>
+    public RelayCommand CheckHl7ConfigurationCommand { get; }
+
+    private void AddHl7Destination()
+    {
+        var destination = new Hl7DestinationSettings
+        {
+            Name = _services.Localizer.Get("Settings.Hl7.NewDestination")
+        };
+
+        Hl7.Destinations.Add(destination);
+        SelectedHl7Destination = destination;
+    }
+
+    private void RemoveHl7Destination()
+    {
+        if (SelectedHl7Destination is null)
+        {
+            return;
+        }
+
+        // A rule left pointing at a destination that no longer exists is reported by the
+        // check rather than silently repaired. Quietly rewriting somebody's routing while
+        // they delete a row is how a report ends up at the wrong system.
+        Hl7.Destinations.Remove(SelectedHl7Destination);
+        SelectedHl7Destination = Hl7.Destinations.FirstOrDefault();
+        CheckHl7Configuration();
+    }
+
+    private async Task TestHl7DestinationAsync()
+    {
+        if (SelectedHl7Destination is null)
+        {
+            return;
+        }
+
+        Hl7DestinationSettings destination = SelectedHl7Destination;
+
+        IReadOnlyList<string> problems = destination.Check();
+
+        if (problems.Count > 0)
+        {
+            Hl7DestinationStatus = string.Join(" ", problems);
+            return;
+        }
+
+        IsTestingHl7 = true;
+        Hl7DestinationStatus = _services.Localizer.Get("Settings.Hl7.Testing");
+
+        try
+        {
+            // A connection and nothing else. Sending a real message from a settings dialog
+            // would put a document in a patient's record to answer the question "is the
+            // port open", which is not a trade anybody would make knowingly. The command
+            // line is where a test message is sent, deliberately and with test data.
+            using var client = new System.Net.Sockets.TcpClient();
+            using var timeout = new CancellationTokenSource(
+                TimeSpan.FromSeconds(Math.Max(1, destination.ConnectTimeoutSeconds)));
+
+            await client.ConnectAsync(destination.Host, destination.Port, timeout.Token)
+                .ConfigureAwait(true);
+
+            Hl7DestinationStatus = _services.Localizer.Format(
+                "Settings.Hl7.TestReached", destination.Host, destination.Port);
+
+            _services.Logger.Information(
+                $"An HL7 connection test reached {destination.Host}:{destination.Port}. " +
+                "Nothing was sent.");
+        }
+        catch (OperationCanceledException)
+        {
+            Hl7DestinationStatus = _services.Localizer.Format(
+                "Settings.Hl7.TestTimedOut", destination.ConnectTimeoutSeconds);
+        }
+        catch (Exception ex) when (ex is System.Net.Sockets.SocketException or IOException
+                                       or ObjectDisposedException)
+        {
+            Hl7DestinationStatus = _services.Localizer.Format(
+                "Settings.Hl7.TestFailed", ex.Message);
+        }
+        finally
+        {
+            IsTestingHl7 = false;
+        }
+    }
+
+    private void AddHl7Rule()
+    {
+        var rule = new Hl7RoutingRuleSettings
+        {
+            Name = _services.Localizer.Get("Settings.Hl7.NewRule"),
+            ProfileId = Hl7Profiles.FirstOrDefault(p => p.IsUsable)?.ProfileId ?? string.Empty,
+            Destinations = Hl7.Destinations.Count > 0 ? [Hl7.Destinations[0].Id] : []
+        };
+
+        // Prefilled with the one condition almost every rule wants, because a rule with no
+        // conditions matches every message and a page that offers that as the starting point
+        // is a page that invites it.
+        rule.When.Add(new Hl7ConditionSettings { Key = "messageType", Value = "ORU" });
+
+        Hl7.Rules.Add(rule);
+        SelectedHl7Rule = rule;
+    }
+
+    private void RemoveHl7Rule()
+    {
+        if (SelectedHl7Rule is null)
+        {
+            return;
+        }
+
+        Hl7.Rules.Remove(SelectedHl7Rule);
+        SelectedHl7Rule = Hl7.Rules.FirstOrDefault();
+        CheckHl7Configuration();
+    }
+
+    private void MoveHl7Rule(int offset)
+    {
+        if (SelectedHl7Rule is null)
+        {
+            return;
+        }
+
+        int index = Hl7.Rules.IndexOf(SelectedHl7Rule);
+        int target = index + offset;
+
+        if (index < 0 || target < 0 || target >= Hl7.Rules.Count)
+        {
+            return;
+        }
+
+        Hl7.Rules.Move(index, target);
+
+        MoveHl7RuleUpCommand?.RaiseCanExecuteChanged();
+        MoveHl7RuleDownCommand?.RaiseCanExecuteChanged();
+    }
+
+    private bool CanMoveHl7Rule(int offset)
+    {
+        if (SelectedHl7Rule is null)
+        {
+            return false;
+        }
+
+        int target = Hl7.Rules.IndexOf(SelectedHl7Rule) + offset;
+
+        return target >= 0 && target < Hl7.Rules.Count;
+    }
+
+    private void AddHl7Condition()
+    {
+        if (SelectedHl7Rule is null)
+        {
+            return;
+        }
+
+        var condition = new Hl7ConditionSettings();
+        SelectedHl7Rule.When.Add(condition);
+        SelectedHl7Condition = condition;
+    }
+
+    private void RemoveHl7Condition()
+    {
+        if (SelectedHl7Rule is null || SelectedHl7Condition is null)
+        {
+            return;
+        }
+
+        SelectedHl7Rule.When.Remove(SelectedHl7Condition);
+        SelectedHl7Condition = SelectedHl7Rule.When.FirstOrDefault();
+    }
+
+    private void ImportHl7Profile()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = _services.Localizer.Get("Settings.Hl7.OpenProfile"),
+            Filter = "Profile (*.json)|*.json|All files (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        ProfileImportResult result = _hl7Settings.Profiles.Import(dialog.FileName);
+
+        if (!result.Succeeded && result.Detail.Contains("already installed", StringComparison.Ordinal))
+        {
+            MessageBoxResult answer = MessageBox.Show(
+                _services.Localizer.Format("Settings.Hl7.ProfileReplace", result.ProfileId),
+                _services.Localizer.Get("Settings.Tab.Hl7"),
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (answer != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            result = _hl7Settings.Profiles.Import(dialog.FileName, overwrite: true);
+        }
+
+        if (result.Succeeded)
+        {
+            Hl7ConfigurationStatus = _services.Localizer.Format(
+                "Settings.Hl7.ProfileInstalled", result.ProfileId);
+
+            _services.AuditLogger.ConfigurationChanged(
+                $"An HL7 profile was installed: {result.ProfileId}.");
+        }
+        else
+        {
+            // Refused, with the reader's own objection. A profile that cannot build a
+            // message would otherwise sit in the list looking available.
+            Hl7ConfigurationStatus = _services.Localizer.Format(
+                "Settings.Hl7.ProfileRefused", result.Detail);
+        }
+
+        RefreshHl7Profiles();
+    }
+
+    private void RemoveHl7Profile()
+    {
+        if (SelectedHl7Profile is null)
+        {
+            return;
+        }
+
+        StoredProfile profile = SelectedHl7Profile;
+
+        MessageBoxResult answer = MessageBox.Show(
+            _services.Localizer.Format("Settings.Hl7.ProfileRemoveConfirm", profile.ProfileId),
+            _services.Localizer.Get("Settings.Tab.Hl7"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (answer != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        _hl7Settings.Profiles.Remove(profile);
+        _services.AuditLogger.ConfigurationChanged(
+            $"An HL7 profile was removed: {profile.ProfileId}.");
+
+        RefreshHl7Profiles();
+        CheckHl7Configuration();
+    }
+
+    private void RefreshHl7Profiles()
+    {
+        Hl7Profiles.Clear();
+
+        foreach (StoredProfile profile in _hl7Settings.Profiles.List())
+        {
+            Hl7Profiles.Add(profile);
+        }
+
+        SelectedHl7Profile = Hl7Profiles.FirstOrDefault();
+        OnPropertyChanged(nameof(Hl7ProfileIdsForRules));
+    }
+
+    /// <summary>
+    /// The profile identifiers a rule can be pointed at.
+    /// </summary>
+    /// <remarks>
+    /// Only the usable ones. Offering a profile that does not hold together would let
+    /// somebody configure a rule that can never send anything, and the first sign of it
+    /// would be a refusal at the moment a report was converted.
+    /// </remarks>
+    public IReadOnlyList<string> Hl7ProfileIdsForRules =>
+        Hl7Profiles.Where(p => p.IsUsable).Select(p => p.ProfileId).ToList();
+
+    private void CheckHl7Configuration()
+    {
+        IReadOnlyList<string> problems = Hl7.Check(Hl7ProfileIdsForRules);
+
+        Hl7ConfigurationStatus = problems.Count == 0
+            ? _services.Localizer.Get(
+                Hl7.IsConfigured ? "Settings.Hl7.ConfigurationSound" : "Settings.Hl7.NothingConfigured")
+            : string.Join(Environment.NewLine, problems.Select(p => "• " + p));
+    }
+
+    /// <summary>
+    /// Writes the HL7 configuration, which Save calls after the main settings.
+    /// </summary>
+    /// <returns>True when it was saved, or when there was nothing to save.</returns>
+    /// <remarks>
+    /// Blocking only when the configuration is both live and broken. A site part way through
+    /// commissioning an interface has to be able to save a configuration that does not work
+    /// yet; a site that has switched announcements on and whose routing cannot send anything
+    /// has a problem it will not otherwise discover until a report goes missing.
+    /// </remarks>
+    private bool SaveHl7Settings()
+    {
+        IReadOnlyList<string> problems = Hl7.Check(Hl7ProfileIdsForRules);
+
+        if (problems.Count > 0 && Hl7.AnnounceConversions)
+        {
+            MessageBox.Show(
+                _services.Localizer.Get("Settings.Hl7.CannotSaveLive") + Environment.NewLine +
+                Environment.NewLine +
+                string.Join(Environment.NewLine, problems.Select(p => "• " + p)),
+                _services.Localizer.Get("Settings.Tab.Hl7"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+
+            return false;
+        }
+
+        try
+        {
+            if (!Hl7.IsConfigured && !Hl7.AnnounceConversions)
+            {
+                // Nothing configured. The file is removed rather than written empty, so that
+                // "is anything configured here" has a one word answer.
+                _hl7Settings.Forget();
+            }
+            else
+            {
+                _hl7Settings.Save(Hl7);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                       or InvalidOperationException)
+        {
+            MessageBox.Show(
+                ex.Message,
+                _services.Localizer.Get("Settings.Tab.Hl7"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+
+            return false;
+        }
+
+        if (problems.Count > 0)
+        {
+            // Saved, and said out loud. The switch is off, so nothing is being sent, and the
+            // operator should still know the configuration does not yet hold together.
+            Hl7ConfigurationStatus = string.Join(
+                Environment.NewLine, problems.Select(p => "• " + p));
+        }
+
+        _services.AuditLogger.ConfigurationChanged(
+            $"HL7 integration: {Hl7.Destinations.Count} destination(s), {Hl7.Rules.Count} rule(s), " +
+            $"announcements {(Hl7.AnnounceConversions ? "on" : "off")}, order {Hl7.Sequence}.");
+
+        return true;
     }
 }
 

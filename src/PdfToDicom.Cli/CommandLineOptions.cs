@@ -104,6 +104,38 @@ public sealed class CommandLineOptions
     /// <summary>Limit a settings export or import to the worklist servers.</summary>
     public bool WorklistsOnly { get; private set; }
 
+    /// <summary>The HL7 profile to build or check against.</summary>
+    public string Hl7ProfilePath { get; private set; } = string.Empty;
+
+    /// <summary>The message to inspect, for hl7-check.</summary>
+    public string Hl7MessagePath { get; private set; } = string.Empty;
+
+    /// <summary>Host and port to send to, written host:port.</summary>
+    public string Hl7Target { get; private set; } = string.Empty;
+
+    /// <summary>Named values for the message subject, written name=value.</summary>
+    public List<string> Hl7Values { get; } = new();
+
+    /// <summary>
+    /// How long to wait for an acknowledgement, or 0 for the usual thirty seconds.
+    /// </summary>
+    /// <remarks>
+    /// Worth having on the command line because the commonest commissioning question is
+    /// whether a receiver answers at all, and waiting half a minute per attempt to find
+    /// out discourages asking.
+    /// </remarks>
+    public int Hl7TimeoutSeconds { get; private set; }
+
+    /// <summary>
+    /// Fill the subject with invented values rather than real ones.
+    /// </summary>
+    /// <remarks>
+    /// The way to exercise an interface without real patient information. The names are
+    /// obviously fictional, so a message arriving at the wrong system during commissioning
+    /// is recognisable as a test the moment somebody reads it.
+    /// </remarks>
+    public bool Hl7TestData { get; private set; }
+
     /// <summary>Errors encountered while parsing.</summary>
     public List<string> ParseErrors { get; } = new();
 
@@ -168,6 +200,9 @@ public sealed class CommandLineOptions
                     continue;
                 case "worklists-only":
                     options.WorklistsOnly = true;
+                    continue;
+                case "test-data":
+                    options.Hl7TestData = true;
                     continue;
             }
 
@@ -281,6 +316,29 @@ public sealed class CommandLineOptions
             case "out":
                 OutputPath = value;
                 break;
+            case "profile":
+                Hl7ProfilePath = value;
+                break;
+            case "message":
+                Hl7MessagePath = value;
+                break;
+            case "to":
+                Hl7Target = value;
+                break;
+            case "set":
+                Hl7Values.Add(value);
+                break;
+            case "timeout":
+                if (int.TryParse(value, out int seconds) && seconds > 0)
+                {
+                    Hl7TimeoutSeconds = seconds;
+                }
+                else
+                {
+                    ParseErrors.Add($"'--timeout {value}' is not a number of seconds.");
+                }
+
+                break;
             default:
                 ParseErrors.Add($"Unknown option '--{name}'.");
                 break;
@@ -323,7 +381,33 @@ public sealed class CommandLineOptions
                       Turn a password into the verifier that guards the worklist and
                       destination settings, to be compiled into a build. The password
                       itself is never stored or printed.
+          hl7-check   Lay an HL7 message out against a profile and report what the
+                      profile objects to. Reads files, touches no network.
+          hl7-send    Build a message from a profile and send it over MLLP, reporting
+                      what came back.
           help        Show this text.
+
+        HL7 OPTIONS
+          --profile <path>             The profile to use, as written by the HL7 page in
+                                       Settings or by hand. Required by both commands.
+          --message <path>             For hl7-check, the message to examine. A file of
+                                       segments separated by carriage returns, line feeds
+                                       or both.
+          --to <host:port>             For hl7-send, where to send it.
+          --set <name=value>           A value for the message, by the name the profile's
+                                       sources use, such as --set patient.id=12345. May be
+                                       repeated. These are the only values used unless
+                                       --test-data is given.
+          --test-data                  Fill the message with obviously invented values
+                                       first, which --set then overrides. The invented
+                                       patient is named ZZZTEST so that a message which
+                                       escapes into a real system is recognisable as a
+                                       test. Never use this against a live archive.
+          --timeout <seconds>          How long to wait for an acknowledgement. Thirty
+                                       seconds when omitted.
+          --no-send                    With hl7-send, print the message that would be
+                                       sent and stop. Nothing is transmitted and nothing
+                                       is written down.
 
         FILE NAME IMPORT OPTIONS
           --from-filename              On send and generate, read the patient information

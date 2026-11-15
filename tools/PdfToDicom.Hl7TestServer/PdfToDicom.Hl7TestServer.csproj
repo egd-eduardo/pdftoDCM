@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    An HL7 receiver for testing, and only for testing.
+
+    It exists for the same reason the test worklist server does: a site adopting an
+    interface usually has no HL7 endpoint it can point a test workstation at, because the
+    real one is a clinical record system and is not somewhere to try a new application
+    against. This listens on MLLP, prints what arrives, and answers however it is told to,
+    including the unhelpful ways a real receiver sometimes does.
+
+    It is NOT part of what a hospital receives. The packaging scripts copy a named list of
+    files, this is not on it, and the handover check refuses any package containing it.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>PdfToDicom.Hl7TestServer</RootNamespace>
+    <AssemblyName>hl7testserver</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PdfToDicom.Interop.Hl7V2\PdfToDicom.Interop.Hl7V2.csproj" />
+  </ItemGroup>
+
+</Project>

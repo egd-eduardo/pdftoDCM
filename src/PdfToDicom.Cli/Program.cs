@@ -60,6 +60,18 @@ try
         "config" => RunShowConfiguration(services),
         "export-settings" => RunExportSettings(services, options),
         "import-settings" => RunImportSettings(services, options),
+        // The transaction log goes beside the application log rather than into a folder
+        // of its own. Somebody commissioning an interface is already being told where the
+        // logs are, and one place to look is worth more than a tidier layout.
+        "hl7-check" => Hl7Commands.Check(options.Hl7ProfilePath, options.Hl7MessagePath),
+        "hl7-send" => await Hl7Commands.SendAsync(
+            options.Hl7ProfilePath,
+            options.Hl7Target,
+            options.Hl7Values,
+            options.Hl7TestData,
+            options.NoSend,
+            options.Hl7TimeoutSeconds,
+            Path.Combine(services.AppLogger.LogFolder, "hl7")),
         _ => UnknownCommand(options.Command)
     };
 }

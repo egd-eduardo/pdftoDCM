@@ -375,6 +375,12 @@ birth, accession number, the file, and where it is going.
 > **Read it.** This is the last moment at which a mistake can be caught for free. Once the
 > document is in the PACS, removing it requires a PACS administrator.
 
+If your IT department has set one up, the summary also lists **the record systems that will
+be told about this document**, under a heading saying so. Those are not archives: they are
+systems like a RIS or an electronic record that are being sent a short message saying the
+report exists and where to find it. The document itself still goes only to the archives
+listed above them.
+
 Click **OK** to proceed, or **Cancel** to go back and correct something.
 
 ### What happens next
@@ -394,6 +400,17 @@ For a normal report this takes a second or two.
 The dot turns green and the results panel shows **OK** next to each destination. The
 document is now in the patient's imaging record. Look for it in the PACS under the patient
 ID and accession number you entered.
+
+### When the dot turns amber
+
+Amber means the document was handled and something else needs looking at. In practice it
+means one thing: the report reached the archive, and a message to a record system was not
+confirmed. The panel says which system and what happened.
+
+**Do not send the document again.** It is already in the archive, and sending it a second
+time would put a second copy there to solve a problem that is not in the archive at all.
+Tell your IT department instead, quoting the message id shown beside the line. They can see
+whether the record system received it.
 
 ### Generate only
 

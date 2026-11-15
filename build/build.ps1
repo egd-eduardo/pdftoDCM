@@ -407,8 +407,25 @@ function Invoke-Test {
         }
     }
 
-    dotnet test $project -c $Configuration --nologo --verbosity minimal
-    if ($LASTEXITCODE -ne 0) { throw 'The test suite failed. The build is not shippable.' }
+    # Every test project under tests/, found rather than listed. Naming them meant that
+    # for two releases this script ran one of three: the engine's 303 tests and the
+    # integration assembly's 52 were never run by the build that reaches a site, while the
+    # failure message claimed the test suite had passed. CI had already been changed to run
+    # the whole solution for this reason; the scripts were not. A glob cannot be forgotten
+    # when the next project is added.
+    #
+    # Not the solution file, because it holds the WPF project, which cannot be loaded at all
+    # on Linux or macOS and would stop this script running there.
+    $testProjects = @(Get-ChildItem -Path (Join-Path $RepoRoot 'tests') -Filter '*.csproj' -Recurse |
+        Sort-Object -Property FullName)
+
+    if ($testProjects.Count -eq 0) { throw 'No test projects were found under tests/.' }
+
+    foreach ($testProject in $testProjects) {
+        Write-Host "    $($testProject.BaseName)"
+        dotnet test $testProject.FullName -c $Configuration --nologo --verbosity minimal
+        if ($LASTEXITCODE -ne 0) { throw 'The test suite failed. The build is not shippable.' }
+    }
 }
 
 function Invoke-Publish {
@@ -537,6 +554,11 @@ function Invoke-Assemble {
         'DicomConformanceStatement.md' = 'DICOM Conformance Statement (for your PACS administrator).md'
         'TechnicalDocumentation.md'    = 'Technical Documentation (for IT).md'
         'WorklistSetup.md'             = 'Worklist Setup (for IT).md'
+
+        # Added in 4.0.0, with the pages that make it usable. It was deliberately held back
+        # while the engine had no configuration surface, because a guide to something a site
+        # cannot switch on describes a product they do not have.
+        'Hl7IntegrationGuide.md'       = 'HL7 Integration (for IT).md'
     }
 
     foreach ($source in $shipped.Keys) {
@@ -551,8 +573,9 @@ function Invoke-Assemble {
     }
 
     # ---------------------------------------------------------------- samples
-    Copy-Item (Join-Path $RepoRoot 'samples\config.sample.json') $samples
-    Copy-Item (Join-Path $RepoRoot 'samples\example-report.pdf') $samples
+    Copy-Item (Join-Path $RepoRoot 'samples\config.sample.json')    $samples
+    Copy-Item (Join-Path $RepoRoot 'samples\example-report.pdf')    $samples
+    Copy-Item (Join-Path $RepoRoot 'samples\hl7-oru-r01.sample.json') $samples
 
     # ---------------------------------------------------------------- start here
     New-StartHereFile -Path (Join-Path $package 'READ ME FIRST.txt') -Version $version
@@ -661,7 +684,7 @@ differs only in case has overwritten it. Windows cannot hold both.
     # somebody changes the list, and handing a private signing key to a hospital is not a
     # mistake that should depend on nobody ever writing a wildcard.
     $forbidden = @('BuildingItYourself', 'CodeSigning', 'ProtectingAgainstUnauthorisedDistribution',
-                   'testworklistserver',
+                   'testworklistserver', 'hl7testserver', 'mllp-receiver',
                    'codesign', '.pfx', '.p12', '.password', '.key')
 
     $leaked = $forbidden | Where-Object { $name = $_; $present | Where-Object { $_ -like "*$name*" } }
@@ -744,11 +767,14 @@ WHAT IS IN THIS FOLDER
     Technical Documentation                  For IT.
     Worklist Setup                           For IT, if your department has
                                              a modality worklist.
+    HL7 Integration                          For IT, if a record system is to
+                                             be told when a report arrives.
     Changelog                                What changed in each version.
 
   Samples\
     config.sample.json       Annotated settings reference.
     example-report.pdf       A document to test with.
+    hl7-oru-r01.sample.json  A worked HL7 profile to start from.
 
 
 IMPORTANT
