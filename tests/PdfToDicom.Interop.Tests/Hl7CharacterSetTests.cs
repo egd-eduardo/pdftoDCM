@@ -117,6 +117,49 @@ public sealed class Hl7CharacterSetTests
     }
 
     [Fact]
+    public void ALetterThatIsItsOwnCharacterIsHandledToo()
+    {
+        // A Polish crossed l is not an l with a mark added, so decomposition does nothing
+        // for it. Before this was handled, stripping accents left a name no better off.
+        Assert.Equal("Walesa", Hl7CharacterSet.Transliterate(PolishName));
+        Assert.Equal("Oresund", Hl7CharacterSet.Transliterate("\u00d8resund"));
+        Assert.Equal("strasse", Hl7CharacterSet.Transliterate("stra\u00dfe"));
+    }
+
+    [Fact]
+    public void WhatCannotBeStrippedIsReplacedRatherThanWrittenAnyway()
+    {
+        // The gap this closes: a value could be transliterated, still be unrepresentable,
+        // and be written regardless. A name in a script with no Latin form has nothing to
+        // strip, so it becomes visibly wrong instead of quietly broken.
+        System.Text.Encoding latin1 = Hl7CharacterSet.Resolve("8859/1");
+
+        string safe = Hl7CharacterSet.ToRepresentable("\u4e2d\u6587", latin1);
+
+        Assert.Null(Hl7CharacterSet.FindUnrepresentable(safe, latin1));
+        Assert.Equal("??", safe);
+    }
+
+    [Fact]
+    public void AValueThatNeedsNothingIsReturnedByToRepresentableUnchanged()
+    {
+        System.Text.Encoding latin1 = Hl7CharacterSet.Resolve("8859/1");
+
+        Assert.Equal(PortugueseName, Hl7CharacterSet.ToRepresentable(PortugueseName, latin1));
+    }
+
+    [Fact]
+    public void OnlyTheCharacterThatCannotBeCarriedIsChanged()
+    {
+        // The reason this works character by character. One Polish letter in a Portuguese
+        // name must not cost the name its cedilla, which the destination can carry.
+        System.Text.Encoding latin1 = Hl7CharacterSet.Resolve("8859/1");
+
+        Assert.Equal("Concei\u00e7\u00e3o-Walesa",
+            Hl7CharacterSet.ToRepresentable(PortugueseName + "-" + PolishName, latin1));
+    }
+
+    [Fact]
     public void TransliterationLeavesTextThatNeedsNothingDoneToItAlone()
     {
         Assert.Equal("Smith", Hl7CharacterSet.Transliterate("Smith"));

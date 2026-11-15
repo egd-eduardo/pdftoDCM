@@ -50,6 +50,12 @@ public sealed record Hl7Profile
     /// <summary>What goes in MSH-11.</summary>
     public string ProcessingId { get; init; } = "P";
 
+    /// <summary>
+    /// A prefix for the message control identifier, so that messages from this workstation
+    /// are recognisable in somebody else's log.
+    /// </summary>
+    public string ControlIdPrefix { get; init; } = string.Empty;
+
     /// <summary>The delimiters, character set and unrepresentable character policy.</summary>
     public ProfileEncoding Encoding { get; init; } = new();
 

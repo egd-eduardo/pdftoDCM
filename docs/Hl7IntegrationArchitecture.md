@@ -5,14 +5,18 @@
 Decided so far, and recorded in the sections that follow: inbound is out of scope, and the
 first and only message type is **ORU^R01 outbound**.
 
-**Phase 2 is complete.** `src/PdfToDicom.Interop.Hl7V2` holds the message model, the ER7
+**Phases 2 and 3 are complete.** `src/PdfToDicom.Interop.Hl7V2` holds the message model, the ER7
 codec, the character set rules, MLLP framing and the outbound transport.
 `src/PdfToDicom.Interop` holds the transaction record, the content hash and the append only
 store that answers whether a document has already reached a destination. 138 tests cover
 the two. Neither assembly is referenced by the application or the command line tool, so what
 is published and what the installer carries are unchanged.
 
-Phase 3, the profile model, is next.
+Phase 3 added the profile model, its reader, the closed transform set, the message builder
+and the message validator. A profile is a JSON document; nothing in the builder knows what
+ORU means, which the tests check by building an ADT from the same code.
+
+Phase 4, destinations and routing, is next.
 
 This document answers Phase 1 of the brief. It analyses the existing application, reads the
 supplied conformance statement as a specimen rather than as a target, and proposes an

@@ -14,6 +14,9 @@
     it up when the engine above it exists, so adding it changes neither the published
     output nor the installer today.
   -->
+  <ItemGroup>
+    <ProjectReference Include="..\PdfToDicom.Interop\PdfToDicom.Interop.csproj" />
+  </ItemGroup>
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>PdfToDicom.Interop.Hl7V2</RootNamespace>

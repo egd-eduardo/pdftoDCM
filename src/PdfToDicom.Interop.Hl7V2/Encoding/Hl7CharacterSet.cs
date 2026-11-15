@@ -146,7 +146,7 @@ public static class Hl7CharacterSet
             throw new Hl7CharacterSetException(offending.Value, encoding.WebName);
         }
 
-        return encoding.GetBytes(Transliterate(message));
+        return encoding.GetBytes(ToRepresentable(message, encoding));
     }
 
     /// <summary>
@@ -172,13 +172,86 @@ public static class Hl7CharacterSet
         foreach (char c in decomposed)
         {
             if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)
-                != System.Globalization.UnicodeCategory.NonSpacingMark)
+                == System.Globalization.UnicodeCategory.NonSpacingMark)
             {
-                builder.Append(c);
+                continue;
             }
+
+            // Decomposition handles a letter carrying a mark, which is most of them. It
+            // does nothing for a letter that is its own character: a Polish crossed l is not
+            // an l with something added, so it survives the step above untouched and would
+            // leave a name no better off than before. These are the European ones, and the
+            // list is short because it is the whole of the problem rather than a sample.
+            if (WithoutMarkOfItsOwn.TryGetValue(c, out string? replacement))
+            {
+                builder.Append(replacement);
+                continue;
+            }
+
+            builder.Append(c);
         }
 
         return builder.ToString().Normalize(NormalizationForm.FormC);
+    }
+
+    private static readonly IReadOnlyDictionary<char, string> WithoutMarkOfItsOwn =
+        new Dictionary<char, string>
+        {
+            ['\u0141'] = "L", ['\u0142'] = "l",   // crossed L, Polish
+            ['\u00d8'] = "O", ['\u00f8'] = "o",   // slashed O, Scandinavian
+            ['\u0110'] = "D", ['\u0111'] = "d",   // barred D, Croatian
+            ['\u00d0'] = "D", ['\u00f0'] = "d",   // eth, Icelandic
+            ['\u00de'] = "Th", ['\u00fe'] = "th", // thorn, Icelandic
+            ['\u00c6'] = "AE", ['\u00e6'] = "ae",
+            ['\u0152'] = "OE", ['\u0153'] = "oe",
+            ['\u00df'] = "ss"                      // sharp s, German
+        };
+
+    /// <summary>
+    /// Produces a value the encoding can certainly carry, stripping what it can and
+    /// replacing what it cannot.
+    /// </summary>
+    /// <remarks>
+    /// The safety net behind <see cref="Transliterate"/>. Stripping accents is not a
+    /// guarantee: a name in a script with no Latin form has nothing to strip, and before
+    /// this existed such a value could be transliterated, still be unrepresentable, and be
+    /// written anyway. Anything that survives both steps becomes a question mark, which is
+    /// visibly wrong rather than subtly wrong, and the caller is told what it did.
+    /// </remarks>
+    public static string ToRepresentable(string? value, System.Text.Encoding encoding)
+    {
+        ArgumentNullException.ThrowIfNull(encoding);
+
+        if (string.IsNullOrEmpty(value) || FindUnrepresentable(value, encoding) is null)
+        {
+            return value ?? string.Empty;
+        }
+
+        // Character by character rather than over the whole value, which matters more than
+        // it sounds. Stripping the lot would take the cedilla and the tilde out of a
+        // Portuguese name that the destination could carry perfectly well, because one
+        // letter elsewhere in it could not. Only what must change is changed.
+        var builder = new StringBuilder(value.Length);
+
+        foreach (char c in value)
+        {
+            string single = c.ToString();
+
+            if (FindUnrepresentable(single, encoding) is null)
+            {
+                builder.Append(c);
+                continue;
+            }
+
+            string stripped = Transliterate(single);
+
+            builder.Append(
+                stripped.Length > 0 && FindUnrepresentable(stripped, encoding) is null
+                    ? stripped
+                    : '?');
+        }
+
+        return builder.ToString();
     }
 }
 
