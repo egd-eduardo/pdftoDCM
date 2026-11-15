@@ -246,17 +246,18 @@ public sealed class ProtectedSettingsLockTests
     /// </para>
     /// </remarks>
     [Fact]
-    public void TheShippedPasswordIsTheOneThatIsWrittenDown()
+    public void APasswordIsSetAtAll()
     {
+        // All this can honestly assert now. The test used to name the shipped password so
+        // that the comment recording it and the verifier could not drift apart; with the
+        // comment gone, naming it here would simply move the plaintext from one file to
+        // another, and this repository is public.
         Assert.True(ProtectedSettingsLock.IsProtected);
-        Assert.True(ProtectedSettingsLock.Verify("Odraude"));
     }
 
     [Fact]
-    public void TheShippedLockRefusesTheObviousNearMisses()
+    public void TheShippedLockRefusesWhatIsObviouslyNotThePassword()
     {
-        Assert.False(ProtectedSettingsLock.Verify("odraude"));
-        Assert.False(ProtectedSettingsLock.Verify("Odraude "));
         Assert.False(ProtectedSettingsLock.Verify("NeverWinterNights"));
         Assert.False(ProtectedSettingsLock.Verify(string.Empty));
         Assert.False(ProtectedSettingsLock.Verify(null));

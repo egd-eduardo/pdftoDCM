@@ -542,7 +542,12 @@ take that seriously rather than as advice.
 ## 3.3.0
 
 **Several worklist servers, chosen when the worklist is opened; the destinations are now
-behind the same password as the worklist; and that password is `Odraude`.**
+behind the same password as the worklist; and that password was set.**
+
+> The password was named here when this repository was private. It has been removed from
+> this file because the repository is now public. Removing it does not unpublish it: it is
+> in the history, so the password named in those commits must be treated as known and
+> replaced.
 
 ### Several worklist servers
 
@@ -574,7 +579,7 @@ DCMTK over a real association, because a worklist connection is agreed with anot
 department and tested against a live server; losing it silently would mean somebody
 retyping an AE Title from memory, and a wrong AE Title offers the wrong patients.
 
-### The destinations are protected too, and the password is now Odraude
+### The destinations are protected too, and a password is now set
 
 The one password now guards **both** the Worklist and the Destinations pages. They are the
 same kind of setting: addresses and AE Titles that decide where patient data comes from and

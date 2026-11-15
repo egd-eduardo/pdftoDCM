@@ -66,24 +66,21 @@ public static class ProtectedSettingsLock
     /// application reports the setting as unprotected so it cannot be forgotten.
     /// </para>
     /// <para>
-    /// <b>The password currently compiled in is Odraude.</b> It is written here
-    /// in the clear at the copyright holder's request, so that it cannot be forgotten and
-    /// can be changed or removed later. The verifier below cannot be turned back into it,
-    /// so this comment is the only record of it in the repository: change the two
-    /// together or they will disagree.
+    /// <b>The password is no longer written down here.</b> It used to be, at the copyright
+    /// holder's request, on the reasoning that the source was never shared and that
+    /// anybody holding it could delete the check outright anyway. That reasoning ended the
+    /// day this repository became public, so the plaintext was removed.
     /// </para>
     /// <para>
-    /// This weakens the lock only against somebody who already has the source, and such a
-    /// person can delete the check outright, so it costs very little against the risk the
-    /// lock is actually for: a member of staff wandering into the worklist or destination
-    /// configuration on a shared clinical workstation, who has the executable and not this
-    /// file. The
-    /// source is not part of what a site receives.
+    /// <b>Removing it does not undo it.</b> The comment is in the repository's history and
+    /// the history is public, so the password it named must be treated as known to
+    /// everybody and the verifier below replaced. Until it is, this lock opens to anyone
+    /// who reads an old commit.
     /// </para>
     /// <para>
-    /// <b>If this repository is ever made public, or shared outside the copyright
-    /// holder, remove this comment and generate a new password.</b> At that point it is
-    /// published, and a published password is no password.
+    /// Nothing here is a secret worth keeping secret in the first place. The lock exists
+    /// against a member of staff wandering into the worklist or destination configuration
+    /// on a shared clinical workstation, not against somebody with the source.
     /// </para>
     /// <para>
     /// <b>To change it.</b> Run <c>pdftodicom settings-password</c>, paste the single line
