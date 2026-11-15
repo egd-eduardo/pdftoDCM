@@ -134,6 +134,19 @@ jobs:
         # next port up, for the same reason.
         run: bash build/verify-against-dcmtk.sh 11112
 
+      - name: Verify the HL7 integration engine against an independent MLLP receiver
+        # The counterpart to the DCMTK check, for the other protocol. It drives the command
+        # line front end against a receiver written from the standard in the Python standard
+        # library, so the engine is answering to something other than itself.
+        #
+        # It belongs here and not only in the pre-push list: it has found four defects that
+        # the unit tests did not, two of them in the message control identifier and the
+        # duplicate guard, which is the sort of thing that must not depend on somebody
+        # remembering to run a script.
+        #
+        # No DCMTK, no HL7 library and no network: python3 and the SDK are enough.
+        run: bash build/verify-hl7-interop.sh 32575
+
       - name: Upload test results
         if: always()
         # Keeping a copy of the results is a convenience; the test step above is what

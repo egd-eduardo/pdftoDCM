@@ -55,7 +55,7 @@ public sealed class Hl7MessageInspectorTests
         MessageInspection inspection =
             Hl7MessageInspector.Inspect(Hl7Message.Parse(CompleteMessage), Profile());
 
-        InspectedSegment obx = Assert.Single(inspection.Segments.Where(s => s.Name == "OBX"));
+        InspectedSegment obx = Assert.Single(inspection.Segments, s => s.Name == "OBX");
 
         Assert.False(obx.IsPresent);
     }

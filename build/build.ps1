@@ -407,8 +407,25 @@ function Invoke-Test {
         }
     }
 
-    dotnet test $project -c $Configuration --nologo --verbosity minimal
-    if ($LASTEXITCODE -ne 0) { throw 'The test suite failed. The build is not shippable.' }
+    # Every test project under tests/, found rather than listed. Naming them meant that
+    # for two releases this script ran one of three: the engine's 303 tests and the
+    # integration assembly's 52 were never run by the build that reaches a site, while the
+    # failure message claimed the test suite had passed. CI had already been changed to run
+    # the whole solution for this reason; the scripts were not. A glob cannot be forgotten
+    # when the next project is added.
+    #
+    # Not the solution file, because it holds the WPF project, which cannot be loaded at all
+    # on Linux or macOS and would stop this script running there.
+    $testProjects = @(Get-ChildItem -Path (Join-Path $RepoRoot 'tests') -Filter '*.csproj' -Recurse |
+        Sort-Object -Property FullName)
+
+    if ($testProjects.Count -eq 0) { throw 'No test projects were found under tests/.' }
+
+    foreach ($testProject in $testProjects) {
+        Write-Host "    $($testProject.BaseName)"
+        dotnet test $testProject.FullName -c $Configuration --nologo --verbosity minimal
+        if ($LASTEXITCODE -ne 0) { throw 'The test suite failed. The build is not shippable.' }
+    }
 }
 
 function Invoke-Publish {

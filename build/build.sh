@@ -334,8 +334,25 @@ do_test() {
         info "install it for a like for like run: https://dotnet.microsoft.com/download/dotnet/$target.0"
     fi
 
-    dotnet test "$REPO_ROOT/tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj" \
-        -c "$CONFIGURATION" --nologo --verbosity minimal
+    # Every test project under tests/, found rather than listed. Naming one meant that for
+    # two releases this ran a third of the suite while reporting that the tests had passed.
+    # The solution file is not used instead, because it holds the WPF project, which cannot
+    # be loaded on Linux or macOS at all.
+    local -a projects=()
+    while IFS= read -r project; do
+        projects+=("$project")
+    done < <(find "$REPO_ROOT/tests" -name '*.csproj' | sort)
+
+    if (( ${#projects[@]} == 0 )); then
+        printf 'No test projects were found under tests/.\n' >&2
+        exit 1
+    fi
+
+    local project
+    for project in "${projects[@]}"; do
+        info "$(basename "$project" .csproj)"
+        dotnet test "$project" -c "$CONFIGURATION" --nologo --verbosity minimal
+    done
 }
 
 # Checks the assembled folder before anything is zipped or sent.
