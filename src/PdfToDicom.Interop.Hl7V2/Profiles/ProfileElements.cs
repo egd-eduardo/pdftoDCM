@@ -90,7 +90,8 @@ public sealed record ProfileField(
 /// <param name="Value">A fixed value, used when there is no source.</param>
 /// <param name="Transform">
 /// A named transform from the closed set, or empty for none. Several may be chained with a
-/// vertical bar.
+/// semicolon, as <c>trim;truncate:30</c>. Not with a vertical bar, which is the field
+/// separator and would be unreadable in a document about HL7.
 /// </param>
 /// <param name="Table">A code translation table, applied after any transform.</param>
 /// <param name="Required">

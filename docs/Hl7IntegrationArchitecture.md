@@ -1,9 +1,19 @@
 # HL7 integration engine: architecture and implementation plan
 
-**Status: approved in outline. Phase 2 under way.**
+**Status: phases 2 to 8 are built. What is not built is named below, in one place.**
 
 Decided so far, and recorded in the sections that follow: inbound is out of scope, and the
 first and only message type is **ORU^R01 outbound**.
+
+**What an administrator can do today, and what nobody can do yet.** The engine, the profile
+model, the inspector in Settings and two command line commands exist and are verified. What
+does not exist is the configuration surface: nothing saves a destination, nothing configures
+a routing rule, and no setting makes a conversion announce itself. An interface therefore
+runs by calling `pdftodicom hl7-send` from a script, which works and is not the same as a
+product feature. `docs/Hl7IntegrationGuide.md` says this to the administrator in its own
+first paragraph rather than leaving it to be discovered, and marks the two sections that
+describe what is still to be built. That is the next phase, and it is mostly interface work,
+which is the part that cannot be written or tested here.
 
 **Phases 2 and 3 are complete.** `src/PdfToDicom.Interop.Hl7V2` holds the message model, the ER7
 codec, the character set rules, MLLP framing and the outbound transport.
@@ -27,6 +37,17 @@ and the conversion workflow itself was not touched to do it.
 table 0008, the control identifier it answers, and whatever the MSA and ERR segments
 explain. Three ways a message could arrive and still not be in a record used to be reported
 as success, and each now has an outcome of its own.
+
+**Phase 8 is complete.** A simulated receiver under `tools/` that answers in each of the
+seven ways a real one can, two command line commands (`hl7-check` offline and `hl7-send`
+over MLLP), a worked profile in `samples/hl7-oru-r01.sample.json`, an administrator's guide
+in `docs/Hl7IntegrationGuide.md`, and `build/verify-hl7-interop.sh`: 47 checks driving the
+command line front end against an MLLP receiver written from the standard in the Python
+standard library, independently of this code. It found two defects that 299 unit tests did
+not: a composite field was displayed as its first component only, so MSH-9 read as `ORU` and
+hid the trigger event, and the test receiver fell back to answering AA on a mistyped
+behaviour, which would have told somebody their sender handles rejections correctly having
+never sent one.
 
 **Phase 5 is built and needs looking at on real Windows.** The inspector's logic is tested:
 a message laid out against a profile, segment by segment and field by field, with the

@@ -34,6 +34,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PdfToDicom.Core\PdfToDicom.Core.csproj" />
+    <!-- The integration engine, for the hl7-check and hl7-send commands. These are
+         how an interface is commissioned and how the interoperability script drives
+         the engine end to end. -->
+    <ProjectReference Include="..\PdfToDicom.Interop.Hl7V2\PdfToDicom.Interop.Hl7V2.csproj" />
   </ItemGroup>
 
 </Project>

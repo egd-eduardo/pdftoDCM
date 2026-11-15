@@ -251,9 +251,60 @@ in clinical use, so the new ordering lives in an assembly above it that calls it
 the front ends do. A build with no HL7 destination configured takes one call with no
 branches and behaves as it did before any of this existed.
 
+**An interface can now be commissioned from a command line, and a profile written without
+reading any source.** `pdftodicom hl7-check` lays a message out against a profile and names
+everything the profile objects to, touching no network. `pdftodicom hl7-send` builds a
+message from a profile and sends it, reporting the control identifier, the outcome and the
+reason. `--no-send` prints what would go on the wire and stops, and that output feeds
+straight back into `hl7-check`, so a profile can be checked against itself before anybody is
+asked for a test endpoint. `--test-data` fills a message with values that are recognisable
+as a test by whoever finds them: the invented patient is named ZZZTEST, because a message
+that escapes into a real system during commissioning should not look like a patient nobody
+can find. The command line never retries, since a retry can duplicate a document at the far
+end and that is a decision somebody takes rather than a default they inherit.
+
+`samples/hl7-oru-r01.sample.json` is a worked ORU^R01 to start from, and
+`docs/Hl7IntegrationGuide.md` is the administrator's guide: every key of the profile model,
+the values available as a source, the closed transform set, the character set policy with a
+recommendation per region, the acknowledgement policy, what each outcome means and what to
+do about it, and a table of symptoms against the first place to look.
+
+**The guide says in its first paragraph what is not built.** The engine, the profile model,
+the inspector and the two commands exist; nothing yet saves a destination, configures a
+routing rule or makes a conversion announce itself. An interface therefore runs from a
+script today, which works and is not the same as a product feature, and the two sections
+that describe the settings pages to come are marked as such rather than read as instructions
+for something that is there.
+
+**A simulated receiver, and a verification that does not mark its own work.**
+`tools/PdfToDicom.Hl7TestServer` answers in each of the seven ways a real receiver can,
+including answering nothing, hanging up, replying with bytes that are not a message and
+acknowledging a message it was never sent. `build/verify-hl7-interop.sh` runs 47 checks
+driving the command line front end against an MLLP receiver written from the standard in the
+Python standard library, independently of this code: that the frame is one an unrelated
+reader can find the edges of, that segments are separated by a carriage return and nothing
+else, that an accented name is encoded in the character set the message declares, that
+control identifiers are unique, that a refusal never reaches the wire, and that none of the
+six unhappy endings is reported as success. It is weaker evidence than the DICOM side's
+verification against DCMTK, which answers to an independent and widely deployed
+implementation, and the script says so when it passes rather than implying otherwise.
+
+It earned its place immediately by finding two defects that 299 unit tests did not. **A
+field with components was displayed as its first component alone**, so MSH-9 read as `ORU`
+and the trigger event appeared to be missing, in the command line listing and in the
+Settings inspector both; somebody checking a profile against a vendor's document would have
+concluded a value was absent when it was present. The delimiter fields are the exception and
+are still shown raw, because encoding MSH-1 renders the field separator as the escape
+sequence that stands for it. **The simulated receiver answered AA on a mistyped behaviour**,
+so `--answer silnt` would have accepted every message and told somebody their sender handles
+rejections correctly, having never sent one; it now refuses what it does not recognise. One
+test fixture was also a separator short, which had put the message type in MSH-8 where
+nothing asserted on it.
+
 The scope is settled: reports outbound, ORU^R01, and nothing else. The application does not
-listen, and no port is opened. See `docs/Hl7IntegrationArchitecture.md` for the
-architecture, the configuration model and the four questions still open.
+listen, and no port is opened. See `docs/Hl7IntegrationGuide.md` for how to configure one and
+`docs/Hl7IntegrationArchitecture.md` for the architecture, the configuration model and the
+questions still open.
 
 ### The dark scheme, and text that could not be read in it
 

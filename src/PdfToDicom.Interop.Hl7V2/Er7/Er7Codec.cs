@@ -190,6 +190,22 @@ public static class Er7Codec
         }
     }
 
+    /// <summary>Encodes one field on its own, exactly as it would appear in a message.</summary>
+    /// <remarks>
+    /// For anything that shows a message to a person. <see cref="Hl7Field.Value"/> is the
+    /// first subcomponent, which is the right answer for a simple field and a misleading one
+    /// for a composite: it renders MSH-9 as "ORU" and hides the trigger event, so somebody
+    /// checking a profile against a vendor's document would conclude a value is absent when
+    /// it is present. Escaping is kept, because what is on the wire is the question being
+    /// asked.
+    /// </remarks>
+    public static string WriteField(Hl7Field? field, Hl7Delimiters? delimiters = null)
+    {
+        var builder = new StringBuilder();
+        WriteField(builder, field, delimiters ?? Hl7Delimiters.Default);
+        return builder.ToString();
+    }
+
     private static void WriteField(StringBuilder builder, Hl7Field? field, Hl7Delimiters delimiters)
     {
         if (field is null)

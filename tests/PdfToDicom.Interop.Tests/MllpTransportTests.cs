@@ -6,7 +6,7 @@ namespace PdfToDicom.Interop.Tests;
 
 public sealed class MllpTransportTests
 {
-    private const string Message = "MSH|^~\\&|PDFTODICOM|||||ORU^R01|1|P|2.4";
+    private const string Message = "MSH|^~\\&|PDFTODICOM||||||ORU^R01|1|P|2.4";
     private const string Acknowledgement = "MSH|^~\\&|RECEIVER|||||ACK|1|P|2.4\rMSA|AA|1";
 
     private static byte[] Encoded => Encoding.ASCII.GetBytes(Message);

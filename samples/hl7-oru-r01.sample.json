@@ -1,0 +1,91 @@
+{
+  "profileId": "sample-oru-r01",
+  "displayName": "Sample ORU^R01, report notification with the study UID in ZDS-1",
+  "revision": 1,
+  "enabled": true,
+
+  "hl7Version": "2.4",
+  "messageType": "ORU",
+  "triggerEvent": "R01",
+  "messageStructure": "ORU_R01",
+  "processingId": "P",
+
+  "encoding": {
+    "fieldSeparator": "|",
+    "encodingCharacters": "^~\\&",
+    "characterSet": "8859/1",
+    "onUnrepresentableCharacter": "refuse"
+  },
+
+  "acknowledgement": {
+    "expect": "accept",
+    "acceptAckType": "AL",
+    "applicationAckType": "NE",
+    "timeoutSeconds": 30
+  },
+
+  "segments": [
+    { "id": "MSH", "usage": "R", "min": 1, "max": 1 },
+    { "id": "PID", "usage": "R", "min": 1, "max": 1, "group": "PATIENT" },
+    { "id": "ORC", "usage": "O", "min": 0, "max": 1, "group": "ORDER_OBSERVATION" },
+    { "id": "OBR", "usage": "R", "min": 1, "max": 1, "group": "ORDER_OBSERVATION" },
+    { "id": "OBX", "usage": "R", "min": 1, "max": 1, "group": "OBSERVATION" },
+    { "id": "ZDS", "usage": "O", "min": 0, "max": 1 }
+  ],
+
+  "fields": [
+    { "path": "PID-3.1", "name": "Patient identifier", "dataType": "ST", "usage": "R", "maxLength": 20 },
+    { "path": "PID-5.1.1", "name": "Family name", "dataType": "ST", "usage": "R", "maxLength": 30 },
+    { "path": "PID-5.2", "name": "Given name", "dataType": "ST", "usage": "O", "maxLength": 30 },
+    { "path": "PID-7", "name": "Date of birth", "dataType": "TS", "usage": "O" },
+    { "path": "PID-8", "name": "Administrative sex", "dataType": "IS", "usage": "O",
+      "allowedValues": ["M", "F", "O", ""] },
+    { "path": "OBR-3.1", "name": "Accession number", "dataType": "ST", "usage": "R", "maxLength": 20 },
+    { "path": "OBR-25", "name": "Result status", "dataType": "ID", "usage": "R",
+      "allowedValues": ["F", "P"] },
+    { "path": "OBX-2", "name": "Value type", "dataType": "ID", "usage": "R",
+      "allowedValues": ["TX", "RP", "ED"] },
+    { "path": "ZDS-1", "name": "Study Instance UID", "dataType": "ST", "usage": "O", "maxLength": 64 }
+  ],
+
+  "mappings": [
+    { "target": "MSH-3.1", "source": "destination.sendingApplication" },
+    { "target": "MSH-4.1", "source": "destination.sendingFacility" },
+    { "target": "MSH-5.1", "source": "destination.receivingApplication" },
+    { "target": "MSH-6.1", "source": "destination.receivingFacility" },
+    { "target": "MSH-7", "source": "now", "transform": "hl7DateTime" },
+
+    { "target": "PID-3.1", "source": "patient.id", "required": true },
+    { "target": "PID-5.1.1", "source": "patient.familyName", "transform": "truncate:30", "required": true },
+    { "target": "PID-5.2", "source": "patient.givenName", "transform": "truncate:30" },
+    { "target": "PID-7", "source": "patient.dateOfBirth", "transform": "hl7Date" },
+    { "target": "PID-8", "source": "patient.sex", "table": "sex" },
+
+    { "target": "ORC-1", "value": "RE" },
+
+    { "target": "OBR-3.1", "source": "study.accessionNumber", "required": true },
+    { "target": "OBR-4.2", "source": "study.description", "transform": "truncate:64" },
+    { "target": "OBR-7", "source": "study.dateTime", "transform": "hl7DateTime" },
+    { "target": "OBR-25", "value": "F" },
+
+    { "target": "OBX-1", "value": "1" },
+    { "target": "OBX-2", "value": "RP" },
+    { "target": "OBX-3.1", "value": "PDFREPORT" },
+    { "target": "OBX-3.2", "source": "document.title", "transform": "truncate:64" },
+    { "target": "OBX-11", "value": "F" },
+
+    { "target": "ZDS-1", "source": "study.instanceUid" },
+    { "target": "ZDS-2", "value": "PDFTODICOM" },
+    { "target": "ZDS-3", "value": "Application" },
+    { "target": "ZDS-4", "value": "DICOM" }
+  ],
+
+  "tables": {
+    "sex": {
+      "Male": "M",
+      "Female": "F",
+      "Other": "O",
+      "Unspecified": ""
+    }
+  }
+}

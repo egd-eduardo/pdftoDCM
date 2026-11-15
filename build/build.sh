@@ -396,7 +396,7 @@ assert_package_is_sound() {
     # somebody changes the list, and handing a private signing key to a hospital is not a
     # mistake that should depend on nobody ever writing a wildcard.
     local forbidden=("BuildingItYourself" "CodeSigning" "ProtectingAgainstUnauthorisedDistribution"
-                     "testworklistserver"
+                     "testworklistserver" "hl7testserver" "mllp-receiver"
                      "codesign" ".pfx" ".p12" ".password" ".key")
     local leaked=()
     local secret

@@ -34,12 +34,13 @@ in that order, and never the third.
 Run all of these. They are fast, and each one exists because something got past the others.
 
 ```bash
-dotnet test "PDF to DICOM.sln" -c Release          # 607 tests, across three test projects
+dotnet test "PDF to DICOM.sln" -c Release          # 609 tests, across three test projects
 python3 build/validate-xaml-bindings.py            # two way bindings to read only properties
 python3 build/validate-viewmodel-commands.py       # unguarded RaiseCanExecuteChanged
 python3 build/validate-installer-script.py         # installer sources and flags
 python3 build/validate-powershell-strict.py        # .Count on something that is not a collection
 bash build/verify-against-dcmtk.sh                 # 94 interoperability checks, needs DCMTK
+bash build/verify-hl7-interop.sh                   # 47 HL7 checks, needs python3 only
 ```
 
 **The desktop project cannot be built on Linux or macOS**, and the view models have no
@@ -80,7 +81,9 @@ The build fails if they do, and that check is not decoration:
 
 - `docs/CodeSigning.md`, `docs/BuildingItYourself.md`,
   `docs/ProtectingAgainstUnauthorisedDistribution.md`
-- the test worklist server
+- the test worklist server, the HL7 test receiver (`hl7testserver`) and
+  `build/hl7/mllp-receiver.py`. All three are commissioning tools, and a listener handed to
+  a hospital is a listener somebody will eventually point a live system at
 - **any signing material**: `codesign.*`, `*.pfx`, `*.p12`, `*.password`, `*.key`. The
   package is assembled from a named list of files so none can reach one today. The check
   exists so that handing a private signing key to a hospital does not depend on nobody

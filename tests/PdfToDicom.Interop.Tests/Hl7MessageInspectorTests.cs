@@ -32,7 +32,7 @@ public sealed class Hl7MessageInspectorTests
         Hl7ProfileReader.Read(json).Profile!;
 
     private const string CompleteMessage =
-        "MSH|^~\\&|PDFTODICOM|||||ORU^R01|1|P|2.4\r" +
+        "MSH|^~\\&|PDFTODICOM||||||ORU^R01|1|P|2.4\r" +
         "PID|||1234567||Silva^Maria|||F\r" +
         "OBR|||ACC001";
 
@@ -179,6 +179,47 @@ public sealed class Hl7MessageInspectorTests
         // needs them, and they are never flagged because nobody configured them.
         Assert.Contains(msh.Fields, f => f.Path == "MSH-1" && f.Value == "|");
         Assert.DoesNotContain(msh.Fields.Where(f => f.Path == "MSH-1"), f => f.HasError);
+    }
+
+    [Fact]
+    public void ACompositeFieldTheProfileNeverMentionedIsShownWhole()
+    {
+        // MSH-9 carries "ORU^R01". Showing its first component would read "ORU" and invite
+        // the conclusion that the trigger event is missing, which is the opposite of what
+        // this screen is opened to establish.
+        MessageInspection inspection =
+            Hl7MessageInspector.Inspect(Hl7Message.Parse(CompleteMessage), Profile());
+
+        InspectedSegment msh = inspection.Segments.Single(s => s.Name == "MSH");
+
+        Assert.Contains(msh.Fields, f => f.Path == "MSH-9" && f.Value == "ORU^R01");
+    }
+
+    [Fact]
+    public void AProfileFieldThatNamesAWholeFieldIsShownWhole()
+    {
+        const string profile = """
+        {
+          "profileId": "composite", "messageType": "ORU", "triggerEvent": "R01",
+          "segments": [
+            { "id": "MSH", "usage": "R", "min": 1, "max": 1 },
+            { "id": "PID", "usage": "R", "min": 1, "max": 1 }
+          ],
+          "fields": [
+            { "path": "PID-5", "name": "Patient name", "usage": "R" },
+            { "path": "PID-5.1.1", "name": "Family name", "usage": "R" }
+          ]
+        }
+        """;
+
+        MessageInspection inspection =
+            Hl7MessageInspector.Inspect(Hl7Message.Parse(CompleteMessage), Profile(profile));
+
+        InspectedSegment pid = inspection.Segments.Single(s => s.Name == "PID");
+
+        // The whole field and one of its components, side by side, each read as written.
+        Assert.Contains(pid.Fields, f => f.Path == "PID-5" && f.Value == "Silva^Maria");
+        Assert.Contains(pid.Fields, f => f.Path == "PID-5.1.1" && f.Value == "Silva");
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using PdfToDicom.Interop.Hl7V2.Er7;
 using PdfToDicom.Interop.Hl7V2.Model;
 using PdfToDicom.Interop.Hl7V2.Profiles;
 
@@ -152,7 +153,14 @@ public static class Hl7MessageInspector
 
             described.Add(path.ToString());
 
-            string value = segment is null ? string.Empty : message.Get(path);
+            // A profile path that names a component is read as that component; one that
+            // names a whole field is shown whole. Reading MSH-9 as its first component
+            // would report "ORU" for a field that carries "ORU^R01^ORU_R01".
+            string value = segment is null
+                ? string.Empty
+                : NamesAComponent(rules.Path)
+                    ? message.Get(path)
+                    : Er7Codec.WriteField(segment.PeekField(path.Field), message.Delimiters);
 
             fields.Add(new InspectedField(
                 rules.Path,
@@ -180,14 +188,32 @@ public static class Hl7MessageInspector
 
                 // MSH-1 and MSH-2 are the delimiters themselves. Shown, because somebody
                 // debugging an encoding problem needs them, and never flagged, because they
-                // are not values anybody configured.
+                // are not values anybody configured. Shown raw, because encoding them would
+                // render the field separator as the escape sequence that stands for it and
+                // make the one field whose literal characters are the point unreadable.
+                bool isDelimiterField =
+                    segmentName.Equals("MSH", StringComparison.OrdinalIgnoreCase) && position <= 2;
+
                 fields.Add(new InspectedField(
-                    path, string.Empty, field.Value, ProfileUsage.Optional,
+                    path, string.Empty,
+                    isDelimiterField ? field.Value : Er7Codec.WriteField(field, message.Delimiters),
+                    ProfileUsage.Optional,
                     InspectedFieldOrigin.InMessageOnly, IssuesFor(issues, path)));
             }
         }
 
         return fields;
+    }
+
+    /// <summary>Whether a profile path addresses a component rather than a whole field.</summary>
+    /// <remarks>
+    /// Asked of the written path and not of the parsed one, because a parsed path reports
+    /// component 1 whether or not a component was written.
+    /// </remarks>
+    private static bool NamesAComponent(string path)
+    {
+        int dash = path.IndexOf('-', StringComparison.Ordinal);
+        return dash >= 0 && path.IndexOf('.', dash) > dash;
     }
 
     private static IReadOnlyList<Hl7MessageIssue> IssuesFor(
