@@ -154,6 +154,30 @@ message of two megabytes, the size an encapsulated report really is, is tested a
 because a transport that only works for small messages fails on exactly the ones that
 matter.
 
+**Every attempt is written down, and the same report is never sent twice by accident.** A
+second assembly, `src/PdfToDicom.Interop`, holds a record of each attempt: which message,
+which destination, which profile and revision built it, how far it got, what came back, how
+long it took, and which DICOM object it accompanies. That last field is the only thing that
+ties the two halves of a conversion together, and without it an archive holding a document
+and a record system that never heard of it cannot be reconciled.
+
+Records go to one file per day, one line each, which is readable by anybody with a text
+editor at three in the morning, needs no database engine and no administrator rights, and
+cannot be left half updated by a power cut. A truncated last line costs that line and not
+the day.
+
+**The report itself is not kept unless a site asks for it.** The body of an ORU is a
+patient's name, their identifier and the clinical text, and a file holding it is a file that
+may later be attached to a support request. Keeping it helps while an interface is being
+commissioned and is a disclosure waiting to happen afterwards, so it is something somebody
+turns on rather than something that happens.
+
+Duplicate protection asks the question that matters: has this exact document already reached
+this exact destination? It is answered from a hash of the transmitted bytes, so no copy of
+the message is needed. An attempt that failed does not count, since the whole point of a
+retry is to send it again, and a destination that acknowledges nothing still counts as
+delivered, since sending again would put a second copy in the record.
+
 The scope is settled: reports outbound, ORU^R01, and nothing else. The application does not
 listen, and no port is opened. See `docs/Hl7IntegrationArchitecture.md` for the
 architecture, the configuration model and the four questions still open.

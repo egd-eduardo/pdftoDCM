@@ -20,6 +20,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{4E8966A5
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PdfToDicom.Interop.Tests", "tests\PdfToDicom.Interop.Tests\PdfToDicom.Interop.Tests.csproj", "{E99267A2-693E-40A4-9803-0CAAA9D63764}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PdfToDicom.Interop", "src\PdfToDicom.Interop\PdfToDicom.Interop.csproj", "{FBAB7F41-FBC1-46C5-BD47-078891E6A880}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -54,6 +56,10 @@ Global
 		{E99267A2-693E-40A4-9803-0CAAA9D63764}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E99267A2-693E-40A4-9803-0CAAA9D63764}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E99267A2-693E-40A4-9803-0CAAA9D63764}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FBAB7F41-FBC1-46C5-BD47-078891E6A880}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FBAB7F41-FBC1-46C5-BD47-078891E6A880}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FBAB7F41-FBC1-46C5-BD47-078891E6A880}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FBAB7F41-FBC1-46C5-BD47-078891E6A880}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -61,5 +67,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{93BEF4A2-796C-403F-ACC6-83B8F018B29F} = {B531294B-5166-4064-A6CF-FADB656D1876}
 		{E99267A2-693E-40A4-9803-0CAAA9D63764} = {4E8966A5-8C8F-4FD7-931F-8CC767F8656B}
+		{FBAB7F41-FBC1-46C5-BD47-078891E6A880} = {B531294B-5166-4064-A6CF-FADB656D1876}
 	EndGlobalSection
 EndGlobal

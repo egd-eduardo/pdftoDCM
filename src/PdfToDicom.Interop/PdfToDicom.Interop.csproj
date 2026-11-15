@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The protocol independent part of the integration engine: the record of what was sent,
+    to whom, and what came back.
+
+    It references nothing, neither Core nor the HL7 adapter, because none of what it holds
+    is specific to HL7. A FHIR exchange has a destination, an attempt, an outcome and a
+    need not to be sent twice in exactly the same way, and the architecture only earns its
+    keep if that is true in the code rather than only in the document.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>PdfToDicom.Interop</RootNamespace>
+    <AssemblyName>PdfToDicom.Interop</AssemblyName>
+  </PropertyGroup>
+
+</Project>

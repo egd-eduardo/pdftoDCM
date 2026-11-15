@@ -5,10 +5,14 @@
 Decided so far, and recorded in the sections that follow: inbound is out of scope, and the
 first and only message type is **ORU^R01 outbound**.
 
-Built so far, all in `src/PdfToDicom.Interop.Hl7V2` and all covered by 121 tests of its own:
-the HL7 version 2 message model, the ER7 codec, the character set rules, MLLP framing and
-the outbound MLLP transport. Still to do in Phase 2: the transaction store. Nothing
-references that assembly yet, so the published application is unchanged.
+**Phase 2 is complete.** `src/PdfToDicom.Interop.Hl7V2` holds the message model, the ER7
+codec, the character set rules, MLLP framing and the outbound transport.
+`src/PdfToDicom.Interop` holds the transaction record, the content hash and the append only
+store that answers whether a document has already reached a destination. 138 tests cover
+the two. Neither assembly is referenced by the application or the command line tool, so what
+is published and what the installer carries are unchanged.
+
+Phase 3, the profile model, is next.
 
 This document answers Phase 1 of the brief. It analyses the existing application, reads the
 supplied conformance statement as a specimen rather than as a target, and proposes an
@@ -175,6 +179,23 @@ project references and two lines in the installer file list.
 FHIR shares the destination model, the routing engine, the transaction store and the
 mapping layer while sharing nothing at all with ER7 parsing or MLLP. The seam is drawn where
 the reuse actually is.
+
+### 3.2 One deviation from the diagram above, and why
+
+The diagram puts a protocol independent transport abstraction in `PdfToDicom.Interop` and
+the MLLP adapter below it in the HL7 assembly. As built, the transport interface lives in
+the HL7 assembly beside its one implementation, and `PdfToDicom.Interop` holds only the
+transaction store.
+
+The reason is that an interface with one implementation and one consumer describes nothing.
+It cannot be shown to be the right shape, because nothing has yet disagreed with it, and the
+second protocol would almost certainly want something different, at which point the
+interface is changed rather than reused and the only thing achieved was the extra file.
+
+What the architecture actually required is intact: the transaction store, which is the part
+that genuinely has nothing to do with HL7, is in the protocol independent assembly and
+references nothing. The abstraction is extracted when a second protocol exists to extract it
+from, which is also the moment it can be checked against something.
 
 ### 3.1 Component responsibility matrix
 

@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PdfToDicom.Interop.Hl7V2\PdfToDicom.Interop.Hl7V2.csproj" />
+    <ProjectReference Include="..\..\src\PdfToDicom.Interop\PdfToDicom.Interop.csproj" />
   </ItemGroup>
 
 </Project>
