@@ -1751,7 +1751,7 @@ signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
     /f certificate.pfx /p $password artifacts\win-x64\app\PdfToDicom.exe
 .\build\build.ps1 -Task package -Runtimes win-x64
 signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
-    /f certificate.pfx /p $password artifacts\PdfToDicom-Setup-3.5.0-x64.exe
+    /f certificate.pfx /p $password artifacts\PdfToDicom-Setup-4.0.0-x64.exe
 ```
 
 ---

@@ -554,6 +554,11 @@ function Invoke-Assemble {
         'DicomConformanceStatement.md' = 'DICOM Conformance Statement (for your PACS administrator).md'
         'TechnicalDocumentation.md'    = 'Technical Documentation (for IT).md'
         'WorklistSetup.md'             = 'Worklist Setup (for IT).md'
+
+        # Added in 4.0.0, with the pages that make it usable. It was deliberately held back
+        # while the engine had no configuration surface, because a guide to something a site
+        # cannot switch on describes a product they do not have.
+        'Hl7IntegrationGuide.md'       = 'HL7 Integration (for IT).md'
     }
 
     foreach ($source in $shipped.Keys) {
@@ -568,8 +573,9 @@ function Invoke-Assemble {
     }
 
     # ---------------------------------------------------------------- samples
-    Copy-Item (Join-Path $RepoRoot 'samples\config.sample.json') $samples
-    Copy-Item (Join-Path $RepoRoot 'samples\example-report.pdf') $samples
+    Copy-Item (Join-Path $RepoRoot 'samples\config.sample.json')    $samples
+    Copy-Item (Join-Path $RepoRoot 'samples\example-report.pdf')    $samples
+    Copy-Item (Join-Path $RepoRoot 'samples\hl7-oru-r01.sample.json') $samples
 
     # ---------------------------------------------------------------- start here
     New-StartHereFile -Path (Join-Path $package 'READ ME FIRST.txt') -Version $version
@@ -761,11 +767,14 @@ WHAT IS IN THIS FOLDER
     Technical Documentation                  For IT.
     Worklist Setup                           For IT, if your department has
                                              a modality worklist.
+    HL7 Integration                          For IT, if a record system is to
+                                             be told when a report arrives.
     Changelog                                What changed in each version.
 
   Samples\
     config.sample.json       Annotated settings reference.
     example-report.pdf       A document to test with.
+    hl7-oru-r01.sample.json  A worked HL7 profile to start from.
 
 
 IMPORTANT

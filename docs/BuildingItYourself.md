@@ -122,10 +122,10 @@ This appears under `artifacts\`:
 
 ```
 artifacts\
-  PdfToDicom-3.5.0-win-x64\        <- the folder to hand over to a site
-  PdfToDicom-3.5.0-win-x64.exe     <- just the application, version in the name
-  PdfToDicom-3.5.0-win-arm64\      <- the same, for Windows on ARM
-  PdfToDicom-3.5.0-win-arm64.exe
+  PdfToDicom-4.0.0-win-x64\        <- the folder to hand over to a site
+  PdfToDicom-4.0.0-win-x64.exe     <- just the application, version in the name
+  PdfToDicom-4.0.0-win-arm64\      <- the same, for Windows on ARM
+  PdfToDicom-4.0.0-win-arm64.exe
 ```
 
 **Both architectures, every time.** The machines in service are 64 bit, and the ARM build

@@ -1,9 +1,17 @@
 # Changelog
 
-## 3.5.0
+## 4.0.0
 
-**A clean build, a visible way out, settings that can be carried to the next machine, a
-fifth of the memory, and a build that produces both architectures and signs them.**
+**An HL7 version 2 integration engine: a report can now tell a record system that it
+exists, configured on screen rather than written into the source. Plus a clean build, a
+visible way out, settings that can be carried to the next machine, a fifth of the memory,
+and a build that produces both architectures and signs them.**
+
+The major version is for the HL7 engine. Nothing about the existing behaviour changes, and
+a site that configures no interface takes the same path through the same code it did in
+3.4: the switch that makes any of it live is off until somebody turns it on. The number
+went up because the product now does something it did not do before, and because a reader
+deciding whether to upgrade should be told that rather than finding it in a minor release.
 
 ### The build
 
@@ -269,12 +277,16 @@ the values available as a source, the closed transform set, the character set po
 recommendation per region, the acknowledgement policy, what each outcome means and what to
 do about it, and a table of symptoms against the first place to look.
 
-**The guide says in its first paragraph what is not built.** The engine, the profile model,
-the inspector and the two commands exist; nothing yet saves a destination, configures a
-routing rule or makes a conversion announce itself. An interface therefore runs from a
-script today, which works and is not the same as a product feature, and the two sections
-that describe the settings pages to come are marked as such rather than read as instructions
-for something that is there.
+**The guide ships, and it says what is not built.** It was written when nothing configured
+the engine, and its first paragraph said so; the settings pages described further down this
+entry are what made that paragraph wrong, and it now records the one limitation that
+remains, which is that a rule sends to one destination from the page while the file supports
+several. The guide and the worked profile are in the handover package and in the installer.
+They were held back while there was no configuration surface, because a guide to something a
+site cannot switch on describes a product they do not have. Where the guide points at a
+commissioning tool, the simulated receiver and the verification script, it now says that a
+site does not receive it, since a shipped document must not send somebody looking for
+something they were not given.
 
 **A simulated receiver, and a verification that does not mark its own work.**
 `tools/PdfToDicom.Hl7TestServer` answers in each of the seven ways a real receiver can,

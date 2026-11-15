@@ -383,6 +383,12 @@ de nascimento, número de acesso, o ficheiro e o destino.
 > **Leia-o.** É o último momento em que um erro pode ser detetado sem custo. Depois de o
 > documento estar no PACS, removê-lo exige um administrador do PACS.
 
+Se o departamento de informática tiver configurado algum, o resumo indica também **os
+sistemas de registo que vão ser informados sobre este documento**, sob um título que o diz.
+Esses não são arquivos: são sistemas como um RIS ou um registo clínico eletrónico, aos quais
+é enviada uma mensagem curta a dizer que o relatório existe e onde o encontrar. O documento
+em si continua a ir apenas para os arquivos indicados acima.
+
 Clique em **OK** para prosseguir, ou em **Cancelar** para voltar atrás.
 
 ### O que acontece a seguir
@@ -402,6 +408,17 @@ Para um relatório normal, isto demora um ou dois segundos.
 O ponto fica verde e o painel de resultados mostra **OK** junto a cada destino. O documento
 está agora no registo imagiológico do doente. Procure-o no PACS pelo número de processo e
 pelo número de acesso que introduziu.
+
+### Quando o ponto fica âmbar
+
+Âmbar significa que o documento foi tratado e que há outra coisa a verificar. Na prática
+significa uma coisa: o relatório chegou ao arquivo e uma mensagem para um sistema de registo
+não foi confirmada. O painel indica qual o sistema e o que aconteceu.
+
+**Não envie o documento outra vez.** Já está no arquivo, e enviá-lo uma segunda vez
+colocaria lá uma segunda cópia para resolver um problema que não está no arquivo. Avise o
+departamento de informática, indicando o id da mensagem mostrado ao lado da linha. Eles
+podem ver se o sistema de registo a recebeu.
 
 ### Apenas gerar
 

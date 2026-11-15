@@ -629,8 +629,15 @@ do_assemble() {
     cp "$REPO_ROOT/docs/WorklistSetup.md" \
        "$package/Documentation/Worklist Setup (for IT).md"
 
+    # Added in 4.0.0, with the pages that make it usable. It was deliberately held back
+    # while the engine had no configuration surface, because a guide to something a site
+    # cannot switch on describes a product they do not have.
+    cp "$REPO_ROOT/docs/Hl7IntegrationGuide.md" \
+       "$package/Documentation/HL7 Integration (for IT).md"
+
     cp "$REPO_ROOT/samples/config.sample.json" "$package/Samples/"
     cp "$REPO_ROOT/samples/example-report.pdf" "$package/Samples/"
+    cp "$REPO_ROOT/samples/hl7-oru-r01.sample.json" "$package/Samples/"
 
     write_start_here "$package/READ ME FIRST.txt" "$version"
 

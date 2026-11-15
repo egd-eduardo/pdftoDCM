@@ -320,9 +320,10 @@ In order, because each step rules out the next step's commonest cause of confusi
 6. **Only then turn the switch on**, and convert one real document while somebody at the
    receiving system is watching for it.
 
-Where no test endpoint exists, `tools/PdfToDicom.Hl7TestServer` is a listener you can run
-on your own machine that answers in each of the ways a real receiver can, including the
-unhelpful ones:
+Where no test endpoint exists, there is a listener that answers in each of the ways a real
+receiver can, including the unhelpful ones. It is a commissioning tool and is **not part of
+what a site receives**, so ask whoever supplied the application for it; from a source
+checkout it is:
 
 ```
 dotnet run --project tools/PdfToDicom.Hl7TestServer -- --port 2575 --answer accept
@@ -517,8 +518,9 @@ the successes is the one worth having and the one nobody keeps.
 
 ## 12. Verifying the engine itself
 
-`build/verify-hl7-interop.sh` drives the command line front end against an MLLP receiver
-written from the standard in the Python standard library, independently of this
+The engine has a verification of its own, run on every change by whoever builds the
+application rather than at a site. It drives the command line front end against an MLLP
+receiver written from the standard in the Python standard library, independently of this
 application's own code, and checks 47 things: that the frame is one an unrelated reader can
 find the edges of, that segments are separated by a carriage return alone, that an accented
 name is encoded in the character set the message declares, that control ids are unique, and
