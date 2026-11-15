@@ -231,6 +231,26 @@ which usually means two conversations have been crossed; both leave the outcome 
 say so rather than claiming either way. A code this build does not recognise is never taken
 for a yes.
 
+**A document can now be converted and announced in one step, and the conversion itself was
+not altered to do it.** The order is a site's choice. By default the two are independent:
+both happen and neither can stop the other, because the object reaching the archive and the
+message reaching the record system are separate pieces of value, and letting a record system
+that is down prevent an archive receiving a report turns one failure into two. A site may
+instead announce only what the archive accepted, since a message carrying a Study Instance
+UID that no archive holds points at nothing; or announce first and convert only once the
+message landed, for a receiver that will not file an image until an order exists. That last
+one is the only arrangement where an HL7 failure stops a DICOM transmission, which is why
+it has to be chosen rather than arrived at.
+
+**An HL7 failure cannot fail a conversion**, and neither can an HL7 defect: everything the
+engine can throw is caught and turned into a result. A report reaching the archive matters
+more than the record system hearing about it, and an exception escaping would cost both.
+
+The conversion workflow is untouched, and that was deliberate. It is the heart of a product
+in clinical use, so the new ordering lives in an assembly above it that calls it exactly as
+the front ends do. A build with no HL7 destination configured takes one call with no
+branches and behaves as it did before any of this existed.
+
 The scope is settled: reports outbound, ORU^R01, and nothing else. The application does not
 listen, and no port is opened. See `docs/Hl7IntegrationArchitecture.md` for the
 architecture, the configuration model and the four questions still open.

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The one place that knows about both halves of the product.
+
+    PdfToDicom.Core does not reference the integration engine and must not start: the
+    conversion path is in clinical use, and keeping HL7 out of its assembly graph is what
+    guarantees that a build with no HL7 configured behaves exactly as it did before any of
+    this existed. The engine, equally, knows nothing about DICOM, which its own tests prove
+    by not compiling if it did.
+
+    So the translation between them lives here, referencing both and referenced by the two
+    front ends.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>PdfToDicom.Integration</RootNamespace>
+    <AssemblyName>PdfToDicom.Integration</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PdfToDicom.Core\PdfToDicom.Core.csproj" />
+    <ProjectReference Include="..\PdfToDicom.Interop.Hl7V2\PdfToDicom.Interop.Hl7V2.csproj" />
+  </ItemGroup>
+
+</Project>

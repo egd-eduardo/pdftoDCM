@@ -20,6 +20,9 @@ ORU means, which the tests check by building an ADT from the same code.
 pieces together: build, check, refuse a duplicate, send with retries where retrying is safe,
 and write down every attempt.
 
+**Phase 7 is complete.** A document can be converted and announced in a configured order,
+and the conversion workflow itself was not touched to do it.
+
 **Phase 6 is complete.** An acknowledgement is read rather than assumed: the six codes of
 table 0008, the control identifier it answers, and whatever the MSA and ERR segments
 explain. Three ways a message could arrive and still not be in a record used to be reported

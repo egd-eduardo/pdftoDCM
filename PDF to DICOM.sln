@@ -22,6 +22,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PdfToDicom.Interop.Tests", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PdfToDicom.Interop", "src\PdfToDicom.Interop\PdfToDicom.Interop.csproj", "{FBAB7F41-FBC1-46C5-BD47-078891E6A880}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PdfToDicom.Integration", "src\PdfToDicom.Integration\PdfToDicom.Integration.csproj", "{128C9101-DFD7-4AA6-B062-24FD2E7DD8F9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PdfToDicom.Integration.Tests", "tests\PdfToDicom.Integration.Tests\PdfToDicom.Integration.Tests.csproj", "{B5169858-5627-476C-BD26-89BB8138CF1C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -60,6 +64,14 @@ Global
 		{FBAB7F41-FBC1-46C5-BD47-078891E6A880}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FBAB7F41-FBC1-46C5-BD47-078891E6A880}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FBAB7F41-FBC1-46C5-BD47-078891E6A880}.Release|Any CPU.Build.0 = Release|Any CPU
+		{128C9101-DFD7-4AA6-B062-24FD2E7DD8F9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{128C9101-DFD7-4AA6-B062-24FD2E7DD8F9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{128C9101-DFD7-4AA6-B062-24FD2E7DD8F9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{128C9101-DFD7-4AA6-B062-24FD2E7DD8F9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B5169858-5627-476C-BD26-89BB8138CF1C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B5169858-5627-476C-BD26-89BB8138CF1C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B5169858-5627-476C-BD26-89BB8138CF1C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B5169858-5627-476C-BD26-89BB8138CF1C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -68,5 +80,7 @@ Global
 		{93BEF4A2-796C-403F-ACC6-83B8F018B29F} = {B531294B-5166-4064-A6CF-FADB656D1876}
 		{E99267A2-693E-40A4-9803-0CAAA9D63764} = {4E8966A5-8C8F-4FD7-931F-8CC767F8656B}
 		{FBAB7F41-FBC1-46C5-BD47-078891E6A880} = {B531294B-5166-4064-A6CF-FADB656D1876}
+		{128C9101-DFD7-4AA6-B062-24FD2E7DD8F9} = {B531294B-5166-4064-A6CF-FADB656D1876}
+		{B5169858-5627-476C-BD26-89BB8138CF1C} = {4E8966A5-8C8F-4FD7-931F-8CC767F8656B}
 	EndGlobalSection
 EndGlobal
