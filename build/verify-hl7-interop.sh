@@ -540,6 +540,70 @@ if start_receiver accept "$DUMP"; then
     fi
 fi
 
+# ------------------------------------------------------------------ The example
+
+step "Checking that the worked example offered in Settings actually works"
+
+# The settings page offers three Example buttons that produce a destination on this machine,
+# a rule, and the shipped profile. A newcomer with no HL7 experience presses those three and
+# then presses Send a test message, so the values behind them have to work exactly as they
+# are. This reproduces that from the command line, with the same values the buttons use.
+#
+# The port is the one the example hardcodes rather than this script's own, because the point
+# is to test the example as a newcomer will meet it.
+EXAMPLE_PORT=2575
+DUMP="$WORK_DIR/example"
+
+python3 -I "$RECEIVER" --port "$EXAMPLE_PORT" --answer accept --dump "$DUMP" \
+    > "$WORK_DIR/receiver-example.log" 2>&1 &
+RECEIVER_PID=$!
+EXAMPLE_WAITED=0
+
+while ! grep -q "listening on" "$WORK_DIR/receiver-example.log" 2>/dev/null; do
+    if ! kill -0 "$RECEIVER_PID" 2>/dev/null; then
+        break
+    fi
+
+    sleep 0.2
+    EXAMPLE_WAITED=$((EXAMPLE_WAITED + 1))
+
+    if (( EXAMPLE_WAITED > 50 )); then
+        break
+    fi
+done
+
+if grep -q "listening on" "$WORK_DIR/receiver-example.log" 2>/dev/null; then
+    pass "a test receiver is listening on the port the example uses, $EXAMPLE_PORT"
+
+    set +e
+    EXAMPLE_OUTPUT="$(dotnet "$CLI" hl7-send \
+        --profile "$PROFILE" \
+        --to "127.0.0.1:$EXAMPLE_PORT" \
+        --timeout 6 --test-data \
+        --set destination.sendingApplication=PDFTODICOM \
+        --set destination.sendingFacility=RADIOLOGY \
+        --set destination.receivingApplication=TESTRECEIVER \
+        --set destination.receivingFacility=HOSPITAL 2>&1)"
+    EXAMPLE_STATUS=$?
+    set -e
+    stop_receiver
+
+    if [[ "$EXAMPLE_STATUS" == "0" ]] && grep -q "outcome *: Acknowledged" <<<"$EXAMPLE_OUTPUT"; then
+        pass "the example's own values produce a message the receiver accepts"
+    else
+        fail "the example does not work: $(tr '\n' ' ' <<<"$EXAMPLE_OUTPUT")"
+    fi
+
+    if [[ -s "$DUMP/frame-001.bin" ]] && grep -Fq "ZZZTEST" "$DUMP/frame-001.bin"; then
+        pass "the test message is recognisable as a test by whoever finds it"
+    else
+        fail "the test message does not carry the invented patient's name"
+    fi
+else
+    fail "the receiver did not start on port $EXAMPLE_PORT; see $WORK_DIR/receiver-example.log"
+    stop_receiver
+fi
+
 # ------------------------------------------------------------------ The record
 
 step "Checking that every attempt was written down"

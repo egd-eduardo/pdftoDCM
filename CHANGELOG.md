@@ -394,6 +394,48 @@ exist. The scratch project that did it is not part of the solution and is not co
 technique is worth recording, because on this repository a view model mistake otherwise waits
 four minutes for CI to find it.
 
+**Somebody who has never seen HL7 before can now get an interface working.** The three
+pages had the right fields on them and told a newcomer nothing about what belongs in those
+fields, which is a page that can only be used by somebody who did not need it.
+
+Each of Profiles, Destinations and Routing now carries the four steps in order, says whether
+it is required at all, and shows an example of what belongs in it. Each also has an
+**Example** button. Together they produce a complete, working configuration: the shipped
+ORU^R01 profile, a destination, and a rule. The destination points at **127.0.0.1**, this
+computer, and can reach nothing real; an example that defaulted to a plausible looking
+hospital address would eventually be saved unchanged, and the first anybody would know of it
+is a message arriving somewhere nobody expected.
+
+The example profile is embedded in the application rather than read from beside the
+executable, because that file lives in a different place depending on whether the
+application arrived by installer, as a handover folder or from a checkout, and a button that
+works in one of the three is worse than no button. It is embedded from `samples/`, so the
+example in the application and the example in the documentation cannot drift apart.
+
+**Send a test message** answers the question the connection test cannot. The connection test
+proves a port is open; this builds a real message from the profile, sends it, and reports
+what came back, which is the only check that establishes whether the receiver understands
+what this application produces. It is a real send, so it asks first, and the confirmation
+names the host, the port, the profile and the invented patient before anything happens: if
+the destination is a live record system, somebody there will see a patient called ZZZTEST.
+Previously this was possible only from the command line, which is not a reasonable thing to
+require of the person who has to configure the interface.
+
+The invented patient now has one definition, shared by the command line and the page. Two
+would eventually disagree, and the one that matters is the one somebody at the receiving end
+is looking for.
+
+The announcer no longer insists on the conversion workflow. Commissioning an interface means
+sending messages and converting nothing, and requiring the workflow made the commissioning
+half depend on eleven collaborators it never calls.
+
+The guide gained a section 0 answering the two questions a newcomer actually asks: whether
+every tab has to be filled in, which it does not, and how to test without touching anything
+real, which is four steps of which the first three need nobody at the hospital. The
+interoperability script gained three checks that press the example's own values through the
+whole chain, because an example offered to somebody with no experience has to work exactly
+as it stands.
+
 The scope is settled: reports outbound, ORU^R01, and nothing else. The application does not
 listen, and no port is opened. See `docs/Hl7IntegrationGuide.md` for how to configure one and
 `docs/Hl7IntegrationArchitecture.md` for the architecture, the configuration model and the

@@ -34,13 +34,13 @@ in that order, and never the third.
 Run all of these. They are fast, and each one exists because something got past the others.
 
 ```bash
-dotnet test "PDF to DICOM.sln" -c Release          # 646 tests, across three test projects
+dotnet test "PDF to DICOM.sln" -c Release          # 653 tests, across three test projects
 python3 build/validate-xaml-bindings.py            # two way bindings to read only properties
 python3 build/validate-viewmodel-commands.py       # unguarded RaiseCanExecuteChanged
 python3 build/validate-installer-script.py         # installer sources and flags
 python3 build/validate-powershell-strict.py        # .Count on something that is not a collection
 bash build/verify-against-dcmtk.sh                 # 94 interoperability checks, needs DCMTK
-bash build/verify-hl7-interop.sh                   # 47 HL7 checks, needs python3 only
+bash build/verify-hl7-interop.sh                   # 50 HL7 checks, needs python3 only
 ```
 
 **The desktop project cannot be built on Linux or macOS**, and the view models have no

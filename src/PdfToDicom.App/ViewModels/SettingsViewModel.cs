@@ -14,6 +14,7 @@ using PdfToDicom.Core.Validation;
 using PdfToDicom.Core.Security;
 using PdfToDicom.Integration;
 using PdfToDicom.Integration.Configuration;
+using PdfToDicom.Interop.Hl7V2.Dispatch;
 using PdfToDicom.Interop.Hl7V2.Inspection;
 using PdfToDicom.Interop.Hl7V2.Model;
 using PdfToDicom.Interop.Hl7V2.Profiles;
@@ -101,6 +102,12 @@ public sealed class SettingsViewModel : ObservableObject
             RemoveHl7Profile, () => SelectedHl7Profile is not null);
         RefreshHl7ProfilesCommand = new RelayCommand(RefreshHl7Profiles);
         CheckHl7ConfigurationCommand = new RelayCommand(CheckHl7Configuration);
+        AddExampleHl7DestinationCommand = new RelayCommand(AddExampleHl7Destination);
+        AddExampleHl7RuleCommand = new RelayCommand(AddExampleHl7Rule);
+        InstallExampleHl7ProfileCommand = new RelayCommand(InstallExampleHl7Profile);
+        SendHl7TestMessageCommand = new AsyncRelayCommand(
+            SendHl7TestMessageAsync,
+            () => SelectedHl7Destination is not null && !IsTestingHl7);
 
         Destinations = new ObservableCollection<PacsDestination>(Working.Destinations);
         SelectedDestination = Destinations.FirstOrDefault();
@@ -1614,9 +1621,11 @@ public sealed class SettingsViewModel : ObservableObject
             {
                 RemoveHl7DestinationCommand?.RaiseCanExecuteChanged();
                 TestHl7DestinationCommand?.RaiseCanExecuteChanged();
+                SendHl7TestMessageCommand?.RaiseCanExecuteChanged();
                 Hl7DestinationStatus = string.Empty;
                 OnPropertyChanged(nameof(HasSelectedHl7Destination));
                 OnPropertyChanged(nameof(Hl7RestrictToProfiles));
+                OnPropertyChanged(nameof(Hl7TestProfileId));
             }
         }
     }
@@ -1756,6 +1765,7 @@ public sealed class SettingsViewModel : ObservableObject
             if (SetProperty(ref _isTestingHl7, value))
             {
                 TestHl7DestinationCommand?.RaiseCanExecuteChanged();
+                SendHl7TestMessageCommand?.RaiseCanExecuteChanged();
             }
         }
     }
@@ -1798,6 +1808,187 @@ public sealed class SettingsViewModel : ObservableObject
 
     /// <summary>Checks the whole HL7 configuration and reports what is wrong with it.</summary>
     public RelayCommand CheckHl7ConfigurationCommand { get; }
+
+    /// <summary>Adds a worked example destination, pointing at this machine.</summary>
+    public RelayCommand AddExampleHl7DestinationCommand { get; }
+
+    /// <summary>Adds a worked example rule.</summary>
+    public RelayCommand AddExampleHl7RuleCommand { get; }
+
+    /// <summary>Installs the example profile that ships inside the application.</summary>
+    public RelayCommand InstallExampleHl7ProfileCommand { get; }
+
+    /// <summary>Sends one message built from invented values, to prove the interface works.</summary>
+    public AsyncRelayCommand SendHl7TestMessageCommand { get; }
+
+    /// <summary>Which profile a test message should be built with.</summary>
+    /// <remarks>
+    /// The selected destination's first permitted profile where it names any, otherwise the
+    /// profile the first enabled rule for that destination uses, otherwise the only
+    /// installed one. Guessing beats asking here: somebody commissioning an interface has
+    /// usually installed exactly one profile, and a dialog that demands they say which is a
+    /// dialog that assumes they know the answer matters.
+    /// </remarks>
+    public string Hl7TestProfileId
+    {
+        get
+        {
+            if (SelectedHl7Destination is null)
+            {
+                return string.Empty;
+            }
+
+            if (SelectedHl7Destination.ProfileIds.Count > 0)
+            {
+                return SelectedHl7Destination.ProfileIds[0];
+            }
+
+            Hl7RoutingRuleSettings? rule = Hl7.Rules.FirstOrDefault(r =>
+                r.Enabled &&
+                r.Destinations.Contains(SelectedHl7Destination.Id, StringComparer.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(r.ProfileId));
+
+            if (rule is not null)
+            {
+                return rule.ProfileId;
+            }
+
+            IReadOnlyList<string> installed = Hl7ProfileIdsForRules;
+
+            return installed.Count == 1 ? installed[0] : string.Empty;
+        }
+    }
+
+    private void AddExampleHl7Destination()
+    {
+        // The example points at this machine, so pressing this cannot reach a hospital
+        // system by accident. What it teaches is which fields matter and what belongs in
+        // them, which an empty form with eleven boxes on it does not.
+        Hl7DestinationSettings destination = Hl7ExampleSetup.Destination();
+
+        Hl7.Destinations.Add(destination);
+        SelectedHl7Destination = destination;
+
+        Hl7DestinationStatus = _services.Localizer.Format(
+            "Settings.Hl7.ExampleDestinationAdded",
+            Hl7ExampleSetup.ExampleHost, Hl7ExampleSetup.ExamplePort);
+
+        CheckHl7Configuration();
+    }
+
+    private void AddExampleHl7Rule()
+    {
+        // Pointed at whatever destination is there, because a rule naming nothing is the
+        // one mistake this button exists to avoid teaching.
+        string destinationId = SelectedHl7Destination?.Id
+            ?? Hl7.Destinations.FirstOrDefault()?.Id
+            ?? string.Empty;
+
+        Hl7RoutingRuleSettings rule = Hl7ExampleSetup.Rule(destinationId);
+
+        Hl7.Rules.Add(rule);
+        SelectedHl7Rule = rule;
+
+        CheckHl7Configuration();
+    }
+
+    private void InstallExampleHl7Profile()
+    {
+        // The example profile is inside the application, so this works whether it arrived
+        // by installer, as a handover folder, or from a checkout.
+        ProfileImportResult result = Hl7ExampleSetup.InstallProfile(_hl7Settings.Profiles);
+
+        Hl7ConfigurationStatus = result.Succeeded
+            ? _services.Localizer.Format("Settings.Hl7.ProfileInstalled", result.ProfileId)
+            : _services.Localizer.Format("Settings.Hl7.ProfileRefused", result.Detail);
+
+        if (result.Succeeded)
+        {
+            _services.AuditLogger.ConfigurationChanged(
+                $"The example HL7 profile was installed: {result.ProfileId}.");
+        }
+
+        RefreshHl7Profiles();
+        CheckHl7Configuration();
+    }
+
+    private async Task SendHl7TestMessageAsync()
+    {
+        if (SelectedHl7Destination is null)
+        {
+            return;
+        }
+
+        Hl7DestinationSettings destination = SelectedHl7Destination;
+        string profileId = Hl7TestProfileId;
+
+        if (string.IsNullOrWhiteSpace(profileId))
+        {
+            Hl7DestinationStatus = _services.Localizer.Get("Settings.Hl7.TestNeedsProfile");
+            return;
+        }
+
+        // Asked, and asked in a way that cannot be misread. This sends a real message to a
+        // real address: if that address is a live record system, somebody there will see a
+        // patient called ZZZTEST. The confirmation names the host, the port and the patient,
+        // because an operator who presses this without understanding that is exactly who
+        // this dialog is for.
+        MessageBoxResult answer = MessageBox.Show(
+            _services.Localizer.Format(
+                "Settings.Hl7.TestMessageConfirm",
+                destination.Name, destination.Host, destination.Port,
+                profileId, Hl7TestSubject.FamilyName),
+            _services.Localizer.Get("Settings.Tab.Hl7"),
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning,
+            MessageBoxResult.Cancel);
+
+        if (answer != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        IsTestingHl7 = true;
+        Hl7DestinationStatus = _services.Localizer.Get("Settings.Hl7.TestMessageSending");
+
+        try
+        {
+            // Built here rather than held as a field: the settings on screen are a copy that
+            // has not been saved, and a test message must use what is on screen rather than
+            // what was last saved, or somebody correcting a port would be testing the old one.
+            var announcer = new Hl7Announcer(
+                null,
+                _services.Logger,
+                Path.Combine(_services.AppLogger.LogFolder, "hl7"),
+                _hl7Settings);
+
+            Hl7DispatchResult result = await announcer
+                .SendTestMessageAsync(destination, profileId)
+                .ConfigureAwait(true);
+
+            Hl7DestinationStatus = _services.Localizer.Format(
+                "Settings.Hl7.TestMessageResult",
+                result.Outcome, result.Message, result.MessageControlId);
+
+            _services.AuditLogger.ConfigurationChanged(
+                $"An HL7 test message was sent to {destination.Name} " +
+                $"({destination.Host}:{destination.Port}) under profile '{profileId}'. " +
+                $"Outcome: {result.Outcome}.");
+        }
+        catch (Exception ex)
+        {
+            // Everything, because a defect in the engine must not take the settings dialog
+            // down with it and lose whatever else the operator had typed into it.
+            _services.Logger.Error("The HL7 test message failed unexpectedly.", ex);
+
+            Hl7DestinationStatus = _services.Localizer.Format(
+                "Settings.Hl7.TestFailed", ex.Message);
+        }
+        finally
+        {
+            IsTestingHl7 = false;
+        }
+    }
 
     private void AddHl7Destination()
     {

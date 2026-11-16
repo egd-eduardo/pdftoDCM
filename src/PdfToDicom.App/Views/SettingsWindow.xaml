@@ -940,17 +940,41 @@
                                         <TextBlock Text="{loc:Localize Settings.Hl7.Destinations.Caption}"
                                                    Style="{StaticResource CaptionTextStyle}"
                                                    TextWrapping="Wrap" Margin="0,0,0,10" />
+
+                                <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,12">
+                                    <StackPanel>
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.Steps.Title}"
+                                                   Style="{StaticResource FieldLabelTextStyle}" />
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.Steps.Body}"
+                                                   Style="{StaticResource CaptionTextStyle}"
+                                                   TextWrapping="Wrap" Margin="0,2,0,8" />
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.Destinations.Required}"
+                                                   Style="{StaticResource CaptionTextStyle}"
+                                                   FontWeight="SemiBold"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.Destinations.Example}"
+                                                   Style="{StaticResource CaptionTextStyle}"
+                                                   TextWrapping="Wrap" Margin="0,4,0,0" />
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.Steps.Example}"
+                                                   Style="{StaticResource CaptionTextStyle}"
+                                                   TextWrapping="Wrap" Margin="0,8,0,0" />
+                                    </StackPanel>
+                                </Border>
                                     </StackPanel>
 
                                     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
                                         <Button Content="{loc:Localize Settings.Hl7.AddDestination}"
                                                 Style="{StaticResource SecondaryButtonStyle}"
                                                 Command="{Binding AddHl7DestinationCommand}"
-                                                MinWidth="96" Margin="0,0,6,0" />
+                                                MinWidth="90" Margin="0,0,6,0" />
+                                        <Button Content="{loc:Localize Settings.Hl7.AddExampleDestination}"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Command="{Binding AddExampleHl7DestinationCommand}"
+                                                MinWidth="90" Margin="0,0,6,0" />
                                         <Button Content="{loc:Localize Settings.Hl7.RemoveDestination}"
                                                 Style="{StaticResource SecondaryButtonStyle}"
                                                 Command="{Binding RemoveHl7DestinationCommand}"
-                                                MinWidth="96" />
+                                                MinWidth="90" />
                                     </StackPanel>
 
                                     <ListBox ItemsSource="{Binding Hl7.Destinations}"
@@ -1076,9 +1100,16 @@
                                             <Button Content="{loc:Localize Settings.Hl7.Test}"
                                                     Style="{StaticResource SecondaryButtonStyle}"
                                                     Command="{Binding TestHl7DestinationCommand}"
-                                                    MinWidth="150" MinHeight="36" />
+                                                    MinWidth="150" MinHeight="36" Margin="0,0,8,0" />
+                                            <Button Content="{loc:Localize Settings.Hl7.SendTestMessage}"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Command="{Binding SendHl7TestMessageCommand}"
+                                                    MinWidth="180" MinHeight="36" />
                                         </StackPanel>
                                         <TextBlock Text="{loc:Localize Settings.Hl7.TestCaption}"
+                                                   Style="{StaticResource CaptionTextStyle}"
+                                                   TextWrapping="Wrap" Margin="0,6,0,0" />
+                                        <TextBlock Text="{loc:Localize Settings.Hl7.SendTestMessageCaption}"
                                                    Style="{StaticResource CaptionTextStyle}"
                                                    TextWrapping="Wrap" Margin="0,6,0,0" />
                                         <TextBlock Text="{Binding Hl7DestinationStatus}"
@@ -1099,6 +1130,26 @@
                                     <TextBlock Text="{loc:Localize Settings.Hl7.Routing.Caption}"
                                                Style="{StaticResource CaptionTextStyle}"
                                                TextWrapping="Wrap" Margin="0,0,0,10" />
+
+                                    <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,12">
+                                        <StackPanel>
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.Steps.Title}"
+                                                       Style="{StaticResource FieldLabelTextStyle}" />
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.Steps.Body}"
+                                                       Style="{StaticResource CaptionTextStyle}"
+                                                       TextWrapping="Wrap" Margin="0,2,0,8" />
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.Routing.Required}"
+                                                       Style="{StaticResource CaptionTextStyle}"
+                                                       FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.Routing.Example}"
+                                                       Style="{StaticResource CaptionTextStyle}"
+                                                       TextWrapping="Wrap" Margin="0,4,0,0" />
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.Steps.Example}"
+                                                       Style="{StaticResource CaptionTextStyle}"
+                                                       TextWrapping="Wrap" Margin="0,8,0,0" />
+                                        </StackPanel>
+                                    </Border>
+
 
                                     <!-- The switch that makes any of this live. Off by
                                          default, and at the top of the page rather than
@@ -1147,7 +1198,11 @@
                                             <Button Content="{loc:Localize Settings.Hl7.AddRule}"
                                                     Style="{StaticResource SecondaryButtonStyle}"
                                                     Command="{Binding AddHl7RuleCommand}"
-                                                    MinWidth="80" Margin="0,0,6,0" />
+                                                    MinWidth="72" Margin="0,0,6,0" />
+                                            <Button Content="{loc:Localize Settings.Hl7.AddExampleRule}"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Command="{Binding AddExampleHl7RuleCommand}"
+                                                    MinWidth="78" Margin="0,0,6,0" />
                                             <Button Content="{loc:Localize Settings.Hl7.RemoveRule}"
                                                     Style="{StaticResource SecondaryButtonStyle}"
                                                     Command="{Binding RemoveHl7RuleCommand}"
@@ -1258,12 +1313,36 @@
                                     <TextBlock Text="{loc:Localize Settings.Hl7.Profiles.Caption}"
                                                Style="{StaticResource CaptionTextStyle}"
                                                TextWrapping="Wrap" Margin="0,0,0,10" />
+
+                                    <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,12">
+                                        <StackPanel>
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.Steps.Title}"
+                                                       Style="{StaticResource FieldLabelTextStyle}" />
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.Steps.Body}"
+                                                       Style="{StaticResource CaptionTextStyle}"
+                                                       TextWrapping="Wrap" Margin="0,2,0,8" />
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.Profiles.Required}"
+                                                       Style="{StaticResource CaptionTextStyle}"
+                                                       FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.Profiles.Example}"
+                                                       Style="{StaticResource CaptionTextStyle}"
+                                                       TextWrapping="Wrap" Margin="0,4,0,0" />
+                                            <TextBlock Text="{loc:Localize Settings.Hl7.Steps.Example}"
+                                                       Style="{StaticResource CaptionTextStyle}"
+                                                       TextWrapping="Wrap" Margin="0,8,0,0" />
+                                        </StackPanel>
+                                    </Border>
+
                                 </StackPanel>
 
                                 <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Content="{loc:Localize Settings.Hl7.ImportProfile}"
+                                        <Button Content="{loc:Localize Settings.Hl7.InstallExampleProfile}"
                                                 Style="{StaticResource PrimaryButtonStyle}"
+                                                Command="{Binding InstallExampleHl7ProfileCommand}"
+                                                MinWidth="160" MinHeight="36" Margin="0,0,6,0" />
+                                        <Button Content="{loc:Localize Settings.Hl7.ImportProfile}"
+                                                Style="{StaticResource SecondaryButtonStyle}"
                                                 Command="{Binding ImportHl7ProfileCommand}"
                                                 MinWidth="150" MinHeight="36" Margin="0,0,6,0" />
                                         <Button Content="{loc:Localize Settings.Hl7.RemoveProfile}"
@@ -1354,6 +1433,11 @@
                             <TextBlock DockPanel.Dock="Top"
                                        Text="{loc:Localize Settings.Hl7.Caption}"
                                        Style="{StaticResource CaptionTextStyle}"
+                                       TextWrapping="Wrap" Margin="0,0,0,6" />
+                            <TextBlock DockPanel.Dock="Top"
+                                       Text="{loc:Localize Settings.Hl7.Inspector.Optional}"
+                                       Style="{StaticResource CaptionTextStyle}"
+                                       FontWeight="SemiBold"
                                        TextWrapping="Wrap" Margin="0,0,0,12" />
 
                             <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">

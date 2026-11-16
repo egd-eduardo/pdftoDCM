@@ -2,6 +2,8 @@ using System.Reflection;
 using System.Text.Json;
 using PdfToDicom.Core.Models;
 using PdfToDicom.Integration.Configuration;
+using PdfToDicom.Interop.Hl7V2.Dispatch;
+using PdfToDicom.Interop.Messaging;
 using PdfToDicom.Interop.Hl7V2.Transport;
 using PdfToDicom.Interop.Routing;
 using Xunit;
@@ -589,6 +591,131 @@ public sealed class Hl7SettingsTests : IDisposable
             settings, service.Profiles, Demographics());
 
         Assert.Equal(IntegrationSequence.Hl7ThenDicom, result.Plan.Sequence);
+    }
+
+    // ------------------------------------------------------------------ The example
+
+    [Fact]
+    public void TheExampleProfileIsInsideTheApplicationAndCanBeUsed()
+    {
+        // Embedded rather than read from beside the executable, because the file sits in a
+        // different place depending on whether the application arrived by installer, by
+        // handover folder or from a checkout. A button that works in one and not the others
+        // is worse than no button.
+        var service = new Hl7SettingsService(SettingsPath);
+
+        ProfileImportResult result = Hl7ExampleSetup.InstallProfile(service.Profiles);
+
+        Assert.True(result.Succeeded, result.Detail);
+        Assert.Equal(Hl7ExampleSetup.ExampleProfileId, result.ProfileId);
+
+        StoredProfile stored = Assert.Single(service.Profiles.List());
+        Assert.True(stored.IsUsable);
+        Assert.Equal("ORU^R01", stored.MessageType);
+    }
+
+    [Fact]
+    public void TheEmbeddedExampleIsTheSameFileThatShipsInSamples()
+    {
+        // One file, embedded from samples/ rather than copied. If these ever differ, the
+        // example in the application and the example in the documentation have drifted, and
+        // somebody following the guide will be looking at the wrong thing.
+        string embedded = Hl7ExampleSetup.ProfileJson();
+
+        Assert.Contains("\"profileId\": \"sample-oru-r01\"", embedded);
+        Assert.Contains("\"messageType\": \"ORU\"", embedded);
+    }
+
+    [Fact]
+    public void InstallingTheExampleTwiceReplacesItRatherThanRefusing()
+    {
+        // A newcomer will press it twice. The ordinary import refuses a profile that is
+        // already there, which is right for a file somebody chose and wrong for the example.
+        var service = new Hl7SettingsService(SettingsPath);
+
+        Assert.True(Hl7ExampleSetup.InstallProfile(service.Profiles).Succeeded);
+        Assert.True(Hl7ExampleSetup.InstallProfile(service.Profiles).Succeeded);
+        Assert.Single(service.Profiles.List());
+    }
+
+    [Fact]
+    public void TheExampleDestinationPointsAtThisMachineAndNowhereElse()
+    {
+        // An example that defaulted to a plausible looking hospital address would
+        // eventually be saved unchanged, and the first anybody would know is a message
+        // arriving somewhere nobody expected.
+        Hl7DestinationSettings destination = Hl7ExampleSetup.Destination();
+
+        Assert.Equal("127.0.0.1", destination.Host);
+        Assert.Empty(destination.CheckBlocking());
+
+        // And the four names are filled in, because leaving them empty is the commonest
+        // reason a first message is rejected without explanation.
+        Assert.NotEmpty(destination.SendingApplication);
+        Assert.NotEmpty(destination.SendingFacility);
+        Assert.NotEmpty(destination.ReceivingApplication);
+        Assert.NotEmpty(destination.ReceivingFacility);
+        Assert.Equal(0, destination.RetryCount);
+    }
+
+    [Fact]
+    public void TheExampleIsAConfigurationThatHoldsTogetherAndWouldSend()
+    {
+        // The whole point of the example: press three buttons and the check passes. If this
+        // test fails, a newcomer following the guidance reaches a page full of objections.
+        var service = new Hl7SettingsService(SettingsPath);
+        Hl7ExampleSetup.InstallProfile(service.Profiles);
+
+        Hl7DestinationSettings destination = Hl7ExampleSetup.Destination();
+
+        var settings = new Hl7IntegrationSettings
+        {
+            AnnounceConversions = true,
+            Destinations = [destination],
+            Rules = [Hl7ExampleSetup.Rule(destination.Id)]
+        };
+
+        IReadOnlyList<string> problems = settings.Check(
+            service.Profiles.List().Select(p => p.ProfileId).ToList());
+
+        Assert.Empty(problems);
+
+        Hl7PlanResult plan = Hl7PlanFactory.Build(settings, service.Profiles, Demographics());
+
+        Assert.True(plan.WillSend);
+        Assert.Empty(plan.Problems);
+    }
+
+    [Fact]
+    public void ATestMessageCarriesTheInventedPatientAndNothingReal()
+    {
+        MessageSubject subject = Hl7TestSubject.Create(Hl7ExampleSetup.Destination());
+
+        Assert.Equal("ZZZTEST", subject.Get("patient.familyName"));
+        Assert.Equal("TEST0000001", subject.Get("patient.id"));
+        Assert.Equal("TESTACC001", subject.Get("study.accessionNumber"));
+
+        // The destination's four names come across, so the message a test produces has the
+        // same header as a real one and tests the thing that usually goes wrong.
+        Assert.Equal("PDFTODICOM", subject.Get("destination.sendingApplication"));
+        Assert.Equal("TESTRECEIVER", subject.Get("destination.receivingApplication"));
+    }
+
+    [Fact]
+    public async Task ATestMessageIsRefusedWhenTheProfileIsNotInstalled()
+    {
+        // Refused before a connection is opened, and said in words rather than as a
+        // timeout. The commonest mistake a newcomer makes is to configure a rule before
+        // installing the profile it names.
+        var announcer = new Hl7Announcer(
+            null!, new CountingLogger(), Path.Combine(_folder, "transactions"),
+            new Hl7SettingsService(SettingsPath));
+
+        Hl7DispatchResult result = await announcer.SendTestMessageAsync(
+            Hl7ExampleSetup.Destination(), "not-installed");
+
+        Assert.Equal(Hl7DispatchOutcome.Refused, result.Outcome);
+        Assert.Contains("not installed", result.Message);
     }
 
     // ------------------------------------------------------------------------ Fixtures
