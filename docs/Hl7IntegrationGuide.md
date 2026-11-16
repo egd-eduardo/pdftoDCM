@@ -22,6 +22,51 @@ deliberately out of scope for now; section 11 says what that means for you.
 
 ---
 
+## 0. If you have never configured an HL7 interface
+
+Two questions first, because they are the ones everybody asks.
+
+### Do I have to fill in every tab?
+
+No. Three of the four, in this order:
+
+| Tab | Needed? | What it is |
+| --- | --- | --- |
+| **Profiles** | Yes, one | What the message contains and where each value comes from. Press **Install the example** to start from a working one |
+| **Destinations** | Yes, one per receiving system | The address, and the four names the receiver reads from the message header |
+| **Routing** | Yes, one rule and the switch | Which reports go where, and whether anything is sent at all |
+| **Inspect a message** | No | A diagnostic screen. Open it when a receiver has rejected something and you want to see what it was sent |
+
+### How do I test it without touching anything real?
+
+There are four steps, and each one rules out the next one's commonest cause of confusion.
+You can do the first three before anybody at the hospital is involved.
+
+1. **Press the three Example buttons.** One on each of Profiles, Destinations and Routing.
+   They produce a complete configuration that points at **127.0.0.1**, which is your own
+   computer, and can reach nothing real. Press **Check the configuration** on the Routing
+   page: it should say the configuration holds together.
+2. **Press Test the connection** on the Destinations page. It opens a connection and closes
+   it, and sends nothing. Against the example destination it will fail, because nothing is
+   listening on your computer yet, and that failure is itself informative: it is what a
+   wrong address looks like.
+3. **Start something that listens, and press Send a test message.** Ask whoever supplied
+   the application for the test receiver, run it, and then press the button. It builds a
+   real message and sends it, and reports what came back. The patient is called ZZZTEST so
+   that anybody who finds the message knows it is a test. This is the step that proves the
+   whole chain works.
+4. **Change the destination to the hospital's own**, and repeat step 2 and step 3 with
+   somebody at the receiving end watching for the message. Only then turn the switch on.
+
+**Leave the switch on the Routing page off until step 4 has worked.** While it is off you
+can configure, check and test as much as you like and no report will announce itself.
+
+A warning about step 3 and step 4 together: **Send a test message really does send.** If the
+destination is a live record system, somebody there will see a patient called ZZZTEST. The
+confirmation names the address before anything happens, and it is worth reading.
+
+---
+
 ## 1. What this interface does
 
 When a report is converted and stored, this application can also tell another system that

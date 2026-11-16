@@ -19,6 +19,20 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      The worked example profile, embedded rather than read from disk.
+
+      The same file is in samples/ for somebody to open and read, is copied into the
+      handover package and into the installer, and is the one the settings page installs
+      when an administrator asks for an example. Embedding the file that is already there,
+      rather than keeping a second copy, means the example in the application and the
+      example in the documentation cannot drift apart.
+    -->
+    <EmbeddedResource Include="..\..\samples\hl7-oru-r01.sample.json"
+                      Link="Resources\hl7-oru-r01.sample.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\PdfToDicom.Core\PdfToDicom.Core.csproj" />
     <ProjectReference Include="..\PdfToDicom.Interop.Hl7V2\PdfToDicom.Interop.Hl7V2.csproj" />
   </ItemGroup>
