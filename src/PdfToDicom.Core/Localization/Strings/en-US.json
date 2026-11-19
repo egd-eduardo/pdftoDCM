@@ -267,6 +267,8 @@
   "Worklist.AllServers": "All worklists",
   "Worklist.NoServers": "No worklist server is enabled. Add one on the Worklist page in Settings.",
   "Worklist.PatientIdHint": "Enter a patient number to fetch that patient. A single match is selected for you; where there are several, pick the right one from the list. Leave both boxes empty for the whole scheduled list.",
+  "Worklist.DateRange": "Scheduled dates",
+  "Worklist.DateRangeHint": "This search covers these dates. It changes nothing for tomorrow: the dates this workstation uses by default are in Settings. A patient ID search ignores the dates entirely and looks at the whole worklist, so an older examination can be found by number; the Scheduled column shows which date each one belongs to.",
   "Worklist.Column.Source": "Worklist",
   "Status.ConfigurationProblem": "The settings could not be read",
   "Settings.CouldNotOpen": "The settings could not be opened.\n\n{1}\n\nYour settings file is:\n{0}\n\nIf this keeps happening, close the application, rename that file (do not delete it, so nothing is lost), and start again. The application will begin with default settings and you can copy your values back in from the renamed file.",

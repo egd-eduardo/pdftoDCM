@@ -76,6 +76,7 @@ public sealed class WorklistService : IWorklistService
         string callingAeTitle,
         string? patientIdFilter = null,
         string? patientNameFilter = null,
+        WorklistDateWindow? dateRangeOverride = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -87,14 +88,24 @@ public sealed class WorklistService : IWorklistService
         {
             IDicomClient client = CreateClient(configuration, ResolveCallingAe(configuration, callingAeTitle));
 
-            DicomCFindRequest request = BuildQuery(configuration, patientIdFilter, patientNameFilter);
+            DicomCFindRequest request = BuildQuery(
+                configuration, patientIdFilter, patientNameFilter, dateRangeOverride);
             DicomStatus? finalStatus = null;
 
             request.OnResponseReceived += (_, response) =>
             {
                 if (response.Status == DicomStatus.Pending && response.HasDataset)
                 {
-                    if (entries.Count >= configuration.MaximumResults)
+                    // Collected first and cut later, after the sort.
+                    //
+                    // This used to stop at the configured maximum as responses arrived, so a
+                    // wide query kept whichever entries the server happened to send first and
+                    // then sorted those. The list was therefore cut in the server's order and
+                    // presented in date order, which looks like a complete answer and is not:
+                    // the examination somebody was looking for could be absent while the list
+                    // appeared full. The ceiling below still exists, so a server with a
+                    // runaway schedule cannot exhaust this process.
+                    if (entries.Count >= CollectionCeiling(configuration))
                     {
                         truncated = true;
                         return;
@@ -127,16 +138,32 @@ public sealed class WorklistService : IWorklistService
                 .ThenBy(e => e.FamilyName, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
 
+            int found = ordered.Count;
+
+            if (ordered.Count > configuration.MaximumResults)
+            {
+                ordered = ordered.Take(configuration.MaximumResults).ToList();
+                truncated = true;
+            }
+
+            string criteria = DescribeCriteria(
+                configuration, patientIdFilter, patientNameFilter, dateRangeOverride);
+
+            // The criteria are written down, not just the count. Without them a log saying
+            // "0 scheduled step(s)" cannot distinguish a server that had nothing from a
+            // query that asked about one day, which is the question anybody diagnosing this
+            // actually has.
             _logger.Information(
-                $"The worklist returned {ordered.Count} scheduled step(s) from " +
-                $"{configuration.CalledAeTitle.Trim()}@{configuration.Host.Trim()}:{configuration.Port}.");
+                $"The worklist returned {found} scheduled step(s) from " +
+                $"{configuration.CalledAeTitle.Trim()}@{configuration.Host.Trim()}:{configuration.Port}. " +
+                $"Asked for {criteria}.");
 
             return new WorklistQueryResult(
                 true,
                 ordered,
                 ordered.Count == 0
-                    ? "The worklist returned no scheduled procedures for this query."
-                    : $"{ordered.Count} scheduled procedure(s) found.",
+                    ? WorklistMessages.Nothing(criteria)
+                    : WorklistMessages.Found(ordered.Count, criteria),
                 truncated);
         }
         catch (Exception ex)
@@ -149,12 +176,78 @@ public sealed class WorklistService : IWorklistService
     // ------------------------------------------------------------------ Query
 
     /// <summary>
+    /// How many entries to hold before the sort, whatever the display maximum is.
+    /// </summary>
+    /// <remarks>
+    /// Ten times the configured maximum, and never fewer than a thousand. The display
+    /// maximum exists to keep the window usable; this exists only to stop a server with a
+    /// runaway schedule exhausting memory, so it can be far larger. An entry is a handful of
+    /// short strings, so even the ceiling is a few megabytes.
+    /// </remarks>
+    private static int CollectionCeiling(WorklistConfiguration configuration) =>
+        Math.Max(1000, configuration.MaximumResults * 10);
+
+    /// <summary>
+    /// Describes what was asked for, in words, for the log and for the operator.
+    /// </summary>
+    private static string DescribeCriteria(
+        WorklistConfiguration configuration,
+        string? patientIdFilter,
+        string? patientNameFilter,
+        WorklistDateWindow? dateRangeOverride)
+    {
+        var parts = new List<string>();
+
+        if (WorklistMatch.IsPresent(patientIdFilter))
+        {
+            parts.Add($"patient ID '{patientIdFilter!.Trim()}'");
+        }
+
+        if (WorklistMatch.IsPresent(patientNameFilter))
+        {
+            parts.Add($"name '{patientNameFilter!.Trim()}'");
+        }
+
+        parts.Add(DescribeDates(configuration, patientIdFilter, dateRangeOverride));
+
+        if (!string.IsNullOrWhiteSpace(configuration.Modality))
+        {
+            // Named because a modality left over from an earlier configuration silently
+            // excludes everything else, and nothing on screen says it is set.
+            parts.Add($"modality '{configuration.Modality.Trim()}'");
+        }
+
+        if (!string.IsNullOrWhiteSpace(configuration.ScheduledStationAeTitle))
+        {
+            parts.Add($"scheduled station '{configuration.ScheduledStationAeTitle.Trim()}'");
+        }
+
+        return string.Join(", ", parts);
+    }
+
+    private static string DescribeDates(
+        WorklistConfiguration configuration,
+        string? patientIdFilter,
+        WorklistDateWindow? dateRangeOverride)
+    {
+        if (WorklistMatch.IsPresent(patientIdFilter))
+        {
+            return "any date, because a patient ID was given";
+        }
+
+        string range = FormatDateRange(configuration, dateRangeOverride);
+
+        return range.Length == 0 ? "any date" : $"dates {range}";
+    }
+
+    /// <summary>
     /// Builds the C-FIND request.
     /// </summary>
     private DicomCFindRequest BuildQuery(
         WorklistConfiguration configuration,
         string? patientIdFilter,
-        string? patientNameFilter)
+        string? patientNameFilter,
+        WorklistDateWindow? dateRangeOverride)
     {
         var request = new DicomCFindRequest(
             DicomUID.ModalityWorklistInformationModelFind,
@@ -182,7 +275,21 @@ public sealed class WorklistService : IWorklistService
         var step = new DicomDataset();
         step.AddOrUpdate(DicomTag.Modality, (configuration.Modality ?? string.Empty).Trim());
         step.AddOrUpdate(DicomTag.ScheduledStationAETitle, (configuration.ScheduledStationAeTitle ?? string.Empty).Trim());
-        step.AddOrUpdate(DicomTag.ScheduledProcedureStepStartDate, FormatDateRange(configuration));
+        // A patient identifier overrides the date entirely.
+        //
+        // Asking "where is this patient's examination" and "what is scheduled today" at the
+        // same time answers neither. An operator looking up one identifier has a document in
+        // their hand for that patient, and the examination it belongs to is as likely to be
+        // last month's as today's; a date restriction turns that search into a question
+        // nobody meant to ask, and the result is an empty list that reads as "no such
+        // patient". The scheduled date is a column in the list, so an operator who gets
+        // several can still see which is which, and what was asked for is said on screen and
+        // written to the log rather than being inferred.
+        step.AddOrUpdate(
+            DicomTag.ScheduledProcedureStepStartDate,
+            WorklistMatch.IsPresent(patientIdFilter)
+                ? string.Empty
+                : FormatDateRange(configuration, dateRangeOverride));
         step.AddOrUpdate(DicomTag.ScheduledProcedureStepStartTime, string.Empty);
         step.AddOrUpdate(DicomTag.ScheduledProcedureStepDescription, string.Empty);
         step.AddOrUpdate(DicomTag.ScheduledProcedureStepID, string.Empty);
@@ -200,9 +307,12 @@ public sealed class WorklistService : IWorklistService
     /// Formats the configured date range the way DICOM range matching expects, or an empty
     /// value when every date should match.
     /// </summary>
-    private static string FormatDateRange(WorklistConfiguration configuration)
+    private static string FormatDateRange(
+        WorklistConfiguration configuration, WorklistDateWindow? dateRangeOverride)
     {
-        (DateTime From, DateTime To)? range = configuration.ResolveDates(DateTime.Today);
+        (DateTime From, DateTime To)? range = dateRangeOverride is null
+            ? configuration.ResolveDates(DateTime.Today)
+            : configuration.ResolveDates(DateTime.Today, dateRangeOverride);
 
         if (range is null)
         {

@@ -5,6 +5,7 @@ using PdfToDicom.Core.Abstractions;
 using PdfToDicom.Core.Configuration;
 using PdfToDicom.Core.Dicom;
 using PdfToDicom.Core.Models;
+using PdfToDicom.Core.Networking;
 using PdfToDicom.Core.Services;
 
 namespace PdfToDicom.App.ViewModels;
@@ -27,6 +28,9 @@ public sealed class WorklistViewModel : ObservableObject
     private string _surnameFilter = string.Empty;
     private WorklistEntry? _selectedEntry;
     private WorklistChoice? _selectedServer;
+    private WorklistDateRange _selectedDateRange = WorklistDateRange.Today;
+    private DateTime? _explicitFrom;
+    private DateTime? _explicitTo;
 
     /// <summary>Creates the view model.</summary>
     public WorklistViewModel(ApplicationServices services)
@@ -86,6 +90,7 @@ public sealed class WorklistViewModel : ObservableObject
             }
 
             OnPropertyChanged(nameof(ShowsSourceColumn));
+            AdoptServerDates(value?.Server);
             RememberChoice();
             _ = SearchAsync();
         }
@@ -102,6 +107,92 @@ public sealed class WorklistViewModel : ObservableObject
 
     /// <summary>Entries currently shown.</summary>
     public ObservableCollection<WorklistEntry> Entries { get; } = new();
+
+    // ------------------------------------------------------------------ The dates
+
+    /// <summary>
+    /// The date ranges offered for this query.
+    /// </summary>
+    /// <remarks>
+    /// Offered here as well as in Settings because the two answer different questions.
+    /// Settings decides what this workstation does every morning; this decides what one
+    /// search looks at, which is how somebody finds an examination from last month without
+    /// the settings password and without changing anything for tomorrow.
+    /// </remarks>
+    public IReadOnlyList<EnumOption<WorklistDateRange>> DateRanges { get; } =
+    [
+        new(WorklistDateRange.Today, "Settings.Worklist.Range.Today"),
+        new(WorklistDateRange.YesterdayAndToday, "Settings.Worklist.Range.YesterdayAndToday"),
+        new(WorklistDateRange.LastSevenDays, "Settings.Worklist.Range.LastSevenDays"),
+        new(WorklistDateRange.AnyDate, "Settings.Worklist.Range.AnyDate"),
+        new(WorklistDateRange.Explicit, "Settings.Worklist.Range.Explicit")
+    ];
+
+    /// <summary>The range this search will use.</summary>
+    public WorklistDateRange SelectedDateRange
+    {
+        get => _selectedDateRange;
+        set
+        {
+            if (SetProperty(ref _selectedDateRange, value))
+            {
+                OnPropertyChanged(nameof(ShowsExplicitDates));
+            }
+        }
+    }
+
+    /// <summary>First date of an explicit range.</summary>
+    public DateTime? ExplicitFrom
+    {
+        get => _explicitFrom;
+        set => SetProperty(ref _explicitFrom, value);
+    }
+
+    /// <summary>Last date of an explicit range.</summary>
+    public DateTime? ExplicitTo
+    {
+        get => _explicitTo;
+        set => SetProperty(ref _explicitTo, value);
+    }
+
+    /// <summary>Whether the two date pickers apply to the current choice.</summary>
+    public bool ShowsExplicitDates => SelectedDateRange == WorklistDateRange.Explicit;
+
+    /// <summary>
+    /// The window to ask one server for, or null to use whatever that server has saved.
+    /// </summary>
+    /// <remarks>
+    /// Null when the operator has not touched the control and it still shows what the server
+    /// is configured with. Sending an override that merely repeats the saved setting would
+    /// work and would make the log read as though somebody had chosen it, which is the sort
+    /// of small untruth that wastes an afternoon later.
+    /// </remarks>
+    private WorklistDateWindow? SelectedDateWindow(WorklistConfiguration server) =>
+        SelectedDateRange == server.DateRange
+            && (SelectedDateRange != WorklistDateRange.Explicit
+                || (ExplicitFrom == server.ExplicitFrom && ExplicitTo == server.ExplicitTo))
+            ? null
+            : new WorklistDateWindow(SelectedDateRange, ExplicitFrom, ExplicitTo);
+
+    /// <summary>
+    /// Points the date control at what the chosen server is configured with.
+    /// </summary>
+    /// <remarks>
+    /// So the window opens showing the truth. Defaulting to "today" regardless would be
+    /// wrong for a site that has configured something else, and defaulting to "any date"
+    /// would quietly undo a deliberate setting on every search.
+    /// </remarks>
+    private void AdoptServerDates(WorklistConfiguration? server)
+    {
+        if (server is null)
+        {
+            return;
+        }
+
+        SelectedDateRange = server.DateRange;
+        ExplicitFrom = server.ExplicitFrom;
+        ExplicitTo = server.ExplicitTo;
+    }
 
     /// <summary>The entry the operator picked, or null while nothing is selected.</summary>
     public WorklistEntry? SelectedEntry
@@ -275,11 +366,16 @@ public sealed class WorklistViewModel : ObservableObject
 
             foreach (WorklistConfiguration server in servers)
             {
+                // Wrapped here rather than in the service, because this is where the
+                // promise is made: the two boxes are labelled "contains". The command line
+                // documents wildcards and passes what was typed, which is a different
+                // promise and still kept.
                 WorklistQueryResult result = await _services.Worklist.QueryAsync(
                     server,
                     configuration.CallingAeTitle,
-                    PatientIdFilter,
-                    SurnameFilter).ConfigureAwait(true);
+                    WorklistMatch.Contains(PatientIdFilter),
+                    WorklistMatch.Contains(SurnameFilter),
+                    SelectedDateWindow(server)).ConfigureAwait(true);
 
                 foreach (WorklistEntry entry in result.Entries)
                 {
@@ -305,7 +401,14 @@ public sealed class WorklistViewModel : ObservableObject
             // One result is almost always the one wanted, and selecting it saves a click
             // at a busy desk. It is the whole of the "type a patient number and get the
             // patient" flow: one match selects itself and the form can be filled at once.
-            if (Entries.Count == 1)
+            //
+            // With one exception, added when the boxes started matching on part of what was
+            // typed. A partial number now has one answer more often, and that answer is not
+            // always the patient meant: typing 123 can return the only patient whose number
+            // contains it, who may be 99123. Where a number was typed and the single result
+            // is not that number, the row is left for the operator to choose on purpose.
+            // Typing the whole number, which is what the hint asks for, still selects itself.
+            if (Entries.Count == 1 && IsSafeToSelectAutomatically(Entries[0]))
             {
                 SelectedEntry = Entries[0];
             }
@@ -358,6 +461,23 @@ public sealed class WorklistViewModel : ObservableObject
     /// keeping whether or not the operator goes on to pick a patient. "All" is not
     /// recorded: it is a way of finding out where a patient is, not a server to return to.
     /// </remarks>
+    /// <summary>
+    /// Whether the single result can be chosen for the operator rather than by them.
+    /// </summary>
+    private bool IsSafeToSelectAutomatically(WorklistEntry entry)
+    {
+        string typed = PatientIdFilter.Trim();
+
+        if (typed.Length == 0)
+        {
+            // No number was typed, so nothing was claimed about which patient this is and
+            // the operator is reading the row either way.
+            return true;
+        }
+
+        return string.Equals(entry.PatientId?.Trim(), typed, StringComparison.OrdinalIgnoreCase);
+    }
+
     private void RememberChoice()
     {
         if (SelectedServer?.Server is null)

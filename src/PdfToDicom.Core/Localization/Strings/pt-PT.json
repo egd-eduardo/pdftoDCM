@@ -267,6 +267,8 @@
   "Worklist.AllServers": "Todas as listas de trabalho",
   "Worklist.NoServers": "Não há nenhuma lista de trabalho ativa. Adicione uma na página Lista de trabalho, em Definições.",
   "Worklist.PatientIdHint": "Introduza um número de processo para obter esse doente. Se houver uma única correspondência, é selecionada automaticamente; se houver várias, escolha a correta na lista. Deixe ambos os campos vazios para ver a lista completa.",
+  "Worklist.DateRange": "Datas agendadas",
+  "Worklist.DateRangeHint": "Esta pesquisa abrange estas datas. Não altera nada para amanhã: as datas que esta estação utiliza por omissão estão nas Definições. Uma pesquisa por ID do doente ignora as datas por completo e consulta toda a worklist, pelo que um exame mais antigo pode ser encontrado por número; a coluna Agendado mostra a que data pertence cada um.",
   "Worklist.Column.Source": "Lista de trabalho",
   "Status.ConfigurationProblem": "Não foi possível ler as definições",
   "Settings.CouldNotOpen": "Não foi possível abrir as definições.\n\n{1}\n\nO seu ficheiro de definições é:\n{0}\n\nSe isto continuar a acontecer, feche a aplicação, mude o nome desse ficheiro (não o apague, para que nada se perca) e volte a iniciar. A aplicação arranca com as definições predefinidas e poderá copiar os seus valores a partir do ficheiro renomeado.",

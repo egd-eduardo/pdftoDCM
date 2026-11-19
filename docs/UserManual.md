@@ -263,6 +263,21 @@ and press **Search**. If exactly one scheduled procedure matches, it is selected
 and all you have to do is press **Use this patient**. If the patient has several
 procedures scheduled, they all appear and you pick the right one.
 
+### Looking for an older examination
+
+The two boxes match on **part** of what you type, so "Silva" finds Silva and Silva Santos,
+and a partial patient number finds every number containing it.
+
+**Scheduled dates** decides which days the search covers. It opens showing what your IT
+department configured for that server, usually today, and you can change it for one search
+without changing anything for tomorrow. "Every date" searches the whole worklist.
+
+**Searching by patient number ignores the dates altogether.** Type the number and the whole
+worklist is searched whatever the date box says, because a document in your hand belongs to
+an examination that may well have been scheduled weeks ago. Look at the **Scheduled** column
+before you pick a row: if a patient has more than one examination, that column is how you
+tell which is which.
+
 ### Choosing which worklist
 
 **If your hospital has more than one worklist**, for example one for radiology and one for
@@ -305,10 +320,10 @@ again and pick another: the whole form is replaced, never mixed.
 
 | What you see | What it usually means |
 |---|---|
-| *The worklist returned no scheduled procedures for this query* | The patient is not scheduled today. Ask your IT department to widen the date range, or fill the form in by hand. |
+| *The worklist returned no scheduled procedures for this query* | Read the **Asked for** part that follows it: it names the dates and the filters that were searched. If it names a date range, change **Scheduled dates** to "Every date" and search again. If it names a modality you did not expect, your IT department has set one on that server. |
 | *could not be reached* | The worklist server is down, or the address is wrong. Fill the form in by hand and tell your IT department. |
 | *rejected the connection* | This workstation is not registered on the worklist server. Your IT department has to do that once. |
-| *More results were available than can be shown* | Narrow the search with a surname or a patient number. |
+| *More results were available than can be shown* | Narrow the search with a surname or a patient number. The list is cut after being put in date order, so what you see is the earliest; the one you want may be later. |
 
 You can always type the details yourself. The worklist is a convenience, never a
 requirement.

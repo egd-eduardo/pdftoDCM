@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Input;
 using PdfToDicom.App.ViewModels;
 
 namespace PdfToDicom.App.Views;
@@ -41,6 +42,42 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        viewModel.TryUnlock(box.Password);
+        box.Clear();
+    }
+
+    /// <summary>
+    /// Unlocks when Enter is pressed in a password box.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Without this, Enter went to the dialog's default button, which is Save. Typing a
+    /// password and pressing Enter therefore saved the settings and closed the dialog with
+    /// the page still locked, which reads as the key doing nothing, and the password had to
+    /// be submitted with the mouse instead.
+    /// </para>
+    /// <para>
+    /// Marked handled so the default button does not also fire. Unlocking and saving on one
+    /// keystroke would be worse than either.
+    /// </para>
+    /// </remarks>
+    private void OnPasswordKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || sender is not System.Windows.Controls.PasswordBox box)
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        if (DataContext is not SettingsViewModel viewModel)
+        {
+            return;
+        }
+
+        // The same two steps the button takes, including clearing the box whatever the
+        // answer was. A wrong password left on screen invites the same wrong password
+        // again, and a right one is a credential sitting on a shared workstation.
         viewModel.TryUnlock(box.Password);
         box.Clear();
     }
