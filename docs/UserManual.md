@@ -282,6 +282,28 @@ for you on a name alone. Look at the list and pick.
 department configured for that server, usually today, and you can change it for one search
 without changing anything for tomorrow. "Every date" searches the whole worklist.
 
+### Reading a long list
+
+**Nothing is thrown away to make the list fit.** A search that finds three thousand
+scheduled procedures keeps all three thousand and shows them five hundred at a time. Under
+the list you will see how many were found, which page you are on, and **First**,
+**Previous**, **Next** and **Last** to move between them. The line reads, for example,
+*Page 2 of 7, showing 501 to 1000 of 3214 found*.
+
+Read that total before deciding a patient is not scheduled. A window showing five hundred
+rows and nothing else is the reason an examination from last December looked absent when it
+was not: the list was cut to five hundred and the rest were discarded before anybody could
+look for them.
+
+How many a page holds is the **Maximum results** setting on the Worklist page in Settings.
+It now means "how many at a time" rather than "how many at all", so lowering it makes the
+pages shorter and loses nothing.
+
+While there is more than one page, clicking a column header no longer re-sorts the list.
+Sorting one page of three thousand rows would reorder what you can see and present it as
+though it were the whole answer. The list is in scheduled order, oldest first, and the
+**Scheduled** column shows the date of each row.
+
 **Searching by patient number ignores the dates altogether.** Type the number and the whole
 worklist is searched whatever the date box says, because a document in your hand belongs to
 an examination that may well have been scheduled weeks ago. Look at the **Scheduled** column
@@ -333,7 +355,7 @@ again and pick another: the whole form is replaced, never mixed.
 | *The worklist returned no scheduled procedures for this query* | Read the **Asked for** part that follows it: it names the dates and the filters that were searched. If it names a date range, change **Scheduled dates** to "Every date" and search again. If it names a modality you did not expect, your IT department has set one on that server. |
 | *could not be reached* | The worklist server is down, or the address is wrong. Fill the form in by hand and tell your IT department. |
 | *rejected the connection* | This workstation is not registered on the worklist server. Your IT department has to do that once. |
-| *More results were available than can be shown* | Narrow the search with a surname or a patient number. The list is cut after being put in date order, so what you see is the earliest; the one you want may be later. |
+| *This list was cut short by this software* | The search found more than fifty thousand scheduled procedures, which is this software's own ceiling rather than the server's answer. Narrow the dates or add a surname or a patient number. Below that ceiling nothing is cut: the result is paged, so use the page buttons. |
 
 You can always type the details yourself. The worklist is a convenience, never a
 requirement.

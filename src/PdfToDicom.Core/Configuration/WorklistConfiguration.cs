@@ -117,9 +117,23 @@ public sealed class WorklistConfiguration
     public bool AcceptAnyTlsCertificate { get; set; }
 
     /// <summary>
-    /// Largest number of entries to show. A guard against a mistyped query returning a
-    /// department's entire schedule and freezing the window.
+    /// How many entries to show on one page of results.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A guard against a mistyped query filling a window with ten thousand rows, which is
+    /// what it has always been for. What changed is that it no longer decides how many
+    /// entries are fetched: the query holds everything the server sends and the window pages
+    /// through it, so a value of 500 means "five hundred at a time" rather than "forget the
+    /// five hundred and first".
+    /// </para>
+    /// <para>
+    /// The name is kept, rather than being changed to something like PageSize, because it is
+    /// a key in every site's configuration file and renaming it would silently reset it to
+    /// the default on the next read. The summary above is the documentation; the name is
+    /// history.
+    /// </para>
+    /// </remarks>
     public int MaximumResults { get; set; } = 500;
 
     /// <summary>Creates an independent copy, used so an editing dialog cannot write through.</summary>

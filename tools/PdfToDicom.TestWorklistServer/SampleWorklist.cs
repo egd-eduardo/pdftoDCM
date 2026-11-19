@@ -45,7 +45,8 @@ internal static class SampleWorklist
         string Sex,
         string Modality,
         string ProcedureDescription,
-        int MinutesFromStartOfDay);
+        int MinutesFromStartOfDay,
+        int DaysBeforeToday = 0);
 
     /// <summary>
     /// Stamped onto every identifier and description this server sends, so that anything
@@ -158,7 +159,20 @@ internal static class SampleWorklist
         // A surname of 69 characters on its own: the pathological case, where there is no
         // room for a given name at all and the surname itself has to be cut.
         new Item("TESTE0000007", "VASCONCELOS CAVALCANTI DE ALMEIDA BARBOSA MAGALHÃES NASCIMENTO JUNIOR",
-                 "PEDRO", "TESTEACC000007", "19781225", "M", "OT", "Relatório de Consulta Externa", 12 * 60)
+                 "PEDRO", "TESTEACC000007", "19781225", "M", "OT", "Relatório de Consulta Externa", 12 * 60),
+
+        // Scheduled roughly a year ago, which is the case this server could not reproduce.
+        // A site reported that an examination scheduled last December was never fetched, and
+        // every entry here was scheduled today, so the report could be read about and not
+        // reproduced. Relative rather than a fixed December date, so it stays a year old
+        // next year instead of quietly becoming a date nobody is looking for.
+        new Item("TESTE0000008", "OLIVEIRA", "CARLOTA", "TESTEACC000008", "19481103", "F",
+                 "OT", "Relatório de Consulta de Pneumologia", 9 * 60 + 15, DaysBeforeToday: 350),
+
+        // Last month, which is the other half of the same report: an examination close
+        // enough to be expected in a list and still outside today.
+        new Item("TESTE0000009", "RIBEIRO", "MATEUS", "TESTEACC000009", "19930812", "M",
+                 "OT", "Relatório de Consulta de Ortopedia", 14 * 60 + 40, DaysBeforeToday: 30)
     };
 
     /// <summary>
@@ -256,6 +270,15 @@ internal static class SampleWorklist
         int month = 1 + (index % 12);
         int day = 1 + (index % 28);
 
+        // Spread over the past year rather than all scheduled today.
+        //
+        // A server whose every entry is scheduled today cannot answer the question that
+        // matters most about a date filter, which is whether an old scheduled step comes
+        // back at all. Roughly one entry in four is today, so the ordinary case of asking
+        // for today still returns a usable list; the rest are scattered over the preceding
+        // year, which is what makes "every date" worth asking for and paging worth having.
+        int daysBack = index % 4 == 0 ? 0 : (index * 7) % 365;
+
         return new Item(
             PatientId: $"{TestMarker}{number}",
             FamilyName: familyName.ToUpperInvariant(),
@@ -265,7 +288,8 @@ internal static class SampleWorklist
             Sex: sex,
             Modality: "OT",
             ProcedureDescription: PoolProcedures[index % PoolProcedures.Length],
-            MinutesFromStartOfDay: minutes);
+            MinutesFromStartOfDay: minutes,
+            DaysBeforeToday: daysBack);
     }
 
     /// <summary>
@@ -285,6 +309,10 @@ internal static class SampleWorklist
         "Relatório de Anatomia Patológica",
         "Relatório de Cardiologia",
     };
+
+    /// <summary>The day one item is scheduled on, relative to the day the server runs.</summary>
+    internal static DateTime ScheduledDay(Item item, DateTime today) =>
+        today.Date.AddDays(-item.DaysBeforeToday);
 
     /// <summary>
     /// Builds the response data set for one item, scheduled on the supplied day.

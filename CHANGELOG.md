@@ -18,6 +18,81 @@ dates changed nothing: the identifier was excluding the patient before the date 
 mattered. The boxes now match on part of what was typed, and anything wildcarded by hand is
 left exactly as typed, because the command line documents wildcards and people use them.
 
+**A second implementation of the worklist question, in the repository.**
+`tools/WorklistExplorer` is a read only diagnostic tool, three projects of its own, that asks
+a worklist the widest possible question and shows everything that comes back beside the exact
+identifier it sent. It was written from the standard rather than from this code, and it
+references none of this application's projects on purpose: a tool sharing `PdfToDicom.Core`
+would inherit the same query builder and could only ever agree with the application about the
+thing being investigated.
+
+It is now in `PDF to DICOM.sln` under a `tools` solution folder, so continuous integration
+compiles all three projects, and it is on the same forbidden list as the two test servers. It
+is not a listener; it is on the list because it exports patient data to wherever whoever runs
+it points it, so handing it to a site is a decision to take by copying the executable.
+
+Compiled against fo-dicom 5.2.2, the version this application uses, with no errors and no
+warnings, and run end to end against the test worklist server: 509 responses, 509 rows, none
+discarded, and the step scheduled on 2025-12-04 present with its accents intact. The three
+fo-dicom members its own notes flagged as unverified are correct as written. The window has
+still not been opened by anybody, and its README says so.
+
+Compared key by key with `WorklistService.BuildQuery`, the two send **the same eighteen
+keys**, so a row one sees and the other does not is not explained by a missing key. The four
+differences that remain are in the values, and they are written down in the tool's README:
+the application sends the operator's name and identifier filters where the tool always sends
+them empty; the application trims the modality and station filters where the tool sends them
+exactly as the file holds them; the tool can express an open ended date range and the
+application completes a half open one with today; and the tool builds its datasets
+`NotValidated()` so the string shown is the string sent, which was checked to be cosmetic,
+since fo-dicom accepts a date range in a validated element either way.
+
+**An examination that was fetched and then thrown away.** Reported from the same site after
+the matching fixes below: an examination scheduled in December 2025 still did not appear.
+The query was not the problem this time. The entries were being fetched and discarded,
+twice over.
+
+The first cut was a ceiling of ten times the configured maximum, five thousand by default,
+applied as responses arrived and therefore in whatever order the server chose to send them.
+A department with more scheduled steps than that lost the rest before anything was sorted,
+so an old examination could be received and dropped without ever being counted. The ceiling
+is now a fixed fifty thousand, unrelated to how many a window shows, and reaching it is
+written to the log as a warning and said on screen rather than being absorbed.
+
+The second cut was the configured maximum itself. It was documented as "largest number of
+entries to show" and it decided what the query kept, so the five hundred and first entry was
+not shown later, it was destroyed. It now means what it said: the page size. A query holds
+everything the server sent, and the window pages through it with First, Previous, Next and
+Last, a line reading "Page 2 of 7, showing 501 to 1000 of 3214 found", and no entry that
+cannot be reached. The setting is untouched in every site's configuration file, because
+renaming the key would have reset it to the default on the next read.
+
+Two consequences came with it. Column sorting is switched off while there is more than one
+page, because sorting five hundred rows out of three thousand reorders what is visible and
+presents it as the whole answer, which is the same defect as cutting a list before sorting
+it approached from the other side. And "one result selects itself" now counts the whole
+result rather than the page, since a page holding one row with nineteen pages behind it is
+not one result.
+
+The arithmetic lives in `WorklistPaging` in the Core assembly rather than in the view model,
+with fourteen tests over it. The view models have no automated coverage, an off by one here
+is a patient nobody can scroll to, and 3.3.0 is the precedent for what untested view model
+code does in a release.
+
+**The command line can now ask for the dates, and print everything.** `--date-range today`,
+`yesterday`, `week` or `any` applies to one query and leaves the saved setting alone, and
+`--all` prints every entry rather than one page of them, with a note saying how many were
+found and how many printed when it does not. This is the shortest way to establish whether a
+server returns an old scheduled step at all, which is a different question from whether this
+software then displays it, and the two could not be separated from the window alone.
+
+**The test worklist server can reproduce the report.** Every entry it served was scheduled
+today, so a defect about old examinations could be read about and not reproduced. Its entries
+are now spread over the preceding year, with roughly a quarter today so that asking for today
+still returns a usable list, and two fixed entries scheduled a year and a month ago. The
+first query against it after the change found 509 entries for every date where the old code
+would have kept 500, with the year old one at the top of the list.
+
 **The search now ignores capitals and accents, and the record still gets the worklist's own
 spelling.** Reported after the matching fix above: a Portuguese worklist is full of names
 like GONÇALVES and JOÃO, and an operator typing `goncalves` found nothing, because DICOM

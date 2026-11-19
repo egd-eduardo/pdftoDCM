@@ -685,6 +685,7 @@ differs only in case has overwritten it. Windows cannot hold both.
     # mistake that should depend on nobody ever writing a wildcard.
     $forbidden = @('BuildingItYourself', 'CodeSigning', 'ProtectingAgainstUnauthorisedDistribution',
                    'testworklistserver', 'hl7testserver', 'mllp-receiver',
+                   'WorklistExplorer',
                    'codesign', '.pfx', '.p12', '.password', '.key')
 
     $leaked = $forbidden | Where-Object { $name = $_; $present | Where-Object { $_ -like "*$name*" } }

@@ -32,6 +32,19 @@ public sealed class WorklistViewModel : ObservableObject
     private DateTime? _explicitFrom;
     private DateTime? _explicitTo;
 
+    /// <summary>
+    /// Everything the last search fetched, of which <see cref="Entries"/> shows one page.
+    /// </summary>
+    /// <remarks>
+    /// Held here rather than cut away by the query, because an entry that is fetched and
+    /// discarded cannot be looked for: that is exactly how an examination scheduled a year
+    /// ago went missing from a list that looked complete.
+    /// </remarks>
+    private readonly List<WorklistEntry> _fetched = new();
+
+    private int _pageIndex;
+    private int _pageSize = WorklistPaging.DefaultPageSize;
+
     /// <summary>Creates the view model.</summary>
     public WorklistViewModel(ApplicationServices services)
     {
@@ -62,6 +75,11 @@ public sealed class WorklistViewModel : ObservableObject
 
         SearchCommand = new RelayCommand(async _ => await SearchAsync(), _ => !IsBusy);
         ClearFiltersCommand = new RelayCommand(_ => ClearFilters(), _ => !IsBusy);
+
+        FirstPageCommand = new RelayCommand(_ => GoToPage(0), _ => CanGoBack);
+        PreviousPageCommand = new RelayCommand(_ => GoToPage(PageIndex - 1), _ => CanGoBack);
+        NextPageCommand = new RelayCommand(_ => GoToPage(PageIndex + 1), _ => CanGoForward);
+        LastPageCommand = new RelayCommand(_ => GoToPage(PageCount - 1), _ => CanGoForward);
 
         // The window is opened to find something, so the first search runs without being
         // asked for. A reception desk should see today's list immediately.
@@ -105,8 +123,119 @@ public sealed class WorklistViewModel : ObservableObject
     /// </summary>
     public bool ShowsSourceColumn => SelectedServer?.IsAll == true;
 
-    /// <summary>Entries currently shown.</summary>
+    /// <summary>The page of entries currently shown.</summary>
     public ObservableCollection<WorklistEntry> Entries { get; } = new();
+
+    // ------------------------------------------------------------------ The pages
+
+    /// <summary>Goes to the first page.</summary>
+    public System.Windows.Input.ICommand FirstPageCommand { get; }
+
+    /// <summary>Goes back one page.</summary>
+    public System.Windows.Input.ICommand PreviousPageCommand { get; }
+
+    /// <summary>Goes forward one page.</summary>
+    public System.Windows.Input.ICommand NextPageCommand { get; }
+
+    /// <summary>Goes to the last page.</summary>
+    public System.Windows.Input.ICommand LastPageCommand { get; }
+
+    /// <summary>How many entries the last search fetched, across every server asked.</summary>
+    public int TotalCount => _fetched.Count;
+
+    /// <summary>
+    /// How many entries one page holds.
+    /// </summary>
+    /// <remarks>
+    /// Taken from the server's own configured maximum, so a site that chose 200 still sees
+    /// 200 at a time. When several servers are asked at once the largest of their values
+    /// wins, because the alternative is for the quietest department's setting to decide how
+    /// the busiest one is read.
+    /// </remarks>
+    public int PageSize
+    {
+        get => _pageSize;
+        private set
+        {
+            if (SetProperty(ref _pageSize, WorklistPaging.SanePageSize(value)))
+            {
+                RefreshPage();
+            }
+        }
+    }
+
+    /// <summary>Which page is shown, counted from zero.</summary>
+    public int PageIndex
+    {
+        get => _pageIndex;
+        private set
+        {
+            if (SetProperty(ref _pageIndex, value))
+            {
+                OnPropertyChanged(nameof(PageNumber));
+                OnPropertyChanged(nameof(PageSummary));
+            }
+        }
+    }
+
+    /// <summary>Which page is shown, counted from one, which is how people count pages.</summary>
+    public int PageNumber => PageIndex + 1;
+
+    /// <summary>
+    /// How many pages the fetched entries make.
+    /// </summary>
+    /// <remarks>
+    /// One when nothing was found, rather than zero. "Page 1 of 0" is not a thing anybody
+    /// can read, and an empty list is one empty page.
+    /// </remarks>
+    public int PageCount => WorklistPaging.PageCount(TotalCount, PageSize);
+
+    /// <summary>True when there is more than one page, so the pager is worth showing.</summary>
+    public bool HasSeveralPages => PageCount > 1;
+
+    /// <summary>
+    /// Whether the grid lets a column header reorder the list.
+    /// </summary>
+    /// <remarks>
+    /// Off while there is more than one page, which is the uncomfortable half of paging. A
+    /// grid sorts what it has been given, so sorting a page by scheduled date reorders five
+    /// hundred rows out of three thousand and presents the result as though it were the
+    /// whole answer. That is the same defect as cutting a list before sorting it, which this
+    /// release exists to fix, arrived at from the other direction.
+    /// </remarks>
+    public bool CanSortColumns => !HasSeveralPages;
+
+    /// <summary>True when there is a page before this one.</summary>
+    public bool CanGoBack => PageIndex > 0;
+
+    /// <summary>True when there is a page after this one.</summary>
+    public bool CanGoForward => PageIndex + 1 < PageCount;
+
+    /// <summary>
+    /// What the pager says, for example "Page 2 of 7, showing 501 to 1000 of 3214".
+    /// </summary>
+    /// <remarks>
+    /// The total is said out loud, and separately from the page. An operator who can see
+    /// that the search found three thousand entries knows the one they want is in there
+    /// somewhere; a window that shows five hundred rows and says nothing else invites them
+    /// to conclude the patient is not scheduled.
+    /// </remarks>
+    public string PageSummary
+    {
+        get
+        {
+            if (TotalCount == 0)
+            {
+                return string.Empty;
+            }
+
+            (int first, int last) = WorklistPaging.PageWindow(PageIndex, TotalCount, PageSize);
+
+            return string.Format(
+                Localize("Worklist.PageSummary"),
+                PageNumber, PageCount, first, last, TotalCount);
+        }
+    }
 
     // ------------------------------------------------------------------ The dates
 
@@ -346,6 +475,7 @@ public sealed class WorklistViewModel : ObservableObject
 
         IsBusy = true;
         Status = Localize("Worklist.Searching");
+        _fetched.Clear();
         Entries.Clear();
         SelectedEntry = null;
 
@@ -383,7 +513,7 @@ public sealed class WorklistViewModel : ObservableObject
                 {
                     // Stamped only when several servers were asked. With one, the column is
                     // hidden and the text would be noise.
-                    Entries.Add(several
+                    _fetched.Add(several
                         ? entry with { SourceWorklistName = server.DisplayName }
                         : entry);
                 }
@@ -395,6 +525,16 @@ public sealed class WorklistViewModel : ObservableObject
                 // whose own server answered should not be told otherwise.
                 messages.Add(several ? $"{server.DisplayName}: {result.Message}" : result.Message);
             }
+
+            // The page size follows the servers that were actually asked, so it is settled
+            // before the first page is filled.
+            PageSize = servers.Max(s => s.MaximumResults);
+
+            // Asked after every server has answered, so that entries from two departments
+            // are interleaved by date rather than appearing as one list after another. The
+            // scheduled date is what an operator reads down the column.
+            _fetched.Sort(ByScheduledDateThenName);
+            RefreshPage();
 
             Status = truncated
                 ? $"{string.Join("  ", messages)} {Localize("Worklist.Truncated")}"
@@ -410,9 +550,14 @@ public sealed class WorklistViewModel : ObservableObject
             // contains it, who may be 99123. Where a number was typed and the single result
             // is not that number, the row is left for the operator to choose on purpose.
             // Typing the whole number, which is what the hint asks for, still selects itself.
-            if (Entries.Count == 1 && IsSafeToSelectAutomatically(Entries[0]))
+            //
+            // Counted over everything fetched rather than over the page, because "one
+            // result" has to mean one result. A page holding a single row while another
+            // nineteen pages wait behind it is not one result, and selecting that row would
+            // fill the form from an entry chosen by arithmetic.
+            if (_fetched.Count == 1 && IsSafeToSelectAutomatically(_fetched[0]))
             {
-                SelectedEntry = Entries[0];
+                SelectedEntry = _fetched[0];
             }
         }
         catch (Exception ex)
@@ -424,6 +569,81 @@ public sealed class WorklistViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>
+    /// Scheduled date first, then family name, which is the order the list is read in.
+    /// </summary>
+    /// <remarks>
+    /// Entries with no scheduled date sort last rather than first. A worklist that sends no
+    /// date for a step is saying it does not know when it is, and a row with nothing in the
+    /// column it is being sorted by belongs at the end rather than above everything a
+    /// department has scheduled.
+    /// </remarks>
+    private static int ByScheduledDateThenName(WorklistEntry left, WorklistEntry right)
+    {
+        int byDate = (left.ScheduledStart ?? DateTime.MaxValue)
+            .CompareTo(right.ScheduledStart ?? DateTime.MaxValue);
+
+        return byDate != 0
+            ? byDate
+            : string.Compare(
+                left.FamilyName, right.FamilyName, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    /// <summary>Shows a page, clamped to the pages that exist.</summary>
+    /// <remarks>
+    /// Clamped rather than guarded, so that a page number arriving from anywhere, a command
+    /// enabled a moment too long, a search that returned fewer entries than the last one,
+    /// cannot leave the window showing nothing with no way back.
+    /// </remarks>
+    private void GoToPage(int index)
+    {
+        PageIndex = WorklistPaging.ClampPageIndex(index, TotalCount, PageSize);
+        FillPage();
+    }
+
+    /// <summary>
+    /// Rebuilds the paging after the fetched entries changed, keeping the first page.
+    /// </summary>
+    private void RefreshPage()
+    {
+        PageIndex = 0;
+        FillPage();
+    }
+
+    /// <summary>
+    /// Puts the current page's entries into the bound collection.
+    /// </summary>
+    /// <remarks>
+    /// The collection is replaced in place rather than being swapped for a new one, because
+    /// the grid is bound to this instance and a new collection would silently stop updating
+    /// it.
+    /// </remarks>
+    private void FillPage()
+    {
+        Entries.Clear();
+
+        foreach (WorklistEntry entry in _fetched
+            .Skip(WorklistPaging.Skipped(PageIndex, TotalCount, PageSize))
+            .Take(PageSize))
+        {
+            Entries.Add(entry);
+        }
+
+        OnPropertyChanged(nameof(TotalCount));
+        OnPropertyChanged(nameof(PageCount));
+        OnPropertyChanged(nameof(PageNumber));
+        OnPropertyChanged(nameof(PageSummary));
+        OnPropertyChanged(nameof(HasSeveralPages));
+        OnPropertyChanged(nameof(CanSortColumns));
+        OnPropertyChanged(nameof(CanGoBack));
+        OnPropertyChanged(nameof(CanGoForward));
+
+        (FirstPageCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (PreviousPageCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (NextPageCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (LastPageCommand as RelayCommand)?.RaiseCanExecuteChanged();
     }
 
     private void ClearFilters()

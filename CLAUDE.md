@@ -34,7 +34,7 @@ in that order, and never the third.
 Run all of these. They are fast, and each one exists because something got past the others.
 
 ```bash
-dotnet test "PDF to DICOM.sln" -c Release          # 676 tests, across three test projects
+dotnet test "PDF to DICOM.sln" -c Release          # 696 tests, across three test projects
 python3 build/validate-xaml-bindings.py            # two way bindings to read only properties
 python3 build/validate-viewmodel-commands.py       # unguarded RaiseCanExecuteChanged
 python3 build/validate-installer-script.py         # installer sources and flags
@@ -84,6 +84,10 @@ The build fails if they do, and that check is not decoration:
 - the test worklist server, the HL7 test receiver (`hl7testserver`) and
   `build/hl7/mllp-receiver.py`. All three are commissioning tools, and a listener handed to
   a hospital is a listener somebody will eventually point a live system at
+- `WorklistExplorer`, the read only worklist diagnostic tool in `tools/WorklistExplorer`. It
+  opens no port, so it is on the list for the other reason: it exports patient data to
+  wherever whoever runs it points it. Giving it to a site is a decision to take deliberately,
+  by copying the executable, not something a packaging script should do on anybody's behalf
 - **any signing material**: `codesign.*`, `*.pfx`, `*.p12`, `*.password`, `*.key`. The
   package is assembled from a named list of files so none can reach one today. The check
   exists so that handing a private signing key to a hospital does not depend on nobody

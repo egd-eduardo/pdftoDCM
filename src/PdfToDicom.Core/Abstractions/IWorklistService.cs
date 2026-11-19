@@ -10,10 +10,15 @@ namespace PdfToDicom.Core.Abstractions;
 /// <param name="Entries">Scheduled procedure steps returned, in scheduled order.</param>
 /// <param name="Message">Operator facing summary, including the reason for a failure.</param>
 /// <param name="WasTruncated">
-/// True when the server had more to say than the configured maximum allowed, so the list
-/// is incomplete. Worth showing: an operator who cannot find a patient needs to know the
-/// list was cut rather than that the patient is absent.
+/// True when the server had more to say than this software's own fetch ceiling allowed, so
+/// the list is incomplete. Worth showing: an operator who cannot find a patient needs to
+/// know the list was cut rather than that the patient is absent.
 /// </param>
+/// <remarks>
+/// <see cref="Entries"/> holds everything the query fetched, not one screen of it. It used
+/// to be cut to the configured maximum, which meant an entry could be fetched and discarded
+/// before any page of it was shown. Paging belongs to whoever displays the entries.
+/// </remarks>
 public sealed record WorklistQueryResult(
     bool IsSuccess,
     IReadOnlyList<WorklistEntry> Entries,

@@ -1,4 +1,5 @@
 using System.Globalization;
+using PdfToDicom.Core.Configuration;
 using PdfToDicom.Core.Models;
 using PdfToDicom.Core.Validation;
 
@@ -79,8 +80,31 @@ public sealed class CommandLineOptions
     /// </summary>
     public string WorklistName { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// The scheduled dates to ask for on this query, or null to use the server's setting.
+    /// </summary>
+    /// <remarks>
+    /// The window has had this since an operator could not find an examination from last
+    /// December. The command line needed it for the same reason and more urgently: it is the
+    /// shortest way to establish whether a server returns an old scheduled step at all,
+    /// which is a different question from whether this software then displays it, and the
+    /// two were impossible to separate from the window alone.
+    /// </remarks>
+    public WorklistDateRange? DateRange { get; private set; }
+
     /// <summary>Generate and save the object without transmitting it.</summary>
     public bool NoSend { get; private set; }
+
+    /// <summary>
+    /// Prints every worklist entry found rather than one screenful.
+    /// </summary>
+    /// <remarks>
+    /// The query itself always fetches everything; this decides only how much is printed.
+    /// Without it the output stops at the server's configured page size and says how many
+    /// more there are, because a department's whole schedule is tens of thousands of lines
+    /// and scrolling past them is not reading them.
+    /// </remarks>
+    public bool AllResults { get; private set; }
 
     /// <summary>Print the generated tags before sending.</summary>
     public bool ShowTags { get; private set; }
@@ -182,6 +206,9 @@ public sealed class CommandLineOptions
                     continue;
                 case "no-send":
                     options.NoSend = true;
+                    continue;
+                case "all":
+                    options.AllResults = true;
                     continue;
                 case "show-tags":
                     options.ShowTags = true;
@@ -292,6 +319,25 @@ public sealed class CommandLineOptions
                 break;
             case "worklist":
                 WorklistName = value;
+                break;
+            case "date-range":
+                // Spelled in words rather than taken as the enum's number, because a
+                // hospital's note of a diagnostic command has to be readable a year later.
+                DateRange = value.Trim().ToLowerInvariant() switch
+                {
+                    "today" => WorklistDateRange.Today,
+                    "yesterday" => WorklistDateRange.YesterdayAndToday,
+                    "week" => WorklistDateRange.LastSevenDays,
+                    "any" => WorklistDateRange.AnyDate,
+                    _ => null
+                };
+
+                if (DateRange is null)
+                {
+                    ParseErrors.Add(
+                        $"--date-range '{value}' is not one of today, yesterday, week, any.");
+                }
+
                 break;
             case "pad-patient-id":
                 if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int padWidth) &&
@@ -485,6 +531,9 @@ public sealed class CommandLineOptions
           --config <path>              Use a specific configuration file.
           --out <path>                 Where extract writes the recovered PDF.
           --no-send                    Generate and save without transmitting.
+          --all                        Print every worklist entry, not one page of them.
+          --date-range <range>         Scheduled dates for one worklist query: today,
+                                       yesterday, week, any. Leaves the saved setting alone.
           --show-tags                  Print the generated DICOM tags.
           --verbose                    Include debug entries in the log.
 
@@ -498,6 +547,7 @@ public sealed class CommandLineOptions
           pdftodicom worklist --worklist Radiology
           pdftodicom worklist --patient-id P0000004
           pdftodicom worklist --surname 'SILVA*'
+          pdftodicom worklist --date-range any --all > schedule.txt
           pdftodicom generate --pdf report.pdf --patient-id 12345 --surname Silva \
                               --given-name Maria --dob 1970-05-21 --accession ACC001
           pdftodicom send --pdf report.pdf --patient-id 12345 --surname Silva \

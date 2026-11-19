@@ -30,6 +30,12 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{E2297B0F
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PdfToDicom.Hl7TestServer", "tools\PdfToDicom.Hl7TestServer\PdfToDicom.Hl7TestServer.csproj", "{00F0C202-7476-4D3B-A1EE-FA23E43591DA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WorklistExplorer.Core", "tools\WorklistExplorer\src\WorklistExplorer.Core\WorklistExplorer.Core.csproj", "{67026D5A-95D7-4307-8467-C9F2AAF20971}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WorklistExplorer.Cli", "tools\WorklistExplorer\src\WorklistExplorer.Cli\WorklistExplorer.Cli.csproj", "{31985545-E1D3-4792-87F2-212E374E9463}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WorklistExplorer.Wpf", "tools\WorklistExplorer\src\WorklistExplorer.Wpf\WorklistExplorer.Wpf.csproj", "{BC6FBE91-20E4-4BDF-A11A-93C5731D6695}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -80,6 +86,18 @@ Global
 		{00F0C202-7476-4D3B-A1EE-FA23E43591DA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{00F0C202-7476-4D3B-A1EE-FA23E43591DA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{00F0C202-7476-4D3B-A1EE-FA23E43591DA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{67026D5A-95D7-4307-8467-C9F2AAF20971}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{67026D5A-95D7-4307-8467-C9F2AAF20971}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{67026D5A-95D7-4307-8467-C9F2AAF20971}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{67026D5A-95D7-4307-8467-C9F2AAF20971}.Release|Any CPU.Build.0 = Release|Any CPU
+		{31985545-E1D3-4792-87F2-212E374E9463}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{31985545-E1D3-4792-87F2-212E374E9463}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{31985545-E1D3-4792-87F2-212E374E9463}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{31985545-E1D3-4792-87F2-212E374E9463}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BC6FBE91-20E4-4BDF-A11A-93C5731D6695}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BC6FBE91-20E4-4BDF-A11A-93C5731D6695}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BC6FBE91-20E4-4BDF-A11A-93C5731D6695}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BC6FBE91-20E4-4BDF-A11A-93C5731D6695}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -91,5 +109,8 @@ Global
 		{128C9101-DFD7-4AA6-B062-24FD2E7DD8F9} = {B531294B-5166-4064-A6CF-FADB656D1876}
 		{B5169858-5627-476C-BD26-89BB8138CF1C} = {4E8966A5-8C8F-4FD7-931F-8CC767F8656B}
 		{00F0C202-7476-4D3B-A1EE-FA23E43591DA} = {E2297B0F-4500-496E-A2C3-BE0DD4B110B7}
+		{67026D5A-95D7-4307-8467-C9F2AAF20971} = {E2297B0F-4500-496E-A2C3-BE0DD4B110B7}
+		{31985545-E1D3-4792-87F2-212E374E9463} = {E2297B0F-4500-496E-A2C3-BE0DD4B110B7}
+		{BC6FBE91-20E4-4BDF-A11A-93C5731D6695} = {E2297B0F-4500-496E-A2C3-BE0DD4B110B7}
 	EndGlobalSection
 EndGlobal
