@@ -137,11 +137,16 @@ pdftoDCM/
 │   │
 │   └── PdfToDicom.Cli/              Headless front end for scripted conversion
 │
-├── tests/PdfToDicom.Core.Tests/     265 xUnit tests
+├── tests/                           696 xUnit tests in three projects
 │
 ├── tools/
-│   └── PdfToDicom.TestWorklistServer/   A Modality Worklist SCP for testing only.
-│                                        Never packaged; see section 8a.
+│   ├── PdfToDicom.TestWorklistServer/   A Modality Worklist SCP for testing only.
+│   │                                    Never packaged; see section 8a.
+│   ├── PdfToDicom.Hl7TestServer/        An MLLP receiver for commissioning HL7.
+│   │                                    Never packaged.
+│   └── WorklistExplorer/                A read only worklist diagnostic tool, three
+│                                        projects of its own. Never packaged; see
+│                                        section 8a.
 │
 ├── build/
 │   ├── build.sh                     Cross compiles the Windows binaries from Unix
@@ -736,23 +741,31 @@ records agree, which is the point of having it.
 
 ### The test worklist server
 
-`tools/PdfToDicom.TestWorklistServer` is a Modality Worklist SCP that serves seven
-invented scheduled procedure steps. It exists because a site adopting this feature
-usually has no worklist server it can point a test workstation at: the real one holds
-live patient data and is not somewhere to try new software against.
+`tools/PdfToDicom.TestWorklistServer` is a Modality Worklist SCP that serves invented
+scheduled procedure steps. It exists because a site adopting this feature usually has no
+worklist server it can point a test workstation at: the real one holds live patient data and
+is not somewhere to try new software against.
 
 ```bash
 dotnet run --project tools/PdfToDicom.TestWorklistServer -- --port 1070 --aet TESTWL
 ```
 
-It serves two sets joined. **Seven fixed entries**, always present and chosen to be
+It serves two sets joined. **Nine fixed entries**, always present and chosen to be
 awkward rather than convenient: accented names, a patient with no given name, a different
-modality, a 73 character name whose surname fits, and a 75 character name whose surname
-alone is over the limit. It builds its data sets with `NotValidated()` precisely so it can
+modality, a 73 character name whose surname fits, a 75 character name whose surname alone is
+over the limit, and two whose only awkwardness is their date, one scheduled a year ago and
+one a month ago.
+
+Those last two were added because every entry this server produced was scheduled today,
+which meant a report about an examination from last December could be read about and not
+reproduced. The pool entries are now spread over the preceding year as well, roughly a
+quarter of them today so that asking for today still returns a usable list. `DaysBeforeToday`
+is derived from an entry's position like everything else about it, so a seed still reproduces
+a run exactly. It builds its data sets with `NotValidated()` precisely so it can
 serve names fo-dicom would otherwise refuse to construct, which is the only way to
 exercise the shortening rule against a real association.
 
-**Ten more drawn at random each run** from a pool of five hundred ordinary Portuguese
+**Ten more drawn at random each run**, or as many as asked for, from a pool of five hundred ordinary Portuguese
 names, read from an embedded list that holds each one already split as
 `Family^Given|Sex`. The split is data rather than a heuristic applied at run time, because
 Portuguese names do not split by rule: the last token is the family name often enough to
@@ -788,6 +801,40 @@ test, and the identifiers carry the mark instead.
 **It is never packaged.** The build scripts copy a named list of files into the customer
 package and it is not on that list; `assert_package_is_sound` checks the list rather than
 the folder, so it cannot be added by accident.
+
+### The worklist explorer
+
+`tools/WorklistExplorer` is a read only diagnostic tool, three projects of its own
+(`WorklistExplorer.Core`, `.Cli` and `.Wpf`), in the solution under the `tools` folder. It
+asks a worklist the widest possible question and shows everything that comes back together
+with the exact identifier it sent, attribute by attribute.
+
+It exists because of a question this application cannot answer about itself. A site reported
+an examination scheduled in December 2025 that never appeared, and from inside the
+application there was no way to separate "the server did not send it" from "the server sent
+it and this software did not show it". A second implementation, built from the standard
+rather than from this code, can be pointed at the same server and compared.
+
+Three properties make it safe to run against a live worklist:
+
+- **It cannot change anything.** It adds only `DicomCEchoRequest` and `DicomCFindRequest` to
+  a client, and the whole network surface is two files.
+- **It never writes to the configuration** it imports, which is this application's own
+  `config.json`.
+- **It keeps patient data out of its own log.** The diagnostic log holds the question, the
+  counts and the statuses; patient data goes only to a CSV or a raw folder somebody asked
+  for.
+
+**It references none of this application's projects**, deliberately. A tool that shared
+`PdfToDicom.Core` would inherit the same query builder and the same reading of a response,
+and could therefore only ever agree with the application about the thing being investigated.
+Its own README compares the two queries key by key; they send the same eighteen keys, and the
+four differences are listed there.
+
+**It is never packaged.** It is on the same forbidden list as the two test servers, for a
+different reason: it is not a listener, it is a tool that exports patient data to wherever
+whoever runs it points it. Handing it to a site is a decision to take on purpose, by copying
+the executable, not something a packaging script should do on anybody's behalf.
 
 ---
 

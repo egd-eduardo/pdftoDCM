@@ -18,6 +18,35 @@ dates changed nothing: the identifier was excluding the patient before the date 
 mattered. The boxes now match on part of what was typed, and anything wildcarded by hand is
 left exactly as typed, because the command line documents wildcards and people use them.
 
+**A second implementation of the worklist question, in the repository.**
+`tools/WorklistExplorer` is a read only diagnostic tool, three projects of its own, that asks
+a worklist the widest possible question and shows everything that comes back beside the exact
+identifier it sent. It was written from the standard rather than from this code, and it
+references none of this application's projects on purpose: a tool sharing `PdfToDicom.Core`
+would inherit the same query builder and could only ever agree with the application about the
+thing being investigated.
+
+It is now in `PDF to DICOM.sln` under a `tools` solution folder, so continuous integration
+compiles all three projects, and it is on the same forbidden list as the two test servers. It
+is not a listener; it is on the list because it exports patient data to wherever whoever runs
+it points it, so handing it to a site is a decision to take by copying the executable.
+
+Compiled against fo-dicom 5.2.2, the version this application uses, with no errors and no
+warnings, and run end to end against the test worklist server: 509 responses, 509 rows, none
+discarded, and the step scheduled on 2025-12-04 present with its accents intact. The three
+fo-dicom members its own notes flagged as unverified are correct as written. The window has
+still not been opened by anybody, and its README says so.
+
+Compared key by key with `WorklistService.BuildQuery`, the two send **the same eighteen
+keys**, so a row one sees and the other does not is not explained by a missing key. The four
+differences that remain are in the values, and they are written down in the tool's README:
+the application sends the operator's name and identifier filters where the tool always sends
+them empty; the application trims the modality and station filters where the tool sends them
+exactly as the file holds them; the tool can express an open ended date range and the
+application completes a half open one with today; and the tool builds its datasets
+`NotValidated()` so the string shown is the string sent, which was checked to be cosmetic,
+since fo-dicom accepts a date range in a validated element either way.
+
 **An examination that was fetched and then thrown away.** Reported from the same site after
 the matching fixes below: an examination scheduled in December 2025 still did not appear.
 The query was not the problem this time. The entries were being fetched and discarded,

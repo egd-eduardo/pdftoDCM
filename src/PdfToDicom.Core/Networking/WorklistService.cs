@@ -351,7 +351,7 @@ public sealed class WorklistService : IWorklistService
     /// <summary>
     /// Builds the C-FIND request.
     /// </summary>
-    private DicomCFindRequest BuildQuery(
+    private static DicomCFindRequest BuildQuery(
         WorklistConfiguration configuration,
         string? patientIdFilter,
         string? patientNameFilter,
@@ -416,6 +416,38 @@ public sealed class WorklistService : IWorklistService
         query.AddOrUpdate(new DicomSequence(DicomTag.ScheduledProcedureStepSequence, step));
 
         return request;
+    }
+
+    /// <summary>
+    /// The identifier a query would send, without sending it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Exists so the keys can be asserted. Nothing could see them before: they were built
+    /// inside a private method on the way to an association, so the one thing whose absence
+    /// silently costs a Study Instance UID had no test at all, and a key deleted by accident
+    /// would have been found by a site rather than by a build.
+    /// </para>
+    /// <para>
+    /// Also the only honest way to compare this query with the one in
+    /// <c>tools/WorklistExplorer</c>, which was written from the standard rather than from
+    /// this code and exists to be a second opinion about what a server was asked. Its README
+    /// lists the differences; a test pins the set so that list cannot quietly go out of date.
+    /// </para>
+    /// </remarks>
+    public static DicomDataset BuildQueryIdentifier(
+        WorklistConfiguration configuration,
+        string? patientIdFilter = null,
+        string? patientNameFilter = null,
+        WorklistDateWindow? dateRangeOverride = null,
+        WorklistMatching matching = WorklistMatching.Exact,
+        bool askServerToFilter = true)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        return BuildQuery(
+            configuration, patientIdFilter, patientNameFilter, dateRangeOverride,
+            matching, askServerToFilter).Dataset;
     }
 
     /// <summary>Normalises an optional filter into a matching key.</summary>

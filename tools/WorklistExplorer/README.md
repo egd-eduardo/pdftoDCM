@@ -56,17 +56,48 @@ Success final status, or the ceiling was reached.
   `%LOCALAPPDATA%\WorklistExplorer\logs`. Patient data is only written to CSV files you
   export and to the raw folder you choose.
 
+## How this differs from the application's own worklist query
+
+Compared key by key against `WorklistService.BuildQuery` in `PdfToDicom.Core`. **Both send
+the same eighteen keys**, the same nine top level return keys, the same seven inside one
+`ScheduledProcedureStepSequence` item, the same `SpecificCharacterSet` of `ISO_IR 192`, the
+same SOP class, the same query retrieve level of not applicable, and the same effective
+priority. Nothing is asked for by one and not the other, so a row this tool sees and the
+application does not is not explained by a missing key.
+
+Four differences remain, and each one matters when reading an answer:
+
+| | Application | This tool |
+|---|---|---|
+| `PatientName`, `PatientID` | The operator's text. Contains matching wraps it as `*text*`, and a search that returns nothing is retried with these two emptied and the rows matched locally, ignoring case and accents | Always empty. There is no patient filter, so the question is deliberately the widest one |
+| `Modality`, `ScheduledStationAETitle` | Trimmed before sending | Sent exactly as the file holds them. A stray space in the configuration is therefore sent, which a literally matching server will not match. That is on purpose, since the point is to show what the file would ask, but it is the one case where this tool can find less than the application |
+| `ScheduledProcedureStepStartDate` | Empty for any date, a plain `yyyyMMdd` for one day, `from-to` for a range. Suppressed entirely when a patient ID was typed, so an old examination can be found by number. An explicit range missing one end is completed with today | The same three forms, and additionally an open ended `from-` or `-to`, which the application cannot express |
+| Dataset validation | Left on | `NotValidated()` on both datasets, so the string shown is exactly the string sent |
+
+The last row was checked rather than assumed: fo-dicom 5.2.2 accepts `20251101-20261119` and
+`-20251231` in a validated `DA` element, so the application is not at risk from its own
+ranges and the flag only guarantees that this tool can never alter a value on the way out.
+
 ## Verification status
 
-Built in a Linux sandbox that could not reach NuGet. The Core and console code were compiled
-and exercised (63 checks: dates, query dataset, configuration import and read only access,
-folding, filter, CSV, pager, ceiling, discards, timeouts) against a stand in for the fo-dicom
-types. **Neither project has yet been compiled against the real fo-dicom 5.2.2, and the WPF
-window has not been compiled or run.** On the first Windows build, please check these fo-dicom
-members in particular, since they are the ones most likely to differ:
+Compiled against the real **fo-dicom 5.2.2**, the version `PdfToDicom.Core` uses, with no
+errors and no warnings, and exercised end to end against `PdfToDicom.TestWorklistServer`:
+509 pending responses, 509 rows kept, none discarded, `ISO_IR 192` declared on every
+response, final status Success, and a step scheduled on 2025-12-04 present in the CSV with
+its accents intact.
 
-1. `DefaultTlsInitiator` (namespace `FellowOakDicom.Network.Tls`, property
-   `IgnoreSslPolicyErrors`) and the `DicomClientFactory.Create` overload that takes it; only
-   used when `AcceptAnyTlsCertificate` is true.
-2. `IDicomClient.ClientOptions.AssociationRequestTimeoutInMs`.
-3. `IDicomClient.SendAsync(CancellationToken, DicomClientCancellationMode)`.
+The three fo-dicom members this file previously flagged as unverified are all correct as
+written, confirmed by reflection against the 5.2.2 assembly:
+
+1. `DefaultTlsInitiator` is in `FellowOakDicom.Network.Tls` and has `IgnoreSslPolicyErrors`;
+   `DicomClientFactory.Create(string host, int port, ITlsInitiator tlsInitiator, string callingAe, string calledAe)`
+   exists. **Compile verified only**: no TLS worklist server was available, so the branch has
+   not been exercised.
+2. `IDicomClient.ClientOptions.AssociationRequestTimeoutInMs` exists and is settable.
+3. `IDicomClient.SendAsync(CancellationToken cancellationToken, DicomClientCancellationMode cancellationMode)`
+   exists, and `DicomClientCancellationMode.ImmediatelyReleaseAssociation` is a member.
+
+**The WPF window has still not been compiled or run.** It is now part of
+`PDF to DICOM.sln`, so continuous integration compiles it on its Windows runners, which is
+evidence that it builds and none at all that it opens. Its twenty three event handlers were
+checked against the XAML by hand; nothing else about it has been verified.

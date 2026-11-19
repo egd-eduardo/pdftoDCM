@@ -414,6 +414,7 @@ assert_package_is_sound() {
     # mistake that should depend on nobody ever writing a wildcard.
     local forbidden=("BuildingItYourself" "CodeSigning" "ProtectingAgainstUnauthorisedDistribution"
                      "testworklistserver" "hl7testserver" "mllp-receiver"
+                     "WorklistExplorer"
                      "codesign" ".pfx" ".p12" ".password" ".key")
     local leaked=()
     local secret
