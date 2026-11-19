@@ -72,7 +72,9 @@ IReadOnlyList<SampleWorklist.Item> serving = SampleWorklist.Choose(randomCount, 
 
 Console.WriteLine($"  AE Title : {aeTitle}");
 Console.WriteLine($"  Port     : {port}");
-Console.WriteLine($"  Entries  : {serving.Count}, scheduled for today");
+Console.WriteLine(
+    $"  Entries  : {serving.Count}, scheduled over the past year, " +
+    $"{serving.Count(i => i.DaysBeforeToday == 0)} of them today");
 Console.WriteLine($"             {SampleWorklist.Awkward.Count} fixed, the ones that break something");
 Console.WriteLine($"             {serving.Count - SampleWorklist.Awkward.Count} drawn at random " +
                   $"from {SampleWorklist.Pool.Count}" + (seed is null ? string.Empty : $", seed {seed}"));
@@ -86,16 +88,26 @@ Console.WriteLine("  their accents are what is being tested.");
 Console.WriteLine();
 Console.WriteLine("  Even so, point the application at a test archive and not a live one.");
 Console.WriteLine();
-Console.WriteLine("  Today's list:");
+// Said out loud, because a list in front of somebody who then searches for today and sees
+// a quarter of it needs to explain itself before they conclude the server is broken.
+Console.WriteLine(
+    $"  Serving {serving.Count} entr{(serving.Count == 1 ? "y" : "ies")}, " +
+    $"{serving.Count(i => i.DaysBeforeToday == 0)} of them scheduled today and the rest " +
+    "spread over the preceding year. Ask for every date to see them all.");
+Console.WriteLine();
+Console.WriteLine("  The list, oldest first:");
 
-foreach (SampleWorklist.Item item in serving.OrderBy(i => i.MinutesFromStartOfDay))
+foreach (SampleWorklist.Item item in serving
+    .OrderByDescending(i => i.DaysBeforeToday)
+    .ThenBy(i => i.MinutesFromStartOfDay))
 {
     string name = item.GivenName.Length == 0
         ? item.FamilyName
         : $"{item.FamilyName}, {item.GivenName}";
 
     Console.WriteLine(
-        $"    {TimeSpan.FromMinutes(item.MinutesFromStartOfDay):hh\\:mm}  " +
+        $"    {SampleWorklist.ScheduledDay(item, DateTime.Today):yyyy-MM-dd} " +
+        $"{TimeSpan.FromMinutes(item.MinutesFromStartOfDay):hh\\:mm}  " +
         $"{item.PatientId,-14}  {item.Modality,-2}  {name}");
 }
 

@@ -98,15 +98,17 @@ internal sealed class WorklistProvider : DicomService, IDicomServiceProvider, ID
 
         foreach (SampleWorklist.Item item in SampleWorklist.Items)
         {
+            DateTime scheduled = SampleWorklist.ScheduledDay(item, today);
+
             if (!ModalityMatches(requestedModality, item.Modality)) { continue; }
-            if (!DateMatches(requestedDates, today)) { continue; }
+            if (!DateMatches(requestedDates, scheduled)) { continue; }
             if (!TextMatches(requestedPatientId, item.PatientId)) { continue; }
             if (!TextMatches(requestedName, item.FamilyName)) { continue; }
 
             matched++;
             yield return new DicomCFindResponse(request, DicomStatus.Pending)
             {
-                Dataset = SampleWorklist.ToDataset(item, today)
+                Dataset = SampleWorklist.ToDataset(item, scheduled)
             };
         }
 
@@ -125,10 +127,14 @@ internal sealed class WorklistProvider : DicomService, IDicomServiceProvider, ID
 
     /// <summary>
     /// Handles both forms a date key arrives in: a single day, and a range written as
-    /// "from-to". Everything here is scheduled today, so the question is only whether
-    /// today falls inside what was asked for.
+    /// "from-to".
     /// </summary>
-    private static bool DateMatches(string requested, DateTime today)
+    /// <remarks>
+    /// Asked about one entry's own scheduled day rather than about today. It used to take
+    /// today, because everything this server served was scheduled today, which meant the
+    /// one question a date filter exists to answer could not be asked of it.
+    /// </remarks>
+    private static bool DateMatches(string requested, DateTime scheduled)
     {
         if (string.IsNullOrWhiteSpace(requested))
         {
@@ -136,7 +142,7 @@ internal sealed class WorklistProvider : DicomService, IDicomServiceProvider, ID
         }
 
         string value = requested.Trim();
-        string todayText = today.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
+        string todayText = scheduled.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
 
         if (!value.Contains('-', StringComparison.Ordinal))
         {

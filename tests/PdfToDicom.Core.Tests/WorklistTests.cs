@@ -588,4 +588,104 @@ public sealed class WorklistDateRangeTests
         Assert.Equal("Sofía", entry.GivenName);
         Assert.Equal("GONCALVES", WorklistFolding.Fold(entry.FamilyName));
     }
+
+    // ------------------------------------------------------------------ Paging
+
+    [Fact]
+    public void AnEmptyResultIsOnePageRatherThanNone()
+    {
+        // "Page 1 of 0" is not readable, and a pager that reports zero pages invites a
+        // caller to clamp an index into a page that does not exist.
+        Assert.Equal(1, WorklistPaging.PageCount(0, 500));
+        Assert.Equal((0, 0), WorklistPaging.PageWindow(0, 0, 500));
+        Assert.Equal(0, WorklistPaging.ClampPageIndex(3, 0, 500));
+    }
+
+    [Theory]
+    [InlineData(1, 500, 1)]
+    [InlineData(499, 500, 1)]
+    [InlineData(500, 500, 1)]
+    [InlineData(501, 500, 2)]
+    [InlineData(1000, 500, 2)]
+    [InlineData(1001, 500, 3)]
+    [InlineData(3214, 500, 7)]
+    [InlineData(12000, 200, 60)]
+    public void ThePageCountCoversEveryEntry(int total, int pageSize, int expected)
+    {
+        Assert.Equal(expected, WorklistPaging.PageCount(total, pageSize));
+
+        // The point of the count: the last page reaches the last entry. An off by one here
+        // is a patient nobody can scroll to.
+        (int _, int last) = WorklistPaging.PageWindow(expected - 1, total, pageSize);
+        Assert.Equal(total, last);
+    }
+
+    [Fact]
+    public void ThePageWindowIsNumberedFromOneAndStopsAtTheLastEntry()
+    {
+        Assert.Equal((1, 500), WorklistPaging.PageWindow(0, 3214, 500));
+        Assert.Equal((501, 1000), WorklistPaging.PageWindow(1, 3214, 500));
+        Assert.Equal((3001, 3214), WorklistPaging.PageWindow(6, 3214, 500));
+    }
+
+    [Fact]
+    public void APageIndexFromAnywhereLandsOnAPageThatExists()
+    {
+        // Reachable without anybody intending it: a button left enabled for a moment, or a
+        // second search that found fewer entries than the first.
+        Assert.Equal(0, WorklistPaging.ClampPageIndex(-4, 3214, 500));
+        Assert.Equal(6, WorklistPaging.ClampPageIndex(99, 3214, 500));
+        Assert.Equal(0, WorklistPaging.ClampPageIndex(5, 10, 500));
+    }
+
+    [Fact]
+    public void AUselessPageSizeFallsBackToTheDefaultInsteadOfShowingNothing()
+    {
+        // A configuration file is editable by hand, and a page size of zero would divide a
+        // result into pages holding nothing at all.
+        Assert.Equal(WorklistPaging.DefaultPageSize, WorklistPaging.SanePageSize(0));
+        Assert.Equal(WorklistPaging.DefaultPageSize, WorklistPaging.SanePageSize(-20));
+        Assert.Equal(25, WorklistPaging.SanePageSize(25));
+        Assert.Equal(1, WorklistPaging.PageCount(400, 0));
+        Assert.Equal((1, 500), WorklistPaging.PageWindow(0, 3214, 0));
+    }
+
+    [Fact]
+    public void SkippingReachesTheFirstEntryOfThePage()
+    {
+        Assert.Equal(0, WorklistPaging.Skipped(0, 3214, 500));
+        Assert.Equal(500, WorklistPaging.Skipped(1, 3214, 500));
+        Assert.Equal(3000, WorklistPaging.Skipped(6, 3214, 500));
+
+        // Every entry is reachable by walking the pages, which is the whole promise.
+        var seen = new HashSet<int>();
+
+        for (int page = 0; page < WorklistPaging.PageCount(3214, 500); page++)
+        {
+            int skipped = WorklistPaging.Skipped(page, 3214, 500);
+
+            for (int i = skipped; i < Math.Min(skipped + 500, 3214); i++)
+            {
+                Assert.True(seen.Add(i), $"entry {i} appeared on two pages");
+            }
+        }
+
+        Assert.Equal(3214, seen.Count);
+    }
+
+    [Fact]
+    public void TheFetchCeilingIsFarAboveAPageAndIsNotDerivedFromOne()
+    {
+        // The defect this replaces: the fetch ceiling was ten times the page size, which is
+        // five thousand by default, and entries past it were dropped as they arrived in the
+        // server's own order, before anything was sorted. An examination scheduled a year
+        // ago could be fetched, discarded and never counted while the list looked complete.
+        Assert.True(
+            WorklistService.FetchCeiling >= 50_000,
+            "the ceiling exists to stop a runaway schedule, not to shorten a list");
+
+        Assert.True(
+            WorklistService.FetchCeiling > WorklistPaging.DefaultPageSize * 10,
+            "how much a window shows at once must not decide how much a query may hold");
+    }
 }

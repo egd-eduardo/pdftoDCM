@@ -163,6 +163,7 @@ public sealed class WorklistService : IWorklistService
     {
         var entries = new List<WorklistEntry>();
         bool truncated = false;
+        int received = 0;
 
         try
         {
@@ -177,16 +178,14 @@ public sealed class WorklistService : IWorklistService
             {
                 if (response.Status == DicomStatus.Pending && response.HasDataset)
                 {
-                    // Collected first and cut later, after the sort.
-                    //
-                    // This used to stop at the configured maximum as responses arrived, so a
-                    // wide query kept whichever entries the server happened to send first and
-                    // then sorted those. The list was therefore cut in the server's order and
-                    // presented in date order, which looks like a complete answer and is not:
-                    // the examination somebody was looking for could be absent while the list
-                    // appeared full. The ceiling below still exists, so a server with a
-                    // runaway schedule cannot exhaust this process.
-                    if (entries.Count >= CollectionCeiling(configuration))
+                    received++;
+
+                    // Everything the server sends is kept, up to the ceiling, and nothing is
+                    // cut to the page size. The page size belongs to the window: cutting here
+                    // would mean the entry somebody is looking for can be fetched and thrown
+                    // away before any page of it is ever shown, which is the defect this
+                    // replaces. Whoever displays the entries decides how many to show at once.
+                    if (entries.Count >= FetchCeiling)
                     {
                         truncated = true;
                         return;
@@ -221,12 +220,6 @@ public sealed class WorklistService : IWorklistService
 
             int found = ordered.Count;
 
-            if (ordered.Count > configuration.MaximumResults)
-            {
-                ordered = ordered.Take(configuration.MaximumResults).ToList();
-                truncated = true;
-            }
-
             string criteria = DescribeCriteria(
                 configuration, patientIdFilter, patientNameFilter, dateRangeOverride);
 
@@ -234,10 +227,27 @@ public sealed class WorklistService : IWorklistService
             // "0 scheduled step(s)" cannot distinguish a server that had nothing from a
             // query that asked about one day, which is the question anybody diagnosing this
             // actually has.
+            //
+            // The number the server sent is written down beside the number kept, because
+            // those two differing is the only visible sign that a response arrived and was
+            // not understood. They differed silently for as long as this code existed.
             _logger.Information(
                 $"The worklist returned {found} scheduled step(s) from " +
                 $"{configuration.CalledAeTitle.Trim()}@{configuration.Host.Trim()}:{configuration.Port}. " +
-                $"Asked for {criteria}.");
+                $"Asked for {criteria}." +
+                (received == found
+                    ? string.Empty
+                    : $" The server sent {received} response(s), so {received - found} " +
+                      "carried nothing this software could read; see the warnings above."));
+
+            if (truncated)
+            {
+                _logger.Warning(
+                    $"The query stopped at {FetchCeiling} entries, which is this software's " +
+                    "ceiling rather than the server's answer, so there are scheduled steps " +
+                    "it has not seen. Narrow the dates or the filters to be sure of a " +
+                    "complete answer.");
+            }
 
             return new WorklistQueryResult(
                 true,
@@ -257,16 +267,33 @@ public sealed class WorklistService : IWorklistService
     // ------------------------------------------------------------------ Query
 
     /// <summary>
-    /// How many entries to hold before the sort, whatever the display maximum is.
+    /// The most entries one query will hold, whatever the page size is.
     /// </summary>
     /// <remarks>
-    /// Ten times the configured maximum, and never fewer than a thousand. The display
-    /// maximum exists to keep the window usable; this exists only to stop a server with a
-    /// runaway schedule exhausting memory, so it can be far larger. An entry is a handful of
-    /// short strings, so even the ceiling is a few megabytes.
+    /// <para>
+    /// Fifty thousand, a fixed number rather than a multiple of the page size. It used to be
+    /// ten times the configured maximum, which is five thousand by default, and that number
+    /// was reached by a real department: entries past it were dropped as they arrived, in
+    /// whatever order the server sent them, before anything was sorted. An examination
+    /// scheduled a year ago could therefore be fetched, discarded and never counted, and the
+    /// list still looked complete. Deriving the ceiling from the page size also tied two
+    /// unrelated things together: how much a window shows at once is not how much a query
+    /// may hold.
+    /// </para>
+    /// <para>
+    /// Measured rather than guessed, because a ceiling chosen by feel is how a workstation
+    /// runs out of memory. One hundred thousand entries carrying realistic values, accented
+    /// names, UIDs and descriptions, cost 33.7 MB, which is 353 bytes each. Fifty thousand is
+    /// therefore about 18 MB, which a workstation that renders PDF pages into bitmaps already
+    /// spends several times over. The number is here so the next person can change it on
+    /// purpose.
+    /// </para>
+    /// <para>
+    /// Reaching it is reported, not silently absorbed. An operator who cannot find a patient
+    /// has to be able to tell a cut list from an absent patient.
+    /// </para>
     /// </remarks>
-    private static int CollectionCeiling(WorklistConfiguration configuration) =>
-        Math.Max(1000, configuration.MaximumResults * 10);
+    public const int FetchCeiling = 50_000;
 
     /// <summary>
     /// Describes what was asked for, in words, for the log and for the operator.

@@ -290,6 +290,28 @@ seleciona uma linha por si quando procurou apenas por nome. Veja a lista e escol
 configurou para esse servidor, normalmente hoje, e pode alterá-lo para uma procura sem
 alterar o que quer que seja para amanhã. "Qualquer data" procura em toda a lista de trabalho.
 
+### Ler uma lista longa
+
+**Nada é descartado para a lista caber.** Uma procura que encontra três mil procedimentos
+agendados guarda os três mil e mostra-os quinhentos de cada vez. Abaixo da lista verá
+quantos foram encontrados, em que página está, e **Primeira**, **Anterior**, **Seguinte** e
+**Última** para se mover entre elas. A linha indica, por exemplo, *Página 2 de 7, a mostrar
+501 a 1000 de 3214 encontrados*.
+
+Leia esse total antes de concluir que um doente não está agendado. Uma janela que mostra
+quinhentas linhas e mais nada é a razão pela qual um exame de dezembro passado parecia
+ausente sem o estar: a lista era cortada nas quinhentas e as restantes eram descartadas
+antes de alguém as poder procurar.
+
+Quantas linhas cabem numa página é a definição **Máximo de resultados** na página Worklist
+das Configurações. Passa a significar "quantas de cada vez" em vez de "quantas no total",
+pelo que reduzi-la torna as páginas mais curtas e não perde nada.
+
+Enquanto houver mais do que uma página, clicar no cabeçalho de uma coluna já não reordena a
+lista. Ordenar uma página de três mil linhas reorganizaria o que está à vista e
+apresentá-lo-ia como se fosse a resposta completa. A lista está por ordem de agendamento, da
+mais antiga para a mais recente, e a coluna **Agendado** mostra a data de cada linha.
+
 **Procurar por número de processo ignora as datas por completo.** Escreva o número e toda a
 lista de trabalho é consultada, independentemente do que diga a caixa das datas, porque um
 documento que tem em mãos pertence a um exame que pode ter sido agendado há semanas. Veja a

@@ -5,6 +5,7 @@ using PdfToDicom.Core.Configuration;
 using PdfToDicom.Core.Dicom;
 using PdfToDicom.Core.Importing;
 using PdfToDicom.Core.Models;
+using PdfToDicom.Core.Networking;
 using PdfToDicom.Core.Security;
 using PdfToDicom.Core.Services;
 using PdfToDicom.Core.Validation;
@@ -600,7 +601,9 @@ static async Task<bool> QueryOneWorklistAsync(
         worklist,
         configuration.CallingAeTitle,
         options.Demographics.PatientId,
-        options.Demographics.FamilyName).ConfigureAwait(false);
+        options.Demographics.FamilyName,
+        options.DateRange is null ? null : new WorklistDateWindow(options.DateRange.Value))
+        .ConfigureAwait(false);
 
     Console.WriteLine(result.Message);
 
@@ -609,7 +612,14 @@ static async Task<bool> QueryOneWorklistAsync(
         return false;
     }
 
-    foreach (WorklistEntry entry in result.Entries)
+    // Everything was fetched; this decides only how much is printed. A department's whole
+    // schedule is tens of thousands of lines, and a console that scrolls past them has not
+    // shown them to anybody.
+    int shown = options.AllResults
+        ? result.Entries.Count
+        : Math.Min(result.Entries.Count, Math.Max(1, worklist.MaximumResults));
+
+    foreach (WorklistEntry entry in result.Entries.Take(shown))
     {
         ShortenedPersonName fitted = PersonNameShortener.Fit(entry.FamilyName, entry.GivenName);
 
@@ -635,10 +645,21 @@ static async Task<bool> QueryOneWorklistAsync(
         }
     }
 
+    if (shown < result.Entries.Count)
+    {
+        Console.WriteLine();
+        Console.WriteLine(
+            $"note: {result.Entries.Count} entries were found and {shown} printed. " +
+            "Add --all to print the rest, or narrow the dates or the filters.");
+    }
+
     if (result.WasTruncated)
     {
         Console.WriteLine();
-        Console.WriteLine($"note: the server had more to return than the configured maximum of {worklist.MaximumResults}.");
+        Console.WriteLine(
+            $"note: the query stopped at {WorklistService.FetchCeiling} entries, which is " +
+            "this software's ceiling and not the server's answer, so there are scheduled " +
+            "steps it has not seen.");
     }
 
     return true;
