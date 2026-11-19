@@ -1,5 +1,7 @@
 using System.Text.Json.Serialization;
 
+using PdfToDicom.Core.Abstractions;
+
 namespace PdfToDicom.Core.Configuration;
 
 /// <summary>
@@ -159,17 +161,37 @@ public sealed class WorklistConfiguration
     /// sent at all.
     /// </summary>
     /// <param name="today">Today's date, injected so the behaviour can be tested.</param>
-    public (DateTime From, DateTime To)? ResolveDates(DateTime today)
+    public (DateTime From, DateTime To)? ResolveDates(DateTime today) =>
+        Resolve(today, DateRange, ExplicitFrom, ExplicitTo);
+
+    /// <summary>
+    /// Resolves a range asked for on one query instead of the saved one.
+    /// </summary>
+    /// <remarks>
+    /// The saved setting is left alone. Widening the dates to find one old examination is
+    /// not a decision about how this workstation should behave tomorrow, and it would
+    /// otherwise mean opening a page behind the settings password to make a change nobody
+    /// wanted to keep.
+    /// </remarks>
+    public (DateTime From, DateTime To)? ResolveDates(DateTime today, WorklistDateWindow window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        return Resolve(today, window.Range, window.From, window.To);
+    }
+
+    private static (DateTime From, DateTime To)? Resolve(
+        DateTime today, WorklistDateRange range, DateTime? explicitFrom, DateTime? explicitTo)
     {
         DateTime day = today.Date;
 
-        return DateRange switch
+        return range switch
         {
             WorklistDateRange.Today => (day, day),
             WorklistDateRange.YesterdayAndToday => (day.AddDays(-1), day),
             WorklistDateRange.LastSevenDays => (day.AddDays(-6), day),
             WorklistDateRange.AnyDate => null,
-            WorklistDateRange.Explicit => ResolveExplicit(day),
+            WorklistDateRange.Explicit => ResolveExplicit(day, explicitFrom, explicitTo),
             _ => (day, day)
         };
     }
@@ -178,10 +200,11 @@ public sealed class WorklistConfiguration
     /// Falls back to today for either end of an explicit range that was left unset, and
     /// swaps the ends if they were entered the wrong way round.
     /// </summary>
-    private (DateTime From, DateTime To) ResolveExplicit(DateTime today)
+    private static (DateTime From, DateTime To) ResolveExplicit(
+        DateTime today, DateTime? explicitFrom, DateTime? explicitTo)
     {
-        DateTime from = (ExplicitFrom ?? today).Date;
-        DateTime to = (ExplicitTo ?? today).Date;
+        DateTime from = (explicitFrom ?? today).Date;
+        DateTime to = (explicitTo ?? today).Date;
 
         return from <= to ? (from, to) : (to, from);
     }

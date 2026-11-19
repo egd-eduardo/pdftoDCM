@@ -76,10 +76,91 @@ public sealed class WorklistService : IWorklistService
         string callingAeTitle,
         string? patientIdFilter = null,
         string? patientNameFilter = null,
+        WorklistDateWindow? dateRangeOverride = null,
+        WorklistMatching matching = WorklistMatching.Exact,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
+        WorklistQueryResult result = await FindAsync(
+                configuration, callingAeTitle, patientIdFilter, patientNameFilter,
+                dateRangeOverride, matching, askServerToFilter: true, cancellationToken)
+            .ConfigureAwait(false);
+
+        bool filtersWereGiven =
+            WorklistMatch.IsPresent(patientIdFilter) || WorklistMatch.IsPresent(patientNameFilter);
+
+        if (matching != WorklistMatching.Forgiving || !filtersWereGiven
+            || !result.IsSuccess || result.Entries.Count > 0)
+        {
+            return result;
+        }
+
+        // Nothing matched, so ask again without handing the server the names at all, and
+        // decide here.
+        //
+        // Two passes rather than one, and the strict pass first. The server is better at
+        // this than we are: it filters before anything crosses the network, and on a busy
+        // department that is the difference between a query and a download. The second pass
+        // only happens when the first found nothing, which is exactly the case an operator
+        // complains about, and exactly the case where the cost is worth paying. Folding on
+        // every search would make every search expensive to spare the rare one.
+        _logger.Information(
+            "The worklist matched nothing with the server's own matching, so the same query " +
+            "is being made without the name filters and matched here, ignoring case and accents.");
+
+        WorklistQueryResult broad = await FindAsync(
+                configuration, callingAeTitle, patientIdFilter, patientNameFilter,
+                dateRangeOverride, matching, askServerToFilter: false, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!broad.IsSuccess)
+        {
+            return broad;
+        }
+
+        // The entries are the server's own, unaltered. Folding decided which to keep and
+        // nothing else: the spelling that reaches the DICOM object is the worklist's.
+        List<WorklistEntry> kept = broad.Entries
+            .Where(e => WorklistFolding.Contains(e.PatientId, patientIdFilter)
+                     && WorklistFolding.Contains(FullName(e), patientNameFilter))
+            .ToList();
+
+        string criteria = DescribeCriteria(
+            configuration, patientIdFilter, patientNameFilter, dateRangeOverride);
+
+        _logger.Information(
+            $"Matching here rather than at the server kept {kept.Count} of {broad.Entries.Count} " +
+            $"scheduled step(s). Asked for {criteria}, ignoring case and accents.");
+
+        return new WorklistQueryResult(
+            kept.Count > 0,
+            kept,
+            kept.Count == 0
+                ? WorklistMessages.Nothing(criteria)
+                : WorklistMessages.Found(kept.Count, criteria),
+            broad.WasTruncated);
+    }
+
+    /// <summary>The whole of a name, for matching a surname typed on its own.</summary>
+    private static string FullName(WorklistEntry entry) =>
+        $"{entry.FamilyName} {entry.GivenName}".Trim();
+
+    /// <summary>Runs one C-FIND.</summary>
+    /// <param name="askServerToFilter">
+    /// Whether the two name filters go into the query. False on the forgiving second pass,
+    /// where they are applied here instead.
+    /// </param>
+    private async Task<WorklistQueryResult> FindAsync(
+        WorklistConfiguration configuration,
+        string callingAeTitle,
+        string? patientIdFilter,
+        string? patientNameFilter,
+        WorklistDateWindow? dateRangeOverride,
+        WorklistMatching matching,
+        bool askServerToFilter,
+        CancellationToken cancellationToken)
+    {
         var entries = new List<WorklistEntry>();
         bool truncated = false;
 
@@ -87,14 +168,25 @@ public sealed class WorklistService : IWorklistService
         {
             IDicomClient client = CreateClient(configuration, ResolveCallingAe(configuration, callingAeTitle));
 
-            DicomCFindRequest request = BuildQuery(configuration, patientIdFilter, patientNameFilter);
+            DicomCFindRequest request = BuildQuery(
+                configuration, patientIdFilter, patientNameFilter, dateRangeOverride,
+                matching, askServerToFilter);
             DicomStatus? finalStatus = null;
 
             request.OnResponseReceived += (_, response) =>
             {
                 if (response.Status == DicomStatus.Pending && response.HasDataset)
                 {
-                    if (entries.Count >= configuration.MaximumResults)
+                    // Collected first and cut later, after the sort.
+                    //
+                    // This used to stop at the configured maximum as responses arrived, so a
+                    // wide query kept whichever entries the server happened to send first and
+                    // then sorted those. The list was therefore cut in the server's order and
+                    // presented in date order, which looks like a complete answer and is not:
+                    // the examination somebody was looking for could be absent while the list
+                    // appeared full. The ceiling below still exists, so a server with a
+                    // runaway schedule cannot exhaust this process.
+                    if (entries.Count >= CollectionCeiling(configuration))
                     {
                         truncated = true;
                         return;
@@ -127,16 +219,32 @@ public sealed class WorklistService : IWorklistService
                 .ThenBy(e => e.FamilyName, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
 
+            int found = ordered.Count;
+
+            if (ordered.Count > configuration.MaximumResults)
+            {
+                ordered = ordered.Take(configuration.MaximumResults).ToList();
+                truncated = true;
+            }
+
+            string criteria = DescribeCriteria(
+                configuration, patientIdFilter, patientNameFilter, dateRangeOverride);
+
+            // The criteria are written down, not just the count. Without them a log saying
+            // "0 scheduled step(s)" cannot distinguish a server that had nothing from a
+            // query that asked about one day, which is the question anybody diagnosing this
+            // actually has.
             _logger.Information(
-                $"The worklist returned {ordered.Count} scheduled step(s) from " +
-                $"{configuration.CalledAeTitle.Trim()}@{configuration.Host.Trim()}:{configuration.Port}.");
+                $"The worklist returned {found} scheduled step(s) from " +
+                $"{configuration.CalledAeTitle.Trim()}@{configuration.Host.Trim()}:{configuration.Port}. " +
+                $"Asked for {criteria}.");
 
             return new WorklistQueryResult(
                 true,
                 ordered,
                 ordered.Count == 0
-                    ? "The worklist returned no scheduled procedures for this query."
-                    : $"{ordered.Count} scheduled procedure(s) found.",
+                    ? WorklistMessages.Nothing(criteria)
+                    : WorklistMessages.Found(ordered.Count, criteria),
                 truncated);
         }
         catch (Exception ex)
@@ -149,12 +257,80 @@ public sealed class WorklistService : IWorklistService
     // ------------------------------------------------------------------ Query
 
     /// <summary>
+    /// How many entries to hold before the sort, whatever the display maximum is.
+    /// </summary>
+    /// <remarks>
+    /// Ten times the configured maximum, and never fewer than a thousand. The display
+    /// maximum exists to keep the window usable; this exists only to stop a server with a
+    /// runaway schedule exhausting memory, so it can be far larger. An entry is a handful of
+    /// short strings, so even the ceiling is a few megabytes.
+    /// </remarks>
+    private static int CollectionCeiling(WorklistConfiguration configuration) =>
+        Math.Max(1000, configuration.MaximumResults * 10);
+
+    /// <summary>
+    /// Describes what was asked for, in words, for the log and for the operator.
+    /// </summary>
+    private static string DescribeCriteria(
+        WorklistConfiguration configuration,
+        string? patientIdFilter,
+        string? patientNameFilter,
+        WorklistDateWindow? dateRangeOverride)
+    {
+        var parts = new List<string>();
+
+        if (WorklistMatch.IsPresent(patientIdFilter))
+        {
+            parts.Add($"patient ID '{patientIdFilter!.Trim()}'");
+        }
+
+        if (WorklistMatch.IsPresent(patientNameFilter))
+        {
+            parts.Add($"name '{patientNameFilter!.Trim()}'");
+        }
+
+        parts.Add(DescribeDates(configuration, patientIdFilter, dateRangeOverride));
+
+        if (!string.IsNullOrWhiteSpace(configuration.Modality))
+        {
+            // Named because a modality left over from an earlier configuration silently
+            // excludes everything else, and nothing on screen says it is set.
+            parts.Add($"modality '{configuration.Modality.Trim()}'");
+        }
+
+        if (!string.IsNullOrWhiteSpace(configuration.ScheduledStationAeTitle))
+        {
+            parts.Add($"scheduled station '{configuration.ScheduledStationAeTitle.Trim()}'");
+        }
+
+        return string.Join(", ", parts);
+    }
+
+    private static string DescribeDates(
+        WorklistConfiguration configuration,
+        string? patientIdFilter,
+        WorklistDateWindow? dateRangeOverride)
+    {
+        if (WorklistMatch.IsPresent(patientIdFilter))
+        {
+            return "any date, because a patient ID was given";
+        }
+
+        string range = FormatDateRange(configuration, dateRangeOverride);
+
+        return range.Length == 0 ? "any date" : $"dates {range}";
+    }
+
+    /// <summary>
     /// Builds the C-FIND request.
     /// </summary>
     private DicomCFindRequest BuildQuery(
         WorklistConfiguration configuration,
         string? patientIdFilter,
-        string? patientNameFilter)
+        string? patientNameFilter,
+        WorklistDateWindow? dateRangeOverride,
+        WorklistMatching matching = WorklistMatching.Exact,
+        bool askServerToFilter = true)
     {
         var request = new DicomCFindRequest(
             DicomUID.ModalityWorklistInformationModelFind,
@@ -169,8 +345,16 @@ public sealed class WorklistService : IWorklistService
         query.AddOrUpdate(DicomTag.SpecificCharacterSet, DicomConstants.Utf8CharacterSet);
 
         // Return keys: sent empty so the server matches anything and reports the value.
-        query.AddOrUpdate(DicomTag.PatientName, Match(patientNameFilter));
-        query.AddOrUpdate(DicomTag.PatientID, Match(patientIdFilter));
+        //
+        // The two name keys are empty on the forgiving second pass, where matching happens
+        // on the answers instead. Sending them and then matching again here would ask the
+        // server to exclude the very rows the second pass exists to find.
+        query.AddOrUpdate(
+            DicomTag.PatientName,
+            askServerToFilter ? MatchKey(patientNameFilter, matching) : string.Empty);
+        query.AddOrUpdate(
+            DicomTag.PatientID,
+            askServerToFilter ? MatchKey(patientIdFilter, matching) : string.Empty);
         query.AddOrUpdate(DicomTag.PatientBirthDate, string.Empty);
         query.AddOrUpdate(DicomTag.PatientSex, string.Empty);
         query.AddOrUpdate(DicomTag.AccessionNumber, string.Empty);
@@ -182,7 +366,21 @@ public sealed class WorklistService : IWorklistService
         var step = new DicomDataset();
         step.AddOrUpdate(DicomTag.Modality, (configuration.Modality ?? string.Empty).Trim());
         step.AddOrUpdate(DicomTag.ScheduledStationAETitle, (configuration.ScheduledStationAeTitle ?? string.Empty).Trim());
-        step.AddOrUpdate(DicomTag.ScheduledProcedureStepStartDate, FormatDateRange(configuration));
+        // A patient identifier overrides the date entirely.
+        //
+        // Asking "where is this patient's examination" and "what is scheduled today" at the
+        // same time answers neither. An operator looking up one identifier has a document in
+        // their hand for that patient, and the examination it belongs to is as likely to be
+        // last month's as today's; a date restriction turns that search into a question
+        // nobody meant to ask, and the result is an empty list that reads as "no such
+        // patient". The scheduled date is a column in the list, so an operator who gets
+        // several can still see which is which, and what was asked for is said on screen and
+        // written to the log rather than being inferred.
+        step.AddOrUpdate(
+            DicomTag.ScheduledProcedureStepStartDate,
+            WorklistMatch.IsPresent(patientIdFilter)
+                ? string.Empty
+                : FormatDateRange(configuration, dateRangeOverride));
         step.AddOrUpdate(DicomTag.ScheduledProcedureStepStartTime, string.Empty);
         step.AddOrUpdate(DicomTag.ScheduledProcedureStepDescription, string.Empty);
         step.AddOrUpdate(DicomTag.ScheduledProcedureStepID, string.Empty);
@@ -197,12 +395,30 @@ public sealed class WorklistService : IWorklistService
     private static string Match(string? filter) => (filter ?? string.Empty).Trim();
 
     /// <summary>
+    /// The key sent to the server for one filter, according to the matching asked for.
+    /// </summary>
+    /// <remarks>
+    /// Forgiving matching still wraps the text for the server's own pass, because a server
+    /// that can answer the question is faster than fetching everything and deciding here.
+    /// The wrapping used to live in the worklist view model, which meant the command line
+    /// and the window disagreed about what a filter meant with nothing saying so; both now
+    /// state which they want.
+    /// </remarks>
+    private static string MatchKey(string? filter, WorklistMatching matching) =>
+        matching == WorklistMatching.Forgiving
+            ? WorklistMatch.Contains(filter)
+            : Match(filter);
+
+    /// <summary>
     /// Formats the configured date range the way DICOM range matching expects, or an empty
     /// value when every date should match.
     /// </summary>
-    private static string FormatDateRange(WorklistConfiguration configuration)
+    private static string FormatDateRange(
+        WorklistConfiguration configuration, WorklistDateWindow? dateRangeOverride)
     {
-        (DateTime From, DateTime To)? range = configuration.ResolveDates(DateTime.Today);
+        (DateTime From, DateTime To)? range = dateRangeOverride is null
+            ? configuration.ResolveDates(DateTime.Today)
+            : configuration.ResolveDates(DateTime.Today, dateRangeOverride);
 
         if (range is null)
         {

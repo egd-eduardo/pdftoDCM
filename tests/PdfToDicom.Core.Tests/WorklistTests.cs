@@ -1,4 +1,7 @@
+using PdfToDicom.Core.Abstractions;
 using PdfToDicom.Core.Configuration;
+using PdfToDicom.Core.Models;
+using PdfToDicom.Core.Networking;
 using PdfToDicom.Core.Dicom;
 using PdfToDicom.Core.Security;
 using PdfToDicom.Core.Validation;
@@ -404,5 +407,185 @@ public sealed class WorklistDateRangeTests
         var configuration = new WorklistConfiguration { DateRange = WorklistDateRange.Explicit };
 
         Assert.Equal((Monday, Monday), configuration.ResolveDates(Monday));
+    }
+
+    // ------------------------------------------------- Finding an older examination
+
+    [Fact]
+    public void TypingASurnameMatchesAPatientWhoAlsoHasAGivenName()
+    {
+        // The defect this covers, reported from a site. The box is labelled "Surname
+        // contains" and the typed text was sent as an exact key, so "Silva" was asked to
+        // match the whole of Patient's Name. A record of "Silva^Maria" does not match that,
+        // which is every record with a given name in it, so the box found nothing and the
+        // worklist looked broken rather than strict.
+        Assert.Equal("*Silva*", WorklistMatch.Contains("Silva"));
+        Assert.Equal("*12345*", WorklistMatch.Contains(" 12345 "));
+    }
+
+    [Fact]
+    public void AWildcardSomebodyTypedIsLeftExactlyAsTyped()
+    {
+        // The command line documents wildcards and people use them. Wrapping "Silva*" into
+        // "*Silva**" would be rude, and on some servers slower.
+        Assert.Equal("Silva*", WorklistMatch.Contains("Silva*"));
+        Assert.Equal("1?3", WorklistMatch.Contains("1?3"));
+    }
+
+    [Fact]
+    public void AnEmptyBoxStaysEmptyAndMatchesEverything()
+    {
+        // Empty is universal matching, which is "every value". Turning it into "**" would
+        // ask the server to match the values that exist, excluding the ones that are absent.
+        Assert.Equal(string.Empty, WorklistMatch.Contains(null));
+        Assert.Equal(string.Empty, WorklistMatch.Contains("   "));
+        Assert.False(WorklistMatch.IsPresent("  "));
+        Assert.True(WorklistMatch.IsPresent("12345"));
+    }
+
+    [Fact]
+    public void AQueryForOneDayCanBeWidenedWithoutChangingTheSavedSetting()
+    {
+        // Looking up one old examination is not a decision about how this workstation should
+        // behave tomorrow, and the saved setting is behind the settings password.
+        var configuration = new WorklistConfiguration { DateRange = WorklistDateRange.Today };
+
+        Assert.Equal((Monday, Monday), configuration.ResolveDates(Monday));
+
+        Assert.Null(configuration.ResolveDates(
+            Monday, new WorklistDateWindow(WorklistDateRange.AnyDate)));
+
+        Assert.Equal(
+            (Monday.AddDays(-30), Monday),
+            configuration.ResolveDates(
+                Monday,
+                new WorklistDateWindow(
+                    WorklistDateRange.Explicit, Monday.AddDays(-30), Monday)));
+
+        // And the saved setting is untouched by any of it.
+        Assert.Equal(WorklistDateRange.Today, configuration.DateRange);
+        Assert.Equal((Monday, Monday), configuration.ResolveDates(Monday));
+    }
+
+    [Fact]
+    public void AnOverriddenExplicitRangeEnteredBackwardsIsStillAcceptedTheRightWayRound()
+    {
+        var configuration = new WorklistConfiguration { DateRange = WorklistDateRange.Today };
+
+        Assert.Equal(
+            (Monday.AddDays(-7), Monday),
+            configuration.ResolveDates(
+                Monday,
+                new WorklistDateWindow(
+                    WorklistDateRange.Explicit, Monday, Monday.AddDays(-7))));
+    }
+
+    // ------------------------------------------------- The phrases the script greps for
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(7)]
+    public void TheFoundMessageKeepsTheExactPhraseTheVerificationScriptLooksFor(int count)
+    {
+        // build/verify-against-dcmtk.sh decides whether three of its checks passed by
+        // looking for this substring in the command line output. Rewording it once turned
+        // five passing checks red while the behaviour underneath was never at fault, so the
+        // phrase is pinned here and a rewording fails in a second rather than in four
+        // minutes of CI.
+        string message = WorklistMessages.Found(count, "dates 20261119");
+
+        Assert.Contains($"{count} scheduled procedure(s) found.", message, StringComparison.Ordinal);
+
+        // And the criteria still arrive, as a second sentence.
+        Assert.Contains("Asked for dates 20261119", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheEmptyMessageKeepsTheExactPhraseTheVerificationScriptLooksFor()
+    {
+        string message = WorklistMessages.Nothing("dates 20200101-20200131");
+
+        Assert.Contains("no scheduled procedures", message, StringComparison.Ordinal);
+        Assert.Contains("Asked for dates 20200101-20200131", message, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------- Finding a name whatever its accents
+
+    [Theory]
+    [InlineData("Goncalves", "Gonçalves")]
+    [InlineData("goncalves", "GONÇALVES")]
+    [InlineData("GONCALVES", "Gonçalves")]
+    [InlineData("Sofia", "Sofía")]
+    [InlineData("Joao", "João")]
+    [InlineData("Mendonca", "Mendonça")]
+    [InlineData("Simoes", "Simões")]
+    [InlineData("Agueda", "Águeda")]
+    public void APortugueseNameIsFoundWhateverTheAccentsAndTheCase(string typed, string onTheWorklist)
+    {
+        // The requirement, in the author's words: looking up has to find any entry, so a
+        // desk that cannot type ç finds the patient anyway. DICOM cannot express this at
+        // all, which is why it is decided on the answers rather than in the query.
+        Assert.True(WorklistFolding.Contains(onTheWorklist, typed));
+    }
+
+    [Theory]
+    [InlineData("Lukasiewicz", "Łukasiewicz")]
+    [InlineData("Osterg", "Østergaard")]
+    [InlineData("Strauss", "Strauß")]
+    public void ALetterThatCarriesItsMarkInsideItselfIsFoldedToo(string typed, string onTheWorklist)
+    {
+        // Decomposition turns é into e and an accent, and does nothing for these: the
+        // stroke in Ł and the slash in Ø are part of the letter.
+        Assert.True(WorklistFolding.Contains(onTheWorklist, typed));
+    }
+
+    [Fact]
+    public void FoldingFindsPartOfANameRatherThanTheWholeOfIt()
+    {
+        // The boxes say "contains", and a surname is one component of Patient's Name, so an
+        // operator typing a family name is looking inside a value that holds a given name
+        // as well.
+        Assert.True(WorklistFolding.Contains("Gonçalves Maria", "alves"));
+        Assert.True(WorklistFolding.Contains("Gonçalves Maria", "MARIA"));
+        Assert.False(WorklistFolding.Contains("Gonçalves Maria", "Silva"));
+    }
+
+    [Fact]
+    public void AnEmptyFilterMatchesEverythingRatherThanNothing()
+    {
+        Assert.True(WorklistFolding.Contains("Gonçalves", null));
+        Assert.True(WorklistFolding.Contains("Gonçalves", "   "));
+        Assert.True(WorklistFolding.Contains(null, null));
+        Assert.False(WorklistFolding.Contains(null, "Silva"));
+    }
+
+    [Fact]
+    public void FoldingIsNotAffectedByTheMachinesOwnLanguage()
+    {
+        // Invariant upper casing, deliberately. A Turkish workstation upper cases a dotless
+        // i differently, and finding a patient should not depend on where the machine is.
+        Assert.Equal("ISIK", WorklistFolding.Fold("ışık"));
+        Assert.Equal("ISIK", WorklistFolding.Fold("IŞIK"));
+    }
+
+    [Fact]
+    public void FoldingIsForComparingAndTheWorklistsOwnSpellingIsWhatIsKept()
+    {
+        // The other half of the requirement, and the half that matters clinically: the
+        // worklist is the authority on how a patient's name is written, so what reaches the
+        // DICOM object is its spelling and not the folded form used to find it.
+        var entry = new WorklistEntry
+        {
+            PatientId = "P0000042",
+            FamilyName = "Gonçalves",
+            GivenName = "Sofía"
+        };
+
+        Assert.True(WorklistFolding.Contains($"{entry.FamilyName} {entry.GivenName}", "goncalves sofia"));
+
+        // Nothing in the folding reaches back into the entry.
+        Assert.Equal("Gonçalves", entry.FamilyName);
+        Assert.Equal("Sofía", entry.GivenName);
+        Assert.Equal("GONCALVES", WorklistFolding.Fold(entry.FamilyName));
     }
 }

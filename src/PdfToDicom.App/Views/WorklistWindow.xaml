@@ -88,6 +88,43 @@
                         VerticalAlignment="Bottom" />
                 </Grid>
 
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="{loc:Localize Worklist.DateRange}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <ComboBox ItemsSource="{Binding DateRanges}"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding SelectedDateRange}" DisplayMemberPath="Display"
+                                  Style="{StaticResource InputComboBoxStyle}"
+                                  IsEnabled="{Binding IsNotBusy}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2"
+                                Visibility="{Binding ShowsExplicitDates, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="{loc:Localize Settings.Worklist.From}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <DatePicker SelectedDate="{Binding ExplicitFrom}" MinHeight="36"
+                                    IsEnabled="{Binding IsNotBusy}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="4"
+                                Visibility="{Binding ShowsExplicitDates, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="{loc:Localize Settings.Worklist.To}" Style="{StaticResource FieldLabelTextStyle}" />
+                        <DatePicker SelectedDate="{Binding ExplicitTo}" MinHeight="36"
+                                    IsEnabled="{Binding IsNotBusy}" />
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock Text="{loc:Localize Worklist.DateRangeHint}"
+                           Style="{StaticResource CaptionTextStyle}"
+                           TextWrapping="Wrap" Margin="0,8,0,0" />
+
                 <TextBlock Text="{loc:Localize Worklist.PatientIdHint}"
                            Style="{StaticResource CaptionTextStyle}"
                            TextWrapping="Wrap" Margin="0,10,0,0" />

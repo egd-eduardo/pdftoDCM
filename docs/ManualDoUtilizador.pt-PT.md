@@ -270,6 +270,32 @@ processo contém** e prima **Procurar**. Se houver exatamente um procedimento ag
 corresponda, é selecionado automaticamente e basta premir **Utilizar este doente**. Se o
 doente tiver vários procedimentos agendados, aparecem todos e escolhe o correto.
 
+### Procurar um exame mais antigo
+
+As duas caixas procuram **parte** do que escreve, pelo que "Silva" encontra Silva e Silva
+Santos, e parte de um número de processo encontra todos os números que o contenham.
+
+**Maiúsculas e acentos são ignorados.** Escrever `goncalves` encontra GONÇALVES, `JOAO`
+encontra João e `silva` encontra SILVA. Escreva o nome pela via mais fácil, com o que o
+teclado lhe der. O que fica arquivado com o documento nunca é o que escreveu: é o nome
+exatamente como a worklist o escreve, acentos incluídos, pelo que GONÇALVES, JOÃO MIGUEL
+chega ao arquivo com a cedilha e o til. As caixas servem para encontrar a linha; é a linha
+que decide o registo.
+
+Há uma consequência que vale a pena conhecer: como `goncalves` e `Gonçalves` passam a contar
+como o mesmo nome, uma procura pode encontrar mais linhas do que antes, e a janela já não
+seleciona uma linha por si quando procurou apenas por nome. Veja a lista e escolha.
+
+**Datas agendadas** decide que dias a procura abrange. Abre a mostrar o que a informática
+configurou para esse servidor, normalmente hoje, e pode alterá-lo para uma procura sem
+alterar o que quer que seja para amanhã. "Qualquer data" procura em toda a lista de trabalho.
+
+**Procurar por número de processo ignora as datas por completo.** Escreva o número e toda a
+lista de trabalho é consultada, independentemente do que diga a caixa das datas, porque um
+documento que tem em mãos pertence a um exame que pode ter sido agendado há semanas. Veja a
+coluna **Agendado** antes de escolher uma linha: se um doente tiver mais do que um exame, é
+essa coluna que lhe diz qual é qual.
+
 ### Escolher a lista de trabalho
 
 **Se o hospital tiver mais do que uma lista de trabalho**, por exemplo uma para radiologia
@@ -313,10 +339,10 @@ nunca misturado.
 
 | O que vê | O que normalmente significa |
 |---|---|
-| *A lista de trabalho não devolveu procedimentos agendados para esta consulta* | O doente não está agendado para hoje. Peça ao departamento de informática para alargar o intervalo de datas, ou preencha o formulário à mão. |
+| *A lista de trabalho não devolveu procedimentos agendados para esta consulta* | Leia a parte **Asked for** que vem a seguir: indica as datas e os filtros utilizados na procura. Se indicar um intervalo de datas, mude **Datas agendadas** para "Qualquer data" e procure de novo. Se indicar uma modalidade que não esperava, a informática configurou uma nesse servidor. |
 | *não foi possível contactar* | O servidor da lista de trabalho está indisponível, ou o endereço está errado. Preencha o formulário à mão e avise a informática. |
 | *rejeitou a ligação* | Esta estação de trabalho não está registada no servidor da lista de trabalho. A informática tem de o fazer uma vez. |
-| *Existiam mais resultados do que os apresentados* | Restrinja a procura com um apelido ou um número de processo. |
+| *Existiam mais resultados do que os apresentados* | Restrinja a procura com um apelido ou um número de processo. A lista é cortada depois de ordenada por data, pelo que vê os mais antigos; o que procura pode vir depois. |
 
 Pode sempre escrever os dados. A lista de trabalho é uma comodidade, nunca uma obrigação.
 
