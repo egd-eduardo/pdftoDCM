@@ -366,16 +366,18 @@ public sealed class WorklistViewModel : ObservableObject
 
             foreach (WorklistConfiguration server in servers)
             {
-                // Wrapped here rather than in the service, because this is where the
-                // promise is made: the two boxes are labelled "contains". The command line
-                // documents wildcards and passes what was typed, which is a different
-                // promise and still kept.
+                // Forgiving, because the boxes say "contains" and because a worklist
+                // holding Gonçalves has to be findable by somebody typing Goncalves. The
+                // text goes across as typed and the service decides how to match it; it
+                // used to be wrapped here, which left the window and the command line
+                // meaning different things by the same argument.
                 WorklistQueryResult result = await _services.Worklist.QueryAsync(
                     server,
                     configuration.CallingAeTitle,
-                    WorklistMatch.Contains(PatientIdFilter),
-                    WorklistMatch.Contains(SurnameFilter),
-                    SelectedDateWindow(server)).ConfigureAwait(true);
+                    PatientIdFilter,
+                    SurnameFilter,
+                    SelectedDateWindow(server),
+                    WorklistMatching.Forgiving).ConfigureAwait(true);
 
                 foreach (WorklistEntry entry in result.Entries)
                 {

@@ -1,5 +1,6 @@
 using PdfToDicom.Core.Abstractions;
 using PdfToDicom.Core.Configuration;
+using PdfToDicom.Core.Models;
 using PdfToDicom.Core.Networking;
 using PdfToDicom.Core.Dicom;
 using PdfToDicom.Core.Security;
@@ -506,5 +507,85 @@ public sealed class WorklistDateRangeTests
 
         Assert.Contains("no scheduled procedures", message, StringComparison.Ordinal);
         Assert.Contains("Asked for dates 20200101-20200131", message, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------- Finding a name whatever its accents
+
+    [Theory]
+    [InlineData("Goncalves", "Gonçalves")]
+    [InlineData("goncalves", "GONÇALVES")]
+    [InlineData("GONCALVES", "Gonçalves")]
+    [InlineData("Sofia", "Sofía")]
+    [InlineData("Joao", "João")]
+    [InlineData("Mendonca", "Mendonça")]
+    [InlineData("Simoes", "Simões")]
+    [InlineData("Agueda", "Águeda")]
+    public void APortugueseNameIsFoundWhateverTheAccentsAndTheCase(string typed, string onTheWorklist)
+    {
+        // The requirement, in the author's words: looking up has to find any entry, so a
+        // desk that cannot type ç finds the patient anyway. DICOM cannot express this at
+        // all, which is why it is decided on the answers rather than in the query.
+        Assert.True(WorklistFolding.Contains(onTheWorklist, typed));
+    }
+
+    [Theory]
+    [InlineData("Lukasiewicz", "Łukasiewicz")]
+    [InlineData("Osterg", "Østergaard")]
+    [InlineData("Strauss", "Strauß")]
+    public void ALetterThatCarriesItsMarkInsideItselfIsFoldedToo(string typed, string onTheWorklist)
+    {
+        // Decomposition turns é into e and an accent, and does nothing for these: the
+        // stroke in Ł and the slash in Ø are part of the letter.
+        Assert.True(WorklistFolding.Contains(onTheWorklist, typed));
+    }
+
+    [Fact]
+    public void FoldingFindsPartOfANameRatherThanTheWholeOfIt()
+    {
+        // The boxes say "contains", and a surname is one component of Patient's Name, so an
+        // operator typing a family name is looking inside a value that holds a given name
+        // as well.
+        Assert.True(WorklistFolding.Contains("Gonçalves Maria", "alves"));
+        Assert.True(WorklistFolding.Contains("Gonçalves Maria", "MARIA"));
+        Assert.False(WorklistFolding.Contains("Gonçalves Maria", "Silva"));
+    }
+
+    [Fact]
+    public void AnEmptyFilterMatchesEverythingRatherThanNothing()
+    {
+        Assert.True(WorklistFolding.Contains("Gonçalves", null));
+        Assert.True(WorklistFolding.Contains("Gonçalves", "   "));
+        Assert.True(WorklistFolding.Contains(null, null));
+        Assert.False(WorklistFolding.Contains(null, "Silva"));
+    }
+
+    [Fact]
+    public void FoldingIsNotAffectedByTheMachinesOwnLanguage()
+    {
+        // Invariant upper casing, deliberately. A Turkish workstation upper cases a dotless
+        // i differently, and finding a patient should not depend on where the machine is.
+        Assert.Equal("ISIK", WorklistFolding.Fold("ışık"));
+        Assert.Equal("ISIK", WorklistFolding.Fold("IŞIK"));
+    }
+
+    [Fact]
+    public void FoldingIsForComparingAndTheWorklistsOwnSpellingIsWhatIsKept()
+    {
+        // The other half of the requirement, and the half that matters clinically: the
+        // worklist is the authority on how a patient's name is written, so what reaches the
+        // DICOM object is its spelling and not the folded form used to find it.
+        var entry = new WorklistEntry
+        {
+            PatientId = "P0000042",
+            FamilyName = "Gonçalves",
+            GivenName = "Sofía"
+        };
+
+        Assert.True(WorklistFolding.Contains($"{entry.FamilyName} {entry.GivenName}", "goncalves sofia"));
+
+        // Nothing in the folding reaches back into the entry.
+        Assert.Equal("Gonçalves", entry.FamilyName);
+        Assert.Equal("Sofía", entry.GivenName);
+        Assert.Equal("GONCALVES", WorklistFolding.Fold(entry.FamilyName));
     }
 }

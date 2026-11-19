@@ -32,7 +32,13 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK_DIR="$(mktemp -d)"
 RECEIVER="$REPO_ROOT/build/hl7/mllp-receiver.py"
 PROFILE="$REPO_ROOT/samples/hl7-oru-r01.sample.json"
-TRANSACTIONS="$WORK_DIR/transactions"
+# Every run gets its own per user state. The duplicate guard is the reason: it remembers
+# what has already been delivered, so a second run of this script on the same machine would
+# otherwise see its own first run's deliveries and report AlreadyDelivered where it expects
+# Acknowledged, reading as fourteen regressions in code nobody touched. CI never noticed
+# because its runner is new each time. Pointing the configuration root at the throwaway
+# directory makes the script say the same thing on the tenth run as on the first.
+export XDG_CONFIG_HOME="$WORK_DIR/appdata"
 
 RECEIVER_PID=""
 FAILURES=0

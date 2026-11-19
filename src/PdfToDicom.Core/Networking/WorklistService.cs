@@ -77,10 +77,90 @@ public sealed class WorklistService : IWorklistService
         string? patientIdFilter = null,
         string? patientNameFilter = null,
         WorklistDateWindow? dateRangeOverride = null,
+        WorklistMatching matching = WorklistMatching.Exact,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
+        WorklistQueryResult result = await FindAsync(
+                configuration, callingAeTitle, patientIdFilter, patientNameFilter,
+                dateRangeOverride, matching, askServerToFilter: true, cancellationToken)
+            .ConfigureAwait(false);
+
+        bool filtersWereGiven =
+            WorklistMatch.IsPresent(patientIdFilter) || WorklistMatch.IsPresent(patientNameFilter);
+
+        if (matching != WorklistMatching.Forgiving || !filtersWereGiven
+            || !result.IsSuccess || result.Entries.Count > 0)
+        {
+            return result;
+        }
+
+        // Nothing matched, so ask again without handing the server the names at all, and
+        // decide here.
+        //
+        // Two passes rather than one, and the strict pass first. The server is better at
+        // this than we are: it filters before anything crosses the network, and on a busy
+        // department that is the difference between a query and a download. The second pass
+        // only happens when the first found nothing, which is exactly the case an operator
+        // complains about, and exactly the case where the cost is worth paying. Folding on
+        // every search would make every search expensive to spare the rare one.
+        _logger.Information(
+            "The worklist matched nothing with the server's own matching, so the same query " +
+            "is being made without the name filters and matched here, ignoring case and accents.");
+
+        WorklistQueryResult broad = await FindAsync(
+                configuration, callingAeTitle, patientIdFilter, patientNameFilter,
+                dateRangeOverride, matching, askServerToFilter: false, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!broad.IsSuccess)
+        {
+            return broad;
+        }
+
+        // The entries are the server's own, unaltered. Folding decided which to keep and
+        // nothing else: the spelling that reaches the DICOM object is the worklist's.
+        List<WorklistEntry> kept = broad.Entries
+            .Where(e => WorklistFolding.Contains(e.PatientId, patientIdFilter)
+                     && WorklistFolding.Contains(FullName(e), patientNameFilter))
+            .ToList();
+
+        string criteria = DescribeCriteria(
+            configuration, patientIdFilter, patientNameFilter, dateRangeOverride);
+
+        _logger.Information(
+            $"Matching here rather than at the server kept {kept.Count} of {broad.Entries.Count} " +
+            $"scheduled step(s). Asked for {criteria}, ignoring case and accents.");
+
+        return new WorklistQueryResult(
+            kept.Count > 0,
+            kept,
+            kept.Count == 0
+                ? WorklistMessages.Nothing(criteria)
+                : WorklistMessages.Found(kept.Count, criteria),
+            broad.WasTruncated);
+    }
+
+    /// <summary>The whole of a name, for matching a surname typed on its own.</summary>
+    private static string FullName(WorklistEntry entry) =>
+        $"{entry.FamilyName} {entry.GivenName}".Trim();
+
+    /// <summary>Runs one C-FIND.</summary>
+    /// <param name="askServerToFilter">
+    /// Whether the two name filters go into the query. False on the forgiving second pass,
+    /// where they are applied here instead.
+    /// </param>
+    private async Task<WorklistQueryResult> FindAsync(
+        WorklistConfiguration configuration,
+        string callingAeTitle,
+        string? patientIdFilter,
+        string? patientNameFilter,
+        WorklistDateWindow? dateRangeOverride,
+        WorklistMatching matching,
+        bool askServerToFilter,
+        CancellationToken cancellationToken)
+    {
         var entries = new List<WorklistEntry>();
         bool truncated = false;
 
@@ -89,7 +169,8 @@ public sealed class WorklistService : IWorklistService
             IDicomClient client = CreateClient(configuration, ResolveCallingAe(configuration, callingAeTitle));
 
             DicomCFindRequest request = BuildQuery(
-                configuration, patientIdFilter, patientNameFilter, dateRangeOverride);
+                configuration, patientIdFilter, patientNameFilter, dateRangeOverride,
+                matching, askServerToFilter);
             DicomStatus? finalStatus = null;
 
             request.OnResponseReceived += (_, response) =>
@@ -247,7 +328,9 @@ public sealed class WorklistService : IWorklistService
         WorklistConfiguration configuration,
         string? patientIdFilter,
         string? patientNameFilter,
-        WorklistDateWindow? dateRangeOverride)
+        WorklistDateWindow? dateRangeOverride,
+        WorklistMatching matching = WorklistMatching.Exact,
+        bool askServerToFilter = true)
     {
         var request = new DicomCFindRequest(
             DicomUID.ModalityWorklistInformationModelFind,
@@ -262,8 +345,16 @@ public sealed class WorklistService : IWorklistService
         query.AddOrUpdate(DicomTag.SpecificCharacterSet, DicomConstants.Utf8CharacterSet);
 
         // Return keys: sent empty so the server matches anything and reports the value.
-        query.AddOrUpdate(DicomTag.PatientName, Match(patientNameFilter));
-        query.AddOrUpdate(DicomTag.PatientID, Match(patientIdFilter));
+        //
+        // The two name keys are empty on the forgiving second pass, where matching happens
+        // on the answers instead. Sending them and then matching again here would ask the
+        // server to exclude the very rows the second pass exists to find.
+        query.AddOrUpdate(
+            DicomTag.PatientName,
+            askServerToFilter ? MatchKey(patientNameFilter, matching) : string.Empty);
+        query.AddOrUpdate(
+            DicomTag.PatientID,
+            askServerToFilter ? MatchKey(patientIdFilter, matching) : string.Empty);
         query.AddOrUpdate(DicomTag.PatientBirthDate, string.Empty);
         query.AddOrUpdate(DicomTag.PatientSex, string.Empty);
         query.AddOrUpdate(DicomTag.AccessionNumber, string.Empty);
@@ -302,6 +393,21 @@ public sealed class WorklistService : IWorklistService
 
     /// <summary>Normalises an optional filter into a matching key.</summary>
     private static string Match(string? filter) => (filter ?? string.Empty).Trim();
+
+    /// <summary>
+    /// The key sent to the server for one filter, according to the matching asked for.
+    /// </summary>
+    /// <remarks>
+    /// Forgiving matching still wraps the text for the server's own pass, because a server
+    /// that can answer the question is faster than fetching everything and deciding here.
+    /// The wrapping used to live in the worklist view model, which meant the command line
+    /// and the window disagreed about what a filter meant with nothing saying so; both now
+    /// state which they want.
+    /// </remarks>
+    private static string MatchKey(string? filter, WorklistMatching matching) =>
+        matching == WorklistMatching.Forgiving
+            ? WorklistMatch.Contains(filter)
+            : Match(filter);
 
     /// <summary>
     /// Formats the configured date range the way DICOM range matching expects, or an empty

@@ -18,6 +18,33 @@ dates changed nothing: the identifier was excluding the patient before the date 
 mattered. The boxes now match on part of what was typed, and anything wildcarded by hand is
 left exactly as typed, because the command line documents wildcards and people use them.
 
+**The search now ignores capitals and accents, and the record still gets the worklist's own
+spelling.** Reported after the matching fix above: a Portuguese worklist is full of names
+like GONÇALVES and JOÃO, and an operator typing `goncalves` found nothing, because DICOM
+matching folds no accents and PS3.4 only permits a server to ignore case, never requires it.
+So the behaviour depended on which archive the hospital bought, which is not something an
+operator can be asked to know.
+
+The strict query is still sent first, unchanged, and a server that answers it is believed.
+Only when that returns nothing is a second query sent with the name keys left empty and the
+rows filtered here, comparing values with accents decomposed and discarded and case folded
+away. Doing the second pass only on an empty answer keeps the normal lookup as cheap as it
+was and keeps the server's own matching authoritative where it works; the alternative,
+fetching the day's list and filtering everything locally, would have made every search
+pull rows it did not need.
+
+What is never folded is what gets written. The folded form exists for the duration of one
+comparison and is not stored, not displayed and not transmitted: the demographics are copied
+from the selected row verbatim, so GONÇALVES, JOÃO MIGUEL reaches the archive with its
+cedilla and its tilde, matching what the worklist holds, which is the whole point of reading
+a worklist rather than a keyboard. A test asserts that, because it is the half of this that
+would fail silently.
+
+The fold maps the characters whose accent is part of the letter rather than a mark on it
+(Ł Ø Đ Þ Æ Œ ß Ħ) and the Turkish dotless pair, which `ToUpperInvariant` leaves alone, so
+`isik` finds IŞIK. Those are cases where decomposing does nothing, which is why they are
+listed rather than relied upon.
+
 **A patient number now ignores the dates entirely.** Asking "where is this patient's
 examination" and "what is scheduled today" at the same time answers neither, and an operator
 with a document in their hand is as likely to want last month's examination as today's. The

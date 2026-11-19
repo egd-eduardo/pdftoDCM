@@ -275,6 +275,17 @@ doente tiver vários procedimentos agendados, aparecem todos e escolhe o correto
 As duas caixas procuram **parte** do que escreve, pelo que "Silva" encontra Silva e Silva
 Santos, e parte de um número de processo encontra todos os números que o contenham.
 
+**Maiúsculas e acentos são ignorados.** Escrever `goncalves` encontra GONÇALVES, `JOAO`
+encontra João e `silva` encontra SILVA. Escreva o nome pela via mais fácil, com o que o
+teclado lhe der. O que fica arquivado com o documento nunca é o que escreveu: é o nome
+exatamente como a worklist o escreve, acentos incluídos, pelo que GONÇALVES, JOÃO MIGUEL
+chega ao arquivo com a cedilha e o til. As caixas servem para encontrar a linha; é a linha
+que decide o registo.
+
+Há uma consequência que vale a pena conhecer: como `goncalves` e `Gonçalves` passam a contar
+como o mesmo nome, uma procura pode encontrar mais linhas do que antes, e a janela já não
+seleciona uma linha por si quando procurou apenas por nome. Veja a lista e escolha.
+
 **Datas agendadas** decide que dias a procura abrange. Abre a mostrar o que a informática
 configurou para esse servidor, normalmente hoje, e pode alterá-lo para uma procura sem
 alterar o que quer que seja para amanhã. "Qualquer data" procura em toda a lista de trabalho.
