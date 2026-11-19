@@ -1,4 +1,6 @@
+using PdfToDicom.Core.Abstractions;
 using PdfToDicom.Core.Configuration;
+using PdfToDicom.Core.Networking;
 using PdfToDicom.Core.Dicom;
 using PdfToDicom.Core.Security;
 using PdfToDicom.Core.Validation;
@@ -404,5 +406,76 @@ public sealed class WorklistDateRangeTests
         var configuration = new WorklistConfiguration { DateRange = WorklistDateRange.Explicit };
 
         Assert.Equal((Monday, Monday), configuration.ResolveDates(Monday));
+    }
+
+    // ------------------------------------------------- Finding an older examination
+
+    [Fact]
+    public void TypingASurnameMatchesAPatientWhoAlsoHasAGivenName()
+    {
+        // The defect this covers, reported from a site. The box is labelled "Surname
+        // contains" and the typed text was sent as an exact key, so "Silva" was asked to
+        // match the whole of Patient's Name. A record of "Silva^Maria" does not match that,
+        // which is every record with a given name in it, so the box found nothing and the
+        // worklist looked broken rather than strict.
+        Assert.Equal("*Silva*", WorklistMatch.Contains("Silva"));
+        Assert.Equal("*12345*", WorklistMatch.Contains(" 12345 "));
+    }
+
+    [Fact]
+    public void AWildcardSomebodyTypedIsLeftExactlyAsTyped()
+    {
+        // The command line documents wildcards and people use them. Wrapping "Silva*" into
+        // "*Silva**" would be rude, and on some servers slower.
+        Assert.Equal("Silva*", WorklistMatch.Contains("Silva*"));
+        Assert.Equal("1?3", WorklistMatch.Contains("1?3"));
+    }
+
+    [Fact]
+    public void AnEmptyBoxStaysEmptyAndMatchesEverything()
+    {
+        // Empty is universal matching, which is "every value". Turning it into "**" would
+        // ask the server to match the values that exist, excluding the ones that are absent.
+        Assert.Equal(string.Empty, WorklistMatch.Contains(null));
+        Assert.Equal(string.Empty, WorklistMatch.Contains("   "));
+        Assert.False(WorklistMatch.IsPresent("  "));
+        Assert.True(WorklistMatch.IsPresent("12345"));
+    }
+
+    [Fact]
+    public void AQueryForOneDayCanBeWidenedWithoutChangingTheSavedSetting()
+    {
+        // Looking up one old examination is not a decision about how this workstation should
+        // behave tomorrow, and the saved setting is behind the settings password.
+        var configuration = new WorklistConfiguration { DateRange = WorklistDateRange.Today };
+
+        Assert.Equal((Monday, Monday), configuration.ResolveDates(Monday));
+
+        Assert.Null(configuration.ResolveDates(
+            Monday, new WorklistDateWindow(WorklistDateRange.AnyDate)));
+
+        Assert.Equal(
+            (Monday.AddDays(-30), Monday),
+            configuration.ResolveDates(
+                Monday,
+                new WorklistDateWindow(
+                    WorklistDateRange.Explicit, Monday.AddDays(-30), Monday)));
+
+        // And the saved setting is untouched by any of it.
+        Assert.Equal(WorklistDateRange.Today, configuration.DateRange);
+        Assert.Equal((Monday, Monday), configuration.ResolveDates(Monday));
+    }
+
+    [Fact]
+    public void AnOverriddenExplicitRangeEnteredBackwardsIsStillAcceptedTheRightWayRound()
+    {
+        var configuration = new WorklistConfiguration { DateRange = WorklistDateRange.Today };
+
+        Assert.Equal(
+            (Monday.AddDays(-7), Monday),
+            configuration.ResolveDates(
+                Monday,
+                new WorklistDateWindow(
+                    WorklistDateRange.Explicit, Monday, Monday.AddDays(-7))));
     }
 }

@@ -1,5 +1,61 @@
 # Changelog
 
+## Unreleased
+
+**The worklist could not find an older examination, and the reason was not the one it
+looked like.** Reported from a site: incomplete examinations from a year back were never
+fetched, one from last month did not appear either, and setting the date range to "Every
+date" did not help. Three separate defects, one of them the cause of the other two looking
+unfixable.
+
+**The two search boxes did not do what they said.** They are labelled "Patient ID contains"
+and "Surname contains" and the typed text was sent as an exact DICOM matching key, with no
+wildcards anywhere. The surname box was the worse half: Patient's Name is `Family^Given`, so
+an exact key of `Silva` does not match `Silva^Maria` on a conformant server, which is every
+record with a given name in it. Typing a surname therefore found nothing at all, and typing
+part of a number found nothing unless it was the whole number. That is why widening the
+dates changed nothing: the identifier was excluding the patient before the date ever
+mattered. The boxes now match on part of what was typed, and anything wildcarded by hand is
+left exactly as typed, because the command line documents wildcards and people use them.
+
+**A patient number now ignores the dates entirely.** Asking "where is this patient's
+examination" and "what is scheduled today" at the same time answers neither, and an operator
+with a document in their hand is as likely to want last month's examination as today's. The
+scheduled date is a column in the list, so somebody who gets several can still see which is
+which, and the window says in words what was searched.
+
+One consequence of matching on part of a number had to be closed at the same time. A single
+result used to select itself, which was safe when a number matched exactly and is not when
+`123` can return the only patient whose number contains it. Where a number was typed and the
+single result is not that number, the row is now left to be chosen on purpose. Typing the
+whole number, which is what the hint asks for, still selects itself.
+
+**The scheduled dates are now on the worklist window**, not only in Settings behind the
+protected password. Looking up one old examination is not a decision about how a workstation
+should behave tomorrow, so the control changes one search and leaves the saved setting alone.
+It opens showing what that server is configured with, because defaulting to today regardless
+would be wrong for a site that configured something else, and defaulting to every date would
+quietly undo a deliberate setting on every search.
+
+**The list was cut in the wrong order.** The maximum number of results was applied as
+responses arrived and the list was sorted afterwards, so a wide query kept whichever entries
+the server happened to send first and then presented them in date order. That looks like a
+complete answer and is not: the examination somebody was looking for could be absent while
+the list appeared full. Entries are now collected, sorted, and then cut, with a ceiling that
+still stops a runaway schedule exhausting the process.
+
+**Nothing says "no scheduled procedures for this query" any more.** The message and the log
+line both name what was actually asked for: the dates, the filters, and the modality and
+scheduled station if the server has them set. A modality left over from an earlier
+configuration silently excludes everything else and nothing on screen said it was there. A
+log that reads "0 scheduled step(s)" could not distinguish a server that had nothing from a
+query that asked about one day, which is the only question worth asking when this goes wrong.
+
+**Enter in a password box now unlocks the page.** It went to the dialog's default button,
+which is Save, so typing the settings password and pressing Enter saved the settings and
+closed the dialog with the page still locked. The keystroke is marked handled, so unlocking
+and saving cannot both happen on one press.
+
 ## 4.0.0
 
 **An HL7 version 2 integration engine: a report can now tell a record system that it

@@ -77,7 +77,8 @@
                             <TextBlock Text="{loc:Localize Settings.Lock.Password}" Style="{StaticResource FieldLabelTextStyle}" />
                             <PasswordBox x:Name="DestinationsPasswordBox"
                                          MinHeight="36" Padding="10,0" Margin="0,0,0,10"
-                                         FontSize="{StaticResource BodyFontSize}" />
+                                         FontSize="{StaticResource BodyFontSize}"
+                                         KeyDown="OnPasswordKeyDown" />
 
                             <Button Content="{loc:Localize Settings.Lock.Unlock}"
                                     Style="{StaticResource PrimaryButtonStyle}"
@@ -331,7 +332,8 @@
                                  it straight afterwards. -->
                             <PasswordBox x:Name="WorklistPasswordBox"
                                          MinHeight="36" Padding="10,0" Margin="0,0,0,10"
-                                         FontSize="{StaticResource BodyFontSize}" />
+                                         FontSize="{StaticResource BodyFontSize}"
+                                         KeyDown="OnPasswordKeyDown" />
 
                             <Button Content="{loc:Localize Settings.Lock.Unlock}"
                                     Style="{StaticResource PrimaryButtonStyle}"
@@ -520,7 +522,8 @@
                             <TextBlock Text="{loc:Localize Settings.Lock.Password}" Style="{StaticResource FieldLabelTextStyle}" />
                             <PasswordBox x:Name="BackupPasswordBox"
                                          MinHeight="36" Padding="10,0" Margin="0,0,0,10"
-                                         FontSize="{StaticResource BodyFontSize}" />
+                                         FontSize="{StaticResource BodyFontSize}"
+                                         KeyDown="OnPasswordKeyDown" />
 
                             <Button Content="{loc:Localize Settings.Lock.Unlock}"
                                     Style="{StaticResource PrimaryButtonStyle}"
@@ -906,7 +909,8 @@
                             <TextBlock Text="{loc:Localize Settings.Lock.Password}" Style="{StaticResource FieldLabelTextStyle}" />
                             <PasswordBox x:Name="Hl7PasswordBox"
                                          MinHeight="36" Padding="10,0" Margin="0,0,0,10"
-                                         FontSize="{StaticResource BodyFontSize}" />
+                                         FontSize="{StaticResource BodyFontSize}"
+                                         KeyDown="OnPasswordKeyDown" />
 
                             <Button Content="{loc:Localize Settings.Lock.Unlock}"
                                     Style="{StaticResource PrimaryButtonStyle}"

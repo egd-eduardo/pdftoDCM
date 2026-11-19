@@ -21,6 +21,17 @@ public sealed record WorklistQueryResult(
     bool WasTruncated = false);
 
 /// <summary>
+/// A date range asked for on one query, rather than the one saved against the server.
+/// </summary>
+/// <param name="Range">Which range, including the one that sends no date key at all.</param>
+/// <param name="From">The first date, used only when <paramref name="Range"/> is explicit.</param>
+/// <param name="To">The last date, used only when <paramref name="Range"/> is explicit.</param>
+public sealed record WorklistDateWindow(
+    WorklistDateRange Range,
+    DateTime? From = null,
+    DateTime? To = null);
+
+/// <summary>
 /// Queries a Modality Worklist SCP for scheduled procedure steps.
 /// </summary>
 /// <remarks>
@@ -45,10 +56,17 @@ public interface IWorklistService
     /// <param name="callingAeTitle">The application's own AE Title, used when no override is set.</param>
     /// <param name="patientIdFilter">Optional Patient ID to narrow the query, with wildcards allowed.</param>
     /// <param name="patientNameFilter">Optional family name to narrow the query, with wildcards allowed.</param>
+    /// <param name="dateRangeOverride">
+    /// A date range for this query only, leaving the server's saved setting alone. The
+    /// worklist window offers this because looking up an older examination is a thing an
+    /// operator does occasionally, and the saved setting is behind the settings password.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the query.</param>
     Task<WorklistQueryResult> QueryAsync(
         WorklistConfiguration configuration,
         string callingAeTitle,
         string? patientIdFilter = null,
         string? patientNameFilter = null,
+        WorklistDateWindow? dateRangeOverride = null,
         CancellationToken cancellationToken = default);
 }
