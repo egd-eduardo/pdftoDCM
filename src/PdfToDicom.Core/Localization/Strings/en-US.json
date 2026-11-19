@@ -266,7 +266,7 @@
   "Worklist.Server": "Worklist to search",
   "Worklist.AllServers": "All worklists",
   "Worklist.NoServers": "No worklist server is enabled. Add one on the Worklist page in Settings.",
-  "Worklist.PatientIdHint": "Enter a patient number to fetch that patient. A single match is selected for you; where there are several, pick the right one from the list. Leave both boxes empty for the whole scheduled list.",
+  "Worklist.PatientIdHint": "Both boxes match on part of what you type and ignore capitals and accents, so goncalves finds Gonçalves. A single match is selected for you when the number you typed is the whole number; otherwise pick the right one from the list. Leave both boxes empty for the whole scheduled list. The name filed with the document is always the worklist's own spelling.",
   "Worklist.DateRange": "Scheduled dates",
   "Worklist.DateRangeHint": "This search covers these dates. It changes nothing for tomorrow: the dates this workstation uses by default are in Settings. A patient ID search ignores the dates entirely and looks at the whole worklist, so an older examination can be found by number; the Scheduled column shows which date each one belongs to.",
   "Worklist.Column.Source": "Worklist",

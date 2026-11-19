@@ -21,6 +21,33 @@ public sealed record WorklistQueryResult(
     bool WasTruncated = false);
 
 /// <summary>
+/// How the typed filters are matched.
+/// </summary>
+public enum WorklistMatching
+{
+    /// <summary>
+    /// The text is the match key, wildcards and all, and the server decides.
+    /// </summary>
+    /// <remarks>
+    /// What the command line does, and what its help documents: <c>*</c> and <c>?</c> are
+    /// the operator's to type. Changing that would alter a published contract.
+    /// </remarks>
+    Exact = 0,
+
+    /// <summary>
+    /// Matches on part of the text, ignoring case and accents.
+    /// </summary>
+    /// <remarks>
+    /// What the worklist window does, because its boxes say "contains" and because a
+    /// worklist holding Gonçalves has to be findable by somebody typing Goncalves. DICOM
+    /// cannot express that, so it is done on the entries the server returns; see
+    /// <see cref="PdfToDicom.Core.Networking.WorklistFolding"/> for why nothing folded is
+    /// ever stored.
+    /// </remarks>
+    Forgiving = 1
+}
+
+/// <summary>
 /// A date range asked for on one query, rather than the one saved against the server.
 /// </summary>
 /// <param name="Range">Which range, including the one that sends no date key at all.</param>
@@ -61,6 +88,10 @@ public interface IWorklistService
     /// worklist window offers this because looking up an older examination is a thing an
     /// operator does occasionally, and the saved setting is behind the settings password.
     /// </param>
+    /// <param name="matching">
+    /// How to match the two filters. The command line leaves this alone and passes what was
+    /// typed; the worklist window asks for forgiving matching.
+    /// </param>
     /// <param name="cancellationToken">Cancels the query.</param>
     Task<WorklistQueryResult> QueryAsync(
         WorklistConfiguration configuration,
@@ -68,5 +99,6 @@ public interface IWorklistService
         string? patientIdFilter = null,
         string? patientNameFilter = null,
         WorklistDateWindow? dateRangeOverride = null,
+        WorklistMatching matching = WorklistMatching.Exact,
         CancellationToken cancellationToken = default);
 }

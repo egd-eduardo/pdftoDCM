@@ -268,6 +268,16 @@ procedures scheduled, they all appear and you pick the right one.
 The two boxes match on **part** of what you type, so "Silva" finds Silva and Silva Santos,
 and a partial patient number finds every number containing it.
 
+**Capitals and accents are ignored.** Typing `goncalves` finds GONÇALVES, `JOAO` finds João,
+and `silva` finds SILVA. Type the name the easy way, with whatever your keyboard gives you.
+What gets filed with the document is never what you typed: it is the name exactly as the
+worklist spells it, accents and all, so GONÇALVES, JOÃO MIGUEL reaches the archive with its
+cedilla and its tilde. The boxes are there to find the row; the row decides the record.
+
+One consequence worth knowing: because `goncalves` and `Gonçalves` now count as the same
+name, a search can match more rows than it used to, and the window no longer selects a row
+for you on a name alone. Look at the list and pick.
+
 **Scheduled dates** decides which days the search covers. It opens showing what your IT
 department configured for that server, usually today, and you can change it for one search
 without changing anything for tomorrow. "Every date" searches the whole worklist.
