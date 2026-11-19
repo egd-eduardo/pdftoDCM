@@ -253,17 +253,17 @@ jobs:
         shell: pwsh
 
       - name: Publish the commissioning tools, which the one click build also builds
-        # Only on win-x64, and only to prove the path works. BUILD.bat passes -Tools, so
-        # four publishes that nothing else in this workflow touches would otherwise be
-        # exercised for the first time on somebody's desk. Doing it on every architecture
-        # would add four self contained publishes per job for no further information.
+        # On every push, but for win-x64 only, which is enough to prove the path works:
+        # BUILD.bat passes -Tools, so four publishes that nothing else in this workflow
+        # touches would otherwise be exercised for the first time on somebody's desk.
         #
-        # Nothing here is uploaded. The upload steps name the installer, the handover
-        # folder and the application; the tools live in artifacts\win-x64\tools and the
-        # packaging check refuses a handover folder that contains any of them.
-        if: matrix.rid == 'win-x64'
+        # For a tag or a build asked for by hand, every architecture, because that is when
+        # somebody wants to run them: the application is tested on a Windows on ARM virtual
+        # machine, and an x64 tool under emulation is not what should be used to diagnose a
+        # worklist on that machine.
+        if: ${{ matrix.rid == 'win-x64' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
         run: |
-          .\build\build.ps1 -Task tools -Runtimes win-x64
+          .\build\build.ps1 -Task tools -Runtimes ${{ matrix.rid }}
 
           $expected = @(
             'WorklistExplorer.exe',
@@ -273,7 +273,7 @@ jobs:
           )
 
           foreach ($name in $expected) {
-            $file = Join-Path 'artifacts\win-x64\tools' $name
+            $file = Join-Path "artifacts\${{ matrix.rid }}\tools" $name
 
             if (-not (Test-Path $file)) {
               throw "The tools build did not produce $name."
@@ -325,5 +325,31 @@ jobs:
           # The versioned copy, so a downloaded file says which build it is without
           # anyone having to open its properties.
           path: artifacts/PdfToDicom-*-${{ matrix.rid }}.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      # The tools, for a tag or a build asked for by hand only, so that whoever asked can
+      # run them without building. Three things are true at once and all three matter.
+      #
+      # They are what diagnoses a worklist that will not answer, and asking somebody to
+      # install an SDK first is a poor answer to "the examination from December is missing".
+      #
+      # They must never travel inside a handover package, which is a separate rule and
+      # still enforced: these are uploaded as artefacts of their own, from a folder outside
+      # every package, and assert_package_is_sound refuses a package containing any of them
+      # by name.
+      #
+      # This repository is public, so an artefact is a public download for as long as it
+      # exists. Two of these listen on a port and two export patient data to wherever they
+      # are pointed, which is a reason to keep their life short rather than a reason not to
+      # publish a build somebody asked for: they hold no patient data themselves, and
+      # anybody can already build them from this source. Seven days, the shortest retention
+      # used here.
+      - name: Upload the commissioning tools
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: PdfToDicom-tools-${{ matrix.rid }}
+          path: artifacts/${{ matrix.rid }}/tools/*.exe
           if-no-files-found: error
           retention-days: 7
