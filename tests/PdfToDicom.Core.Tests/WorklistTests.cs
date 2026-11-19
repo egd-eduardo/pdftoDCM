@@ -478,4 +478,33 @@ public sealed class WorklistDateRangeTests
                 new WorklistDateWindow(
                     WorklistDateRange.Explicit, Monday, Monday.AddDays(-7))));
     }
+
+    // ------------------------------------------------- The phrases the script greps for
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(7)]
+    public void TheFoundMessageKeepsTheExactPhraseTheVerificationScriptLooksFor(int count)
+    {
+        // build/verify-against-dcmtk.sh decides whether three of its checks passed by
+        // looking for this substring in the command line output. Rewording it once turned
+        // five passing checks red while the behaviour underneath was never at fault, so the
+        // phrase is pinned here and a rewording fails in a second rather than in four
+        // minutes of CI.
+        string message = WorklistMessages.Found(count, "dates 20261119");
+
+        Assert.Contains($"{count} scheduled procedure(s) found.", message, StringComparison.Ordinal);
+
+        // And the criteria still arrive, as a second sentence.
+        Assert.Contains("Asked for dates 20261119", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheEmptyMessageKeepsTheExactPhraseTheVerificationScriptLooksFor()
+    {
+        string message = WorklistMessages.Nothing("dates 20200101-20200131");
+
+        Assert.Contains("no scheduled procedures", message, StringComparison.Ordinal);
+        Assert.Contains("Asked for dates 20200101-20200131", message, StringComparison.Ordinal);
+    }
 }

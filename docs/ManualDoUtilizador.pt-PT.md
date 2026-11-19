@@ -328,7 +328,7 @@ nunca misturado.
 
 | O que vê | O que normalmente significa |
 |---|---|
-| *A lista de trabalho não devolveu nada para ...* | Leia o fim dessa linha: indica as datas e os filtros utilizados na procura. Se indicar um intervalo de datas, mude **Datas agendadas** para "Qualquer data" e procure de novo. Se indicar uma modalidade que não esperava, a informática configurou uma nesse servidor. |
+| *A lista de trabalho não devolveu procedimentos agendados para esta consulta* | Leia a parte **Asked for** que vem a seguir: indica as datas e os filtros utilizados na procura. Se indicar um intervalo de datas, mude **Datas agendadas** para "Qualquer data" e procure de novo. Se indicar uma modalidade que não esperava, a informática configurou uma nesse servidor. |
 | *não foi possível contactar* | O servidor da lista de trabalho está indisponível, ou o endereço está errado. Preencha o formulário à mão e avise a informática. |
 | *rejeitou a ligação* | Esta estação de trabalho não está registada no servidor da lista de trabalho. A informática tem de o fazer uma vez. |
 | *Existiam mais resultados do que os apresentados* | Restrinja a procura com um apelido ou um número de processo. A lista é cortada depois de ordenada por data, pelo que vê os mais antigos; o que procura pode vir depois. |

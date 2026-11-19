@@ -44,8 +44,9 @@ complete answer and is not: the examination somebody was looking for could be ab
 the list appeared full. Entries are now collected, sorted, and then cut, with a ceiling that
 still stops a runaway schedule exhausting the process.
 
-**Nothing says "no scheduled procedures for this query" any more.** The message and the log
-line both name what was actually asked for: the dates, the filters, and the modality and
+**The message and the log line now say what was actually asked for.** Both keep their
+original wording and append it, because the DICOM verification script greps these messages
+and that script is worth more than the phrasing. What they add is the dates, the filters, and the modality and
 scheduled station if the server has them set. A modality left over from an earlier
 configuration silently excludes everything else and nothing on screen said it was there. A
 log that reads "0 scheduled step(s)" could not distinguish a server that had nothing from a

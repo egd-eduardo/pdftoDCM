@@ -320,7 +320,7 @@ again and pick another: the whole form is replaced, never mixed.
 
 | What you see | What it usually means |
 |---|---|
-| *The worklist returned nothing for ...* | Read the end of that line: it names the dates and filters that were searched. If it says a date range, change **Scheduled dates** to "Every date" and search again. If it names a modality you did not expect, your IT department has set one on that server. |
+| *The worklist returned no scheduled procedures for this query* | Read the **Asked for** part that follows it: it names the dates and the filters that were searched. If it names a date range, change **Scheduled dates** to "Every date" and search again. If it names a modality you did not expect, your IT department has set one on that server. |
 | *could not be reached* | The worklist server is down, or the address is wrong. Fill the form in by hand and tell your IT department. |
 | *rejected the connection* | This workstation is not registered on the worklist server. Your IT department has to do that once. |
 | *More results were available than can be shown* | Narrow the search with a surname or a patient number. The list is cut after being put in date order, so what you see is the earliest; the one you want may be later. |

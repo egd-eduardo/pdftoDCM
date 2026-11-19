@@ -162,8 +162,8 @@ public sealed class WorklistService : IWorklistService
                 true,
                 ordered,
                 ordered.Count == 0
-                    ? $"The worklist returned nothing for {criteria}."
-                    : $"{ordered.Count} scheduled procedure(s) found for {criteria}.",
+                    ? WorklistMessages.Nothing(criteria)
+                    : WorklistMessages.Found(ordered.Count, criteria),
                 truncated);
         }
         catch (Exception ex)
