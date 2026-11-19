@@ -7,6 +7,11 @@ REM  application for 64 bit and for ARM, and assembles the folder you hand to
 REM  a hospital: the executable together with the licence, the third party
 REM  notices, the manuals and the samples.
 REM
+REM  It also builds the tools: the worklist explorer and its console front end,
+REM  the test worklist server and the HL7 test receiver. They land in a folder
+REM  of their own and are never part of what a hospital is given, which the
+REM  packaging check enforces rather than trusting.
+REM
 REM  Both architectures, because the machine this is built on is not always
 REM  the machine it runs on: the sites are 64 bit and the testing is done on a
 REM  Windows on ARM virtual machine.
@@ -59,7 +64,7 @@ if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set RID=win-arm64
 if /i "%PROCESSOR_ARCHITECTURE%"=="x86"   set RID=win-x86
 
 echo   Architecture  %PROCESSOR_ARCHITECTURE%  -^>  !RID!  ^(this computer^)
-echo   Building      win-x64 and win-arm64
+echo   Building      win-x64 and win-arm64, application and tools
 
 REM ------------------------------------------------------------ Optional bits
 REM Neither is required. Saying which are present avoids surprise at the end
@@ -94,7 +99,13 @@ REM
 REM No -Runtime: build.ps1 builds 64 bit and ARM by default. It also signs
 REM what it builds when a code signing certificate is installed for this
 REM user, so there is nothing to ask about afterwards.
-"!PS!" -NoProfile -ExecutionPolicy Bypass -File "build\build.ps1"
+REM
+REM -Tools adds the four commissioning and diagnostic executables. Passed here
+REM rather than made the default inside build.ps1, because the release pipeline
+REM runs that script too and should keep producing only what ships. Somebody
+REM who double clicks this file is working on the product and wants the whole
+REM bench; a pipeline assembling a handover folder does not.
+"!PS!" -NoProfile -ExecutionPolicy Bypass -File "build\build.ps1" -Tools
 if errorlevel 1 goto :failed
 
 REM ------------------------------------------------------------- Where it is
@@ -146,6 +157,31 @@ echo   notices, the manuals in English and Portuguese, the conformance
 echo   statement for the PACS administrator, and sample files. No zip is made:
 echo   copy the folder to the machine, or onto a stick, as it stands.
 echo.
+
+REM --------------------------------------------------------------- The tools
+REM Reported separately and plainly. These four are the files that must not
+REM travel with a handover folder, and the reason is worth repeating at the
+REM moment somebody is looking at a list of executables deciding what to copy.
+set TOOLS=%CD%\artifacts\!RID!\tools
+if exist "!TOOLS!\WorklistExplorer.exe" (
+    echo   The tools for this computer are in:
+    echo.
+    echo     !TOOLS!
+    echo.
+    echo     WorklistExplorer.exe      asks a worklist the widest question and shows
+    echo                               everything that comes back. Read only: it sends
+    echo                               C-ECHO and C-FIND and nothing else
+    echo     WorklistExplorer.Cli.exe  the same, on the command line, writing CSV
+    echo     testworklistserver.exe    serves invented scheduled procedures, for testing
+    echo                               the worklist feature without a hospital system
+    echo     hl7testserver.exe         answers HL7 messages, for commissioning an interface
+    echo.
+    echo   None of these belongs in the folder handed to a hospital. Two of them
+    echo   listen on a port and the other two export patient data to wherever they
+    echo   are pointed. Copy one deliberately if you need it on a site; the build
+    echo   will never put one in a handover folder.
+    echo.
+)
 
 REM --------------------------------------------------------------- Signing
 REM Reported rather than offered. The build signs by default when there is a

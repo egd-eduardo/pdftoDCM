@@ -22,6 +22,13 @@
     package simply omits its "Command line" folder when it was not built. The release
     pipeline passes it, so what reaches a site is still complete.
 
+.PARAMETER Tools
+    Also publish the commissioning and diagnostic tools: the worklist explorer, its
+    console front end, the test worklist server and the HL7 test receiver. They go to
+    artifacts\<runtime>\tools and are never part of a handover package, which the
+    packaging check enforces separately. Off by default, because four more self contained
+    publishes is a slower build than most days need.
+
 .PARAMETER Sign
     Require signing, and fail when no code signing certificate can be found. Signing is
     attempted anyway without this: see below.
@@ -40,6 +47,7 @@
     test     run the test suite only
     publish  publish the executables and assemble the handover folder
     package  build the installer only, from an existing publish
+    tools    publish the commissioning and diagnostic tools only, and nothing else
     signing  explain what signing would do on this machine, and why; builds nothing
     prune    keep the deliverables, drop the intermediate build output
     clean    remove build output
@@ -56,12 +64,13 @@
     .\build\build.ps1 -Task app -Runtimes win-arm64
     .\build\build.ps1 -Task test
     .\build\build.ps1 -Cli
+    .\build\build.ps1 -Tools
     .\build\build.ps1 -NoSign
 #>
 
 [CmdletBinding()]
 param(
-    [ValidateSet('all', 'app', 'test', 'publish', 'package', 'signing', 'prune', 'clean')]
+    [ValidateSet('all', 'app', 'test', 'publish', 'package', 'tools', 'signing', 'prune', 'clean')]
     [string]$Task = 'all',
 
     [string]$Configuration = 'Release',
@@ -78,6 +87,11 @@ param(
     # the application's, and most builds have no use for it. Off unless asked for; the
     # release pipeline asks.
     [switch]$Cli,
+
+    # The tools are off by default for the same reason as the command line front end: each
+    # is a self contained publish of its own. They are also the things that must never
+    # reach a site, so an unasked for build should not scatter them next to the package.
+    [switch]$Tools,
 
     [switch]$Sign,
 
@@ -482,6 +496,67 @@ function Invoke-Publish {
         --nologo -v quiet
 
     if ($LASTEXITCODE -ne 0) { throw 'Publishing the command line tool failed.' }
+}
+
+<#
+    Publishes the commissioning and diagnostic tools.
+
+    They go to artifacts\<runtime>\tools, deliberately outside every package folder.
+    Assert-PackageIsSound refuses a package containing any of them by name, so the two
+    checks agree: the build can produce them, and the handover folder cannot carry them.
+    Handing one to a site is a decision somebody takes by copying an executable.
+
+    The single file and self contained properties are passed here rather than left to the
+    project files. The worklist explorer's own project applies them only when the runtime
+    identifier is win-x64, which is right for its own publish.cmd and wrong here: an
+    arm64 build would otherwise come out as a folder of loose assemblies needing an
+    installed runtime, which is the one thing nobody wants to arrange on a hospital
+    workstation.
+#>
+function Invoke-PublishTools {
+    param([Parameter(Mandatory)][string]$Runtime)
+
+    $tools = @(
+        @{ Name = 'the worklist explorer';   Project = 'tools\WorklistExplorer\src\WorklistExplorer.Wpf\WorklistExplorer.Wpf.csproj'; Produces = 'WorklistExplorer.exe' }
+        @{ Name = 'its console front end';   Project = 'tools\WorklistExplorer\src\WorklistExplorer.Cli\WorklistExplorer.Cli.csproj'; Produces = 'WorklistExplorer.Cli.exe' }
+        @{ Name = 'the test worklist server'; Project = 'tools\PdfToDicom.TestWorklistServer\PdfToDicom.TestWorklistServer.csproj';     Produces = 'testworklistserver.exe' }
+        @{ Name = 'the HL7 test receiver';   Project = 'tools\PdfToDicom.Hl7TestServer\PdfToDicom.Hl7TestServer.csproj';               Produces = 'hl7testserver.exe' }
+    )
+
+    $output = Join-Path $Artifacts "$Runtime\tools"
+
+    foreach ($tool in $tools) {
+        Write-Step "Publishing $($tool.Name) for $Runtime"
+
+        dotnet publish (Join-Path $RepoRoot $tool.Project) `
+            -c $Configuration `
+            -r $Runtime `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -o $output `
+            --nologo -v quiet
+
+        if ($LASTEXITCODE -ne 0) { throw "Publishing $($tool.Name) failed." }
+
+        $produced = Join-Path $output $tool.Produces
+
+        # Checked by name rather than trusting the exit code. The four publishes share one
+        # output folder, so a project whose assembly name changed would succeed and leave
+        # nothing recognisable behind, and the folder would still look plausible.
+        if (-not (Test-Path $produced)) {
+            throw "Publishing $($tool.Name) reported success but produced no $($tool.Produces) in $output."
+        }
+
+        $size = [math]::Round((Get-Item $produced).Length / 1MB, 1)
+        Write-Host "    produced $($tool.Produces) ($size MB)"
+    }
+
+    Write-Host ''
+    Write-Host "    the tools are in $output" -ForegroundColor Yellow
+    Write-Host '    none of them belongs in a handover folder: each one either listens on a' -ForegroundColor Yellow
+    Write-Host '    port or exports patient data to wherever it is pointed' -ForegroundColor Yellow
 }
 
 <#
@@ -935,7 +1010,11 @@ if ($Sign -and $NoSign) {
 
 # Said once, before anything is built, because it decides what comes out at the end.
 if ($Task -notin @('clean', 'prune', 'signing')) {
-    Write-Host "    building for $($Runtimes -join ', ')$(if ($Cli) { ', with the command line tool' })"
+    $extras = @()
+    if ($Cli)   { $extras += 'the command line tool' }
+    if ($Tools -and $Task -ne 'tools') { $extras += 'the commissioning tools' }
+
+    Write-Host "    building for $($Runtimes -join ', ')$(if ($extras) { ", with $($extras -join ' and ')" })"
 }
 
 switch ($Task) {
@@ -957,6 +1036,7 @@ switch ($Task) {
 
         foreach ($runtime in $Runtimes) {
             Invoke-Publish -Runtime $runtime
+            if ($Tools) { Invoke-PublishTools -Runtime $runtime }
             Invoke-Sign -Runtime $runtime
             Write-Host "    $(Join-Path $Artifacts "$runtime\app\PdfToDicom.exe")"
         }
@@ -967,12 +1047,25 @@ switch ($Task) {
 
         foreach ($runtime in $Runtimes) {
             Invoke-Publish -Runtime $runtime
+            if ($Tools) { Invoke-PublishTools -Runtime $runtime }
 
             # Before assembling, not after. The handover folder takes copies of the
             # executable, so signing afterwards would sign the original and leave every
             # copy that is actually handed out unsigned.
             Invoke-Sign -Runtime $runtime
             Invoke-Assemble -Runtime $runtime
+        }
+    }
+
+    # The tools on their own, which is both a developer's shortcut and the only way to
+    # exercise this path in continuous integration without publishing the product twice.
+    # It implies -Tools: asking for the task and then being told nothing was built because
+    # a switch was missing would be a riddle.
+    'tools' {
+        Invoke-Restore
+
+        foreach ($runtime in $Runtimes) {
+            Invoke-PublishTools -Runtime $runtime
         }
     }
 
@@ -998,6 +1091,15 @@ switch ($Task) {
 
         foreach ($runtime in $Runtimes) {
             Invoke-Publish -Runtime $runtime
+
+            # Before the package is assembled, so that a tool failing to publish stops
+            # the build rather than being discovered after a handover folder exists.
+            #
+            # They are not signed. sign.ps1 signs the three things that leave this
+            # machine, the application, the command line tool and the installer, and
+            # nothing here is handed to anybody by a build.
+            if ($Tools) { Invoke-PublishTools -Runtime $runtime }
+
             Invoke-Sign -Runtime $runtime
             Invoke-Assemble -Runtime $runtime
             Invoke-Package -Runtime $runtime
