@@ -99,9 +99,10 @@ Nothing hidden, and nothing that touches your system outside this folder:
    Python is checked by asking it for its version, not by looking for the name. Windows
    ships stub files that answer to `python` and `python3` but only advertise the Microsoft
    Store, and anything that merely checks the name is fooled by them.
-4. Runs `build\build.ps1`, which restores, builds, validates, tests, publishes **both 64
-   bit and ARM**, assembles a handover package for each and builds the installer.
-5. **Refuses to continue if any of the 265 tests fails.** A build that fails its tests is
+4. Runs `build\build.ps1 -Tools`, which restores, builds, validates, tests, publishes
+   **both 64 bit and ARM**, assembles a handover package for each, builds the installer,
+   and publishes the four commissioning and diagnostic tools.
+5. **Refuses to continue if any of the 696 tests fails.** A build that fails its tests is
    not one to hand to a hospital.
 6. Signs what it built, if a code signing certificate is installed for your user, and
    tells you how to create one if not. It is not asked about, because signing when it is
@@ -126,6 +127,8 @@ artifacts\
   PdfToDicom-4.0.0-win-x64.exe     <- just the application, version in the name
   PdfToDicom-4.0.0-win-arm64\      <- the same, for Windows on ARM
   PdfToDicom-4.0.0-win-arm64.exe
+  win-x64\tools\                   <- the four tools; never handed to a site
+  win-arm64\tools\
 ```
 
 **Both architectures, every time.** The machines in service are 64 bit, and the ARM build
@@ -140,6 +143,33 @@ it, and the build says so as it goes. Add `-Cli` when the package is for a site:
 ```powershell
 .\build\build.ps1 -Cli
 ```
+
+**The tools are built too, and they are not for a site.** `BUILD.bat` passes `-Tools`, so
+each architecture also gets `win-x64\tools\` holding four self contained executables:
+
+| | |
+| --- | --- |
+| `WorklistExplorer.exe` | Asks a worklist the widest possible question and shows everything that comes back beside the exact identifier it sent. Read only: C-ECHO and C-FIND, no code path for anything that changes a hospital system |
+| `WorklistExplorer.Cli.exe` | The same on the command line, writing CSV |
+| `testworklistserver.exe` | Serves invented scheduled procedure steps, so the worklist feature can be exercised without a real hospital system |
+| `hl7testserver.exe` | Answers HL7 messages, for commissioning an interface |
+
+They are published outside every package folder, and `Assert-PackageIsSound` refuses a
+handover folder containing any of them by name. Two listen on a port and the other two
+export patient data to wherever they are pointed, so giving one to a site is a decision to
+take by copying an executable rather than something a packaging script does on your behalf.
+
+The release pipeline does **not** pass `-Tools`, because what it assembles is what ships.
+To build them alone, without publishing the product again:
+
+```powershell
+.\build\build.ps1 -Task tools
+.\build\build.ps1 -Task tools -Runtimes win-arm64
+```
+
+`build.sh` has no equivalent switch. The explorer's window is a WPF project, which cannot
+be built on Linux or macOS at all, and the other three are quicker to run with
+`dotnet run --project` on a development machine than to publish.
 
 **No zip is made.** The folder can be copied to the machine, or onto a stick, exactly as it
 stands, so an archive is only of use for sending one file by email. Add `-Zip` if you want

@@ -1514,7 +1514,7 @@ differ only in case.
 dotnet test tests/PdfToDicom.Core.Tests/PdfToDicom.Core.Tests.csproj
 ```
 
-265 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
+334 tests covering validation rules, VR limits, UID uniqueness (20,000 identifiers per
 strategy), person name construction and shortening, the worklist date ranges, the
 settings password verifier, every mandatory attribute, payload integrity and odd length
 padding, UTF-8 round trips, configuration persistence and corruption recovery, file name
@@ -1847,7 +1847,7 @@ networking, validation and workflow layers need no change.
 
 Stated plainly, because a hospital deploying this needs to know what it does not do.
 
-1. **The user interface is not covered by automated tests.** The 265 tests cover Core in
+1. **The user interface is not covered by automated tests.** The 696 tests cover Core in
    depth, but WPF cannot run on a build agent without a desktop session, so no test opens
    a window. `build/validate-xaml-bindings.py` and
    `build/validate-viewmodel-commands.py` catch the two classes of fault that have

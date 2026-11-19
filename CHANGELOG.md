@@ -18,6 +18,25 @@ dates changed nothing: the identifier was excluding the patient before the date 
 mattered. The boxes now match on part of what was typed, and anything wildcarded by hand is
 left exactly as typed, because the command line documents wildcards and people use them.
 
+**The one click build now builds the tools as well.** `BUILD.bat` passes a new `-Tools`
+switch to `build.ps1`, so a double click produces the worklist explorer, its console front
+end, the test worklist server and the HL7 test receiver as self contained executables beside
+the application, for both architectures. They go to `artifacts\<runtime>\tools`, which is
+outside every package folder, and the packaging check already refuses a handover folder
+containing any of them by name, so the build can make them and cannot hand them over. The
+batch file names all four on screen with what each one does and why none belongs on a site.
+
+The switch is off by default in `build.ps1` itself, because the release pipeline runs that
+same script and what it assembles is what ships. `-Task tools` publishes them alone, which is
+also how continuous integration now exercises the path: four publishes that nothing else in
+the workflow touched would otherwise have been tried for the first time on somebody's desk.
+That check runs on win-x64 only and uploads nothing.
+
+The single file and self contained properties are passed on the command line rather than left
+to the project files, because the explorer's own project applies them only for win-x64. An
+arm64 build would otherwise have come out as a folder of loose assemblies needing an
+installed runtime, which is the one thing nobody wants to arrange on a hospital workstation.
+
 **A second implementation of the worklist question, in the repository.**
 `tools/WorklistExplorer` is a read only diagnostic tool, three projects of its own, that asks
 a worklist the widest possible question and shows everything that comes back beside the exact

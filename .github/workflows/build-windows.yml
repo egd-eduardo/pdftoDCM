@@ -252,6 +252,37 @@ jobs:
           Write-Host ("The executable is self contained and targets {0} (machine 0x{1:X4})." -f $rid, $machine)
         shell: pwsh
 
+      - name: Publish the commissioning tools, which the one click build also builds
+        # Only on win-x64, and only to prove the path works. BUILD.bat passes -Tools, so
+        # four publishes that nothing else in this workflow touches would otherwise be
+        # exercised for the first time on somebody's desk. Doing it on every architecture
+        # would add four self contained publishes per job for no further information.
+        #
+        # Nothing here is uploaded. The upload steps name the installer, the handover
+        # folder and the application; the tools live in artifacts\win-x64\tools and the
+        # packaging check refuses a handover folder that contains any of them.
+        if: matrix.rid == 'win-x64'
+        run: |
+          .\build\build.ps1 -Task tools -Runtimes win-x64
+
+          $expected = @(
+            'WorklistExplorer.exe',
+            'WorklistExplorer.Cli.exe',
+            'testworklistserver.exe',
+            'hl7testserver.exe'
+          )
+
+          foreach ($name in $expected) {
+            $file = Join-Path 'artifacts\win-x64\tools' $name
+
+            if (-not (Test-Path $file)) {
+              throw "The tools build did not produce $name."
+            }
+
+            Write-Host ("{0} is {1} MB" -f $name, [math]::Round((Get-Item $file).Length / 1MB, 1))
+          }
+        shell: pwsh
+
       # One run of this matrix produces roughly 700 MB across the three architectures.
       # Artifact storage is charged against the whole account rather than this repository,
       # so keeping that for every push exhausted the allowance and blocked uploads
