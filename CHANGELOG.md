@@ -30,7 +30,16 @@ The switch is off by default in `build.ps1` itself, because the release pipeline
 same script and what it assembles is what ships. `-Task tools` publishes them alone, which is
 also how continuous integration now exercises the path: four publishes that nothing else in
 the workflow touched would otherwise have been tried for the first time on somebody's desk.
-That check runs on win-x64 only and uploads nothing.
+On an ordinary push that check runs on win-x64 and keeps nothing.
+
+A tag or a build asked for by hand builds them for all three architectures and uploads them,
+so whoever asked can run them without installing an SDK first. Asking somebody to set up a
+toolchain is a poor answer to "the examination from December is missing", and the ARM build
+matters because an x64 tool under emulation is not what should be used to diagnose a worklist
+on the machine this is tested on. They are uploaded as artefacts of their own, from a folder
+outside every package, and the packaging check still refuses a handover folder containing any
+of them by name. Their retention is seven days, the shortest used here, because this
+repository is public and an artefact is a public download for as long as it exists.
 
 The single file and self contained properties are passed on the command line rather than left
 to the project files, because the explorer's own project applies them only for win-x64. An
